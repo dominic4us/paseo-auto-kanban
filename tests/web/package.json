@@ -1,0 +1,2 @@
+{ "name": "paseo-auto-kanban-web-harness", "private": true, "type": "module",
+  "dependencies": { "react-native-web": "0.21.2", "react-dom": "19.1.0", "esbuild": "0.25.10", "playwright-core": "1.63.0" } }

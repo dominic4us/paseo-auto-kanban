@@ -1,0 +1,2 @@
+<!-- REQ-120 (research/194 v2 M2): the medal's face — a disc inside medal-base.svg's ring, same 24-unit box, tinted a lighter silver. Built on lucide "award" (https://lucide.dev, ISC). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle fill="#000" stroke="none" cx="12" cy="8" r="4.1"/></svg>

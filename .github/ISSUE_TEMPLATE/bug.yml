@@ -1,0 +1,60 @@
+name: Bug report
+description: Something on screen is broken or behaves wrongly
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please remove real project names, file paths and card text from screenshots
+        and logs before posting — this repository is public.
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Kanban version (Kanban settings → About), Paseo server version (`paseo --version`) and app version.
+      placeholder: "Kanban 0.2.0 · Paseo 0.10.2 · Mac app 0.10.2"
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      multiple: true
+      options:
+        - Mac app
+        - Windows or Linux app
+        - Web UI
+        - Phone app (iOS)
+        - Phone app (Android)
+        - kanban CLI
+  - type: dropdown
+    id: theme
+    attributes:
+      label: Theme
+      options:
+        - Light
+        - Dark
+        - Not relevant
+  - type: textarea
+    id: steps
+    attributes:
+      label: What did you do?
+      description: Steps, or the exact command you ran.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What went wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+  - type: textarea
+    id: media
+    attributes:
+      label: Screenshots, recordings or output
+      description: For the CLI, paste the command's output (add `--json` if you can).

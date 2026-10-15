@@ -1,0 +1,20 @@
+name: Question
+description: You are not sure what something means or how to use it
+title: "[Question] "
+labels: [question]
+body:
+  - type: input
+    id: where
+    attributes:
+      label: Which screen or command?
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions (optional)
+      placeholder: "Kanban 0.2.0 · Paseo 0.10.2"

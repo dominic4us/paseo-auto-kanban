@@ -1,0 +1,31 @@
+paseo-auto-kanban
+This plugin runs inside Paseo and reuses a few of Paseo's own assets and values.
+
+Paseo — https://github.com/getpaseo/paseo
+Copyright (c) 2025-present Mohamed Boudra
+Licensed under the Apache License, Version 2.0
+(https://www.apache.org/licenses/LICENSE-2.0).
+
+Used from Paseo:
+- Provider marks (assets/provider-icons/*.svg, rendered into client/provider-icons.ts by
+  scripts/provider-icons.mjs), copied unchanged from
+    packages/app/src/components/icons/claude-icon.tsx
+    packages/app/src/components/icons/codex-icon.tsx
+    packages/app/src/assets/acp-provider-icons/gemini.svg
+- Theme, status-dot and identity colour values (client/palette.ts), as noted beside each value.
+
+Trademarks: Claude is a trademark of Anthropic, PBC. OpenAI, GPT and Codex are trademarks of OpenAI.
+Gemini is a trademark of Google LLC. The marks are shown only to say which provider an agent runs on.
+This plugin is not made, sponsored, endorsed or certified by Anthropic, OpenAI, Google or Paseo, and is
+not affiliated with them. The Apache License does not grant any trademark rights (section 6).
+
+Used from Lucide (https://lucide.dev):
+- The crown and medal marks for archived lead cards (assets/leader-icons/*.svg and *-48.png, rendered
+  into client/leader-icons.ts as SVG and base64 PNG) are derived from the Lucide "crown" icon
+  (crown-filled, crown-beads) and the Lucide "award" icon (medal-base, medal-ribbon, medal-light):
+  paths reshaped, filled and split into layers.
+- Lucide is licensed under the ISC License, Copyright (c) 2026 Lucide Icons and Contributors. The
+  Feather-derived icons in Lucide are also under the MIT License, Copyright (c) 2013-present Cole
+  Bemis; "crown" and "award" are not on that list, and the MIT text is kept because it is part of
+  Lucide's license file. Both texts in full: licenses/lucide-LICENSE.txt
+  (copied unchanged from https://lucide.dev/license).

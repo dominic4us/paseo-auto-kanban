@@ -1,0 +1,28 @@
+name: Suggestion
+description: Something you would like to work differently
+title: "[Suggestion] "
+labels: [enhancement]
+body:
+  - type: input
+    id: where
+    attributes:
+      label: Which screen or command?
+    validations:
+      required: true
+  - type: textarea
+    id: now
+    attributes:
+      label: How it works now
+    validations:
+      required: true
+  - type: textarea
+    id: wish
+    attributes:
+      label: How you would like it to work
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: What are you trying to get done? How often does it come up?

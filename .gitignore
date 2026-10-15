@@ -1,0 +1,21 @@
+# Dependencies and build output (may be symbolic links to an external build cache)
+node_modules
+dist
+build
+.next
+*.tsbuildinfo
+coverage/
+
+# Tool and OS by-products
+.DS_Store
+@eaDir/
+*.log
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Generated work documents contain real card text. Only synthetic examples may be committed
+PROCESS.md
+!docs/examples/PROCESS.md

@@ -1,0 +1,57 @@
+{
+  "name": "paseo-auto-kanban",
+  "version": "0.2.0",
+  "description": "A Kanban board for Paseo that follows your coding agents: cards for each agent, stages per workspace, and a local ledger you can read and edit from the CLI.",
+  "license": "Apache-2.0",
+  "author": "panto-dominic",
+  "homepage": "https://github.com/panto-dominic/paseo-auto-kanban#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/panto-dominic/paseo-auto-kanban.git"
+  },
+  "bugs": {
+    "url": "https://github.com/panto-dominic/paseo-auto-kanban/issues"
+  },
+  "keywords": [
+    "paseo",
+    "paseo-plugin",
+    "kanban",
+    "ai-agents",
+    "coding-agents",
+    "workflow"
+  ],
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    "./core": {
+      "types": "./dist/server/core/index.d.ts",
+      "import": "./dist/server/core/index.js"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "node scripts/sync-server-version.mjs && tsc && node scripts/cli-compat.mjs",
+    "test": "npm run build && node --test --test-concurrency=4 tests/*.test.mjs",
+    "test:hermes": "node scripts/check-hermes.mjs . --required",
+    "test:web": "node tests/web/run.mjs"
+  },
+  "devDependencies": {
+    "@getpaseo/client": "0.9.1",
+    "@getpaseo/plugin": "0.9.1",
+    "@getpaseo/protocol": "0.9.1",
+    "@types/node": "22.19.7",
+    "@types/react": "19.2.0",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-test-renderer": "19.1.0",
+    "typescript": "5.9.3",
+    "zod": "4.4.3"
+  },
+  "bin": {
+    "kanban": "dist/src/cli/main.js",
+    "paseo-kanban": "dist/src/cli/main.js"
+  }
+}
