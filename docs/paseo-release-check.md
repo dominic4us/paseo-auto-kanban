@@ -21,7 +21,8 @@ never the real ledgers. The plugin uses the data directory of the Paseo server p
 process starts. Exporting `KANBAN_DATA_DIR` in a terminal changes only the commands started from that terminal, such as
 the `kanban` CLI; a server that is already running, and `paseo plugin reload`, keep the directory they had. On a
 machine whose Paseo server holds real boards, testing "in a separate directory" therefore needs a separate server, as
-in [CONTRIBUTING](../CONTRIBUTING.md#trying-your-change-in-paseo).
+in [CONTRIBUTING](../CONTRIBUTING.md#a-separate-test-server) (its own home, port and, to open its web screen,
+`features.webUi.enabled`).
 
 ```sh
 export KANBAN_DATA_DIR="$HOME/kanban-release-check"   # a throwaway directory, for this terminal's kanban CLI

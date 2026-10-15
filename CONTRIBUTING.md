@@ -33,7 +33,7 @@ npm test            # builds, then runs every tests/*.test.mjs (about six minute
 
 Install your checkout under a separate plugin ID so it does not replace a released installation. The plugin uses
 the data folder of the Paseo server it runs in (`KANBAN_DATA_DIR` in the server's environment, else
-`~/paseo-kanban-data`), so test writes on a test machine or a daemon started with a throwaway `KANBAN_DATA_DIR`:
+`~/paseo-kanban-data`), so test writes on a test machine or on [a separate test server](#a-separate-test-server):
 
 ```sh
 paseo plugin install /absolute/path/to/checkout --id paseo-auto-kanban-dev
@@ -43,6 +43,26 @@ paseo plugin reload paseo-auto-kanban-dev     # after each change
 Paseo compiles the TypeScript sources directly; there is no build step for the plugin itself. Disable the
 released plugin while testing, since both would react to the same agent events. Before proposing a change that
 touches Paseo APIs, run the [Paseo release check](docs/paseo-release-check.md) steps that apply.
+
+### A separate test server
+
+On a machine whose Paseo server holds real boards, start a second Paseo server with its own home, port and data
+folder. `KANBAN_DATA_DIR` only counts when it is set for the server process as it starts:
+
+```sh
+TEST="$HOME/paseo-test"
+paseo daemon config set --home "$TEST/.paseo" daemon.listen 127.0.0.1:6877
+paseo daemon config set --home "$TEST/.paseo" features.webUi.enabled true
+paseo daemon config set --home "$TEST/.paseo" pluginsEnabled true
+KANBAN_DATA_DIR="$TEST/kanban-data" paseo daemon start --home "$TEST/.paseo"
+paseo plugin install /absolute/path/to/checkout --id paseo-auto-kanban-dev --home "$TEST/.paseo"
+```
+
+- `daemon.listen` keeps it off the real server's port. Its web screen is at `http://127.0.0.1:6877/` only with
+  `features.webUi.enabled` set in that home (`daemon start` does not read it from the environment); without it the
+  page is a 404.
+- `pluginsEnabled` is the **Enable plugins** switch for that server.
+- Stop it with `paseo daemon stop --home "$TEST/.paseo"` when you are done.
 
 ## Code rules
 

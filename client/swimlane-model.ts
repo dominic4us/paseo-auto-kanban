@@ -271,13 +271,15 @@ export function leadTitleOneLine(title: string, whole = false): boolean {
  * one line (`titleLines` 1, `leadTitleOneLine`) gives the second back, so its last row — the status row — ends the card.
  * A row a card does not have is never kept: no next action, no "→" line (84 rather than 104), a lead's alike.
  */
-export function cardDimensions(hasNextAction: boolean, fontScale = 1, marked = false, summarised: boolean | number = false, busy = false, titleLines: 1 | 2 = 2) {
+export function cardDimensions(hasNextAction: boolean, fontScale = 1, marked = false, summarised: boolean | number = false, busy = false, titleLines: 1 | 2 = 2,
+  reply: 0 | 1 | 2 = 0) {
   // REQ-99: a lead is one row taller too — its family line (16 and the gap over it) under its last row. REQ-104: and
   // one more, its status row under that line. REQ-84: a card with a busy mark, one more for its row. REQ-119: `summarised`
-  // may say how many lead rows (`leadRows`), true being both.
+  // may say how many lead rows (`leadRows`), true being both. REQ-145 ③ (gate 366): a card that needs a response, its reply rows
+  // (`reply`: the chip's, and "Blocked" and the request's state's when it has them) — 18px and the gap over each.
   const rows = summarised === true ? LEAD_ROWS : summarised || 0;
   // REQ-139: counted at 100% and then scaled as one, so the box is the sum of its scaled rows.
-  const base = px((hasNextAction ? 104 : 84) + (marked ? MARK_ROW + 6 : 0) + rows * (16 + 6) + (busy ? 16 + 6 : 0)
+  const base = px((hasNextAction ? 104 : 84) + (marked ? MARK_ROW + 6 : 0) + rows * (16 + 6) + (busy ? 16 + 6 : 0) + reply * (18 + 6)
     - (titleLines === 1 ? 18 : 0));
   return { minHeight: base, ...(fontScale <= 1 ? { height: base } : {}), paddingVertical: px(10),
     paddingHorizontal: px(12), gap: px(6), titleLineHeight: px(18), metaLineHeight: px(14), nextLineHeight: px(16) };

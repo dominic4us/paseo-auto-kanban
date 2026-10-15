@@ -362,6 +362,13 @@ export interface FlowOverlay {
  * it only its answer's `when` branch is bold — whether the step there holds data or not — and never two: a definition with two
  * branches of one answer draws neither. An ambiguous, partly read or unrecorded decision is off the way, its branches plain.
  */
+/**
+ * The report's own word ("반려", "조건부") for a verdict where it was read, else the kind's. D54: a function of its own, not one made
+ * in flowOverlay's loop, where Hermes (the phone apps' engine) would let it keep the loop's last cell (research/364).
+ */
+function verdictWord(events: readonly WorkflowEventDTO[], item: { doc?: number | undefined; verdict?: Verdict | undefined }, w: WorkflowWords): string {
+  return events.find(e => e.kind === 'verdict' && e.doc === item.doc && e.verdict === item.verdict)?.word ?? w.verdict[item.verdict ?? 'unknown'];
+}
 export function flowOverlay(definition: Pick<Definition, 'stages' | 'edges'>, release: WorkflowReleaseDTO | undefined, w: WorkflowWords, unit?: 'instance'): FlowOverlay {
   const passed = new Set(release?.path.map(p => p.stage) ?? []);
   const { edges, stages } = definition;
@@ -399,13 +406,10 @@ export function flowOverlay(definition: Pick<Definition, 'stages' | 'edges'>, re
     // A loop's step carries its verdicts on the way (`path`); any other judged step on its own events, in document order.
     const walked = (release?.path ?? []).filter(p => p.stage === stage.id && p.verdict);
     const judged = walked.length ? walked : cell.events.filter(e => e.kind === 'verdict' && e.verdict);
-    // The report's own word ("반려", "조건부") where it was read, else the kind's.
-    const word = (item: { doc?: number | undefined; verdict?: Verdict | undefined }) =>
-      cell.events.find(e => e.kind === 'verdict' && e.doc === item.doc && e.verdict === item.verdict)?.word ?? w.verdict[item.verdict ?? 'unknown'];
     if (judged.length) {
       const first = judged[0]!, last = judged.at(-1)!;
-      notes[stage.id] = [[first.doc, word(first)].filter(v => v !== undefined).join(' '),
-        ...(judged.length > 1 && last.verdict !== first.verdict ? ['→ ' + word(last)] : [])];
+      notes[stage.id] = [[first.doc, verdictWord(cell.events, first, w)].filter(v => v !== undefined).join(' '),
+        ...(judged.length > 1 && last.verdict !== first.verdict ? ['→ ' + verdictWord(cell.events, last, w)] : [])];
     // A 건's step says what its table cell says (313-F3): "기록 없음 · 규칙 충돌 1" where a common rule took its files, never a bare "기록 없음".
     } else if (instances && cell.state !== 'decision' && cell.state !== 'no-source') notes[stage.id] = [tableCell(release!, stage, w).text];
     else if (cell.state === 'no-record') notes[stage.id] = [w.stateNoRecord];

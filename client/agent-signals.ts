@@ -247,43 +247,47 @@ function createStore() {
     return changed || later;
   };
   const drain = () => {
+    // D54: each lookup keeps its own id and host in a call of its own — made in the loop below, Hermes (the phone apps' engine,
+    // no block scope) would hand the code after the await the id of the loop's last pass (research/364).
+    const recheck = async (id: string, paseo: NonNullable<typeof api>) => {
+      let changed = false;
+      try { changed = settleRecheck(id, (await paseo.agents.ref(id).refresh())?.agent); }
+      catch { rechecks.delete(id); touched.delete(id); }
+      lookups--;
+      if (changed) notify();
+      drain();
+    };
+    const lookup = async (id: string, paseo: NonNullable<typeof api>) => {
+      let bucket: SignalBucket = 'unknown';
+      try {
+        const result = await paseo.agents.ref(id).refresh();
+        // An archived agent is finished work, not an unknown one; anything else keeps its own bucket.
+        if (result?.agent) {
+          if (!active.has(id)) noteActive(result.agent);
+          bucket = result.agent.archivedAt ? 'idle' : signalBucket(result.agent);
+          if (!buckets.has(id)) noteHost(id, result.agent, bucket);
+          if (!buckets.has(id)) {
+            if (result.agent.archivedAt) archivedIds.add(id); else archivedIds.delete(id);
+          }
+          if (!buckets.has(id)) { models.set(id, modelOf(result.agent)); noteHome(result.agent); }
+        }
+      } catch {
+        // A refused or unknown id stays 'Status unavailable'; it never raises a banner or retries.
+      }
+      lookups--;
+      resolved.set(id, bucket); answered.add(id);
+      notify();
+      drain();
+    };
     while (lookups < LOOKUP_LIMIT && queue.length) {
       const id = queue.shift()!, paseo = api;
       if (!paseo) { if (!rechecks.delete(id)) asked.delete(id); dropQueue(); return; }
       lookups++;
       if (rechecks.has(id)) {
-        void (async () => {
-          let changed = false;
-          try { changed = settleRecheck(id, (await paseo.agents.ref(id).refresh())?.agent); }
-          catch { rechecks.delete(id); touched.delete(id); }
-          lookups--;
-          if (changed) notify();
-          drain();
-        })();
+        void recheck(id, paseo);
         continue;
       }
-      void (async () => {
-        let bucket: SignalBucket = 'unknown';
-        try {
-          const result = await paseo.agents.ref(id).refresh();
-          // An archived agent is finished work, not an unknown one; anything else keeps its own bucket.
-          if (result?.agent) {
-            if (!active.has(id)) noteActive(result.agent);
-            bucket = result.agent.archivedAt ? 'idle' : signalBucket(result.agent);
-            if (!buckets.has(id)) noteHost(id, result.agent, bucket);
-            if (!buckets.has(id)) {
-              if (result.agent.archivedAt) archivedIds.add(id); else archivedIds.delete(id);
-            }
-            if (!buckets.has(id)) { models.set(id, modelOf(result.agent)); noteHome(result.agent); }
-          }
-        } catch {
-          // A refused or unknown id stays 'Status unavailable'; it never raises a banner or retries.
-        }
-        lookups--;
-        resolved.set(id, bucket); answered.add(id);
-        notify();
-        drain();
-      })();
+      void lookup(id, paseo);
     }
   };
   const request = (agentIds: readonly string[], first = false) => {

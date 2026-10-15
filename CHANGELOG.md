@@ -3,6 +3,25 @@
 All notable changes, newest first. Versions before 0.2.0 were private test builds published under the plugin
 ID `paseo-kanban`; this summary groups them by theme.
 
+## 0.2.2
+
+- **Phone apps fixed.** Since 0.1.64, the Kanban screen in the Paseo phone apps had its header, buttons and stage tabs
+  overlapping, a large blue disc on cards with a running agent, and those cards' titles missing. Sizes now come out right
+  there too. A card's agent status could also be read for the wrong agent after a lookup on the phone; it is now its own.
+- **"Response needed" is no longer cut.** On a narrow card (a 264px lane, or a phone) the chip read "Response nee…". A card
+  that needs a response now shows the chip on a row of its own under the agent's name, with Draft and the priority beside it.
+  Blocked and the state of a request sent to an agent are on one more row, on any card, and are never cut; so such cards are
+  a row or two taller. The agent's name keeps its usual room, and a checklist's numbers ("0/3") and the age stay whole beside
+  it. On a small phone at a large screen size, the word "Criteria" and the agent a request goes to are what get shortened.
+- **README:** animations at the top of a lead agent handing work to sub-agents and of a real agent's card, the overview and busy-mark animations under *Why*
+  (still images for dark themes and "View without motion" links), and the images load from GitHub so they show on
+  npm too. Install now says which Paseo (0.9.0+) and Node.js (22+) are needed, installs the CLI with
+  `npm install -g --prefix ~/.local` (a root-owned npm folder fails with `EACCES`), updates the plugin and the CLI
+  with two commands, explains where the first board comes from, and walks through moving from `paseo-kanban`,
+  including the old `~/.local/bin/kanban` link (`EEXIST`) and why both must not stay enabled.
+- **Docs:** how to start a separate test server (its own home, port and web screen) in CONTRIBUTING and the release
+  check; the stage names each place uses (*Doing* on phone tabs, `todo (Waiting)` in the CLI).
+
 ## 0.2.1
 
 - **Install from npm.** The plugin can be installed with `paseo plugin install npm:paseo-auto-kanban`, and the

@@ -27,6 +27,8 @@ detail. Facts here follow the code; when they disagree, the code wins and this p
 - **Board.** One per workspace, stored as a JSON ledger in the data folder. The default template `basic@1` has
   four stages: Waiting (shown as *To Do* on English screens), In progress, Review and Done. Stage ids are
   `todo`, `doing`, `review`, `done`; Done is the completion stage (`countsAsDone`).
+  The names differ by place: the phone's tabs say *Doing* for In progress, and the CLI prints the stored name,
+  so `kanban ls` shows `todo (Waiting)` for To Do.
 - **Card.** A unit of work: title, acceptance criteria, notes, next action, priority, deliverables, block reason,
   `awaiting` (agent / user / none) and linked agents. Cards are archived, never deleted.
 - **Intent.** A person creates *drafts* by default; an agent identified by `PASEO_AGENT_ID` creates *requested*
@@ -304,6 +306,17 @@ archive run (at most every ten minutes); auto refresh checks count as such reads
   `PROCESS.md` by hand.
 
 ## Command line reference
+
+### Installing from npm
+
+```sh
+npm install -g --prefix ~/.local paseo-auto-kanban
+kanban --version
+```
+
+`--prefix ~/.local` avoids the `EACCES` a root-owned npm global folder gives; an old `kanban` link in `~/.local/bin`
+stops the install with `EEXIST` until it is removed (see the README's [Command line](../README.md#command-line)). The CLI
+does not update with the plugin: `npm install -g --prefix ~/.local paseo-auto-kanban@latest`.
 
 ### Building and linking
 

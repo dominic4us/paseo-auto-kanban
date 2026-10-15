@@ -502,7 +502,8 @@ test('wide board uses stage columns, 30px controls and 104px next-action cards',
   await act(async () => root.root.findAllByType('View').find(v => v.props.onLayout).props.onLayout({ nativeEvent: { layout: { width: 1200 } } }));
   assert.equal(root.root.findAllByType('Pressable').filter(p => p.props.accessibilityRole === 'tab').length, 0);
   assert.equal(labelled(root, 'Refresh').props.style.width, 30);
-  assert.equal(labelled(root, 'Example card').props.style.minHeight, 104);
+  // REQ-145 ③ (gate 366): this card waits for a person, so it is one reply row taller (104 + 24).
+  assert.equal(labelled(root, 'Example card').props.style.minHeight, 128);
   assert.ok(root.root.findAllByType('ScrollView').some(s => s.props.horizontal));
 });
 test('SDK failure is said, not guessed as "not found", while an RPC failure preserves last good overview', async t => {
@@ -1000,7 +1001,7 @@ test('REQ-19 repeats headings per lane, stretches measurable panels, and keeps e
   assert.match(text(root), /Example Workspace/); assert.match(textOf(hosts(root, 'swimlane-lane-header')[0]), /\(3\)/); assert.doesNotMatch(text(root), /3 cards/);
   assert.ok(root.root.findByProps({ testID: 'project-icon' }));
   const active = labelled(root, 'Example card'), done = labelled(root, 'Finished');
-  assert.equal(active.props.style.backgroundColor, '#ffffff'); assert.equal(active.props.style.height, 104);
+  assert.equal(active.props.style.backgroundColor, '#ffffff'); assert.equal(active.props.style.height, 128, 'REQ-145 ③: and its reply row');
   assert.equal(done.props.style.height, 84);
   assert.equal(active.findAllByProps({ testID: 'card-stage-stripe' }).length, 1);
   assert.equal(done.findAllByProps({ testID: 'card-stage-stripe' }).length, 1);
@@ -1464,7 +1465,7 @@ test('REQ-22 ①②③ a card, its lane header and the detail show the most urge
   // REQ-73: the lead is named by profile → model → title → id; this agent has only its title.
   // REQ-126: "· +1" is its own text beside the name, so a long name never pushes it out.
   assert.match(text(root), /"Agent 2222[^"]*"[\s\S]*"· \+1"/, 'the representative agent leads and the rest collapse into +N');
-  assert.equal(labelled(root, 'Example card').props.style.minHeight, 104, 'REQ-22 ⑦ card height is unchanged');
+  assert.equal(labelled(root, 'Example card').props.style.minHeight, 128, 'REQ-22 ⑦ card height is unchanged (104 and, REQ-145 ③, its reply row)');
   assert.equal(nativeNode(root, 'swimlane-lane-header').props.style.minHeight, 44, 'REQ-22 ③ header height is unchanged');
   const calls = h.calls.length, listCalls = h.agents.calls.length;
   await act(async () => h.agents.upsert(AGENT_B, { status: 'error' }));
@@ -2219,7 +2220,8 @@ test('REQ-73 the card face: sidebar mark + title / provider mark + name (+N), fl
     agentIds: [AGENT_B, AGENT_A], agents: 2, updatedAt };
   const root = await tile(card, { [AGENT_A]: 'permission', [AGENT_B]: 'working' });
   const content = nativeNode(root, 'card-content');
-  const [first, second, third] = content.children;
+  // REQ-145 ③ (gate 366): a card that waits for a person: line two, its reply row, then "Blocked" on a row of its own.
+  const [first, second, replyRow, heldRow, third] = content.children;
   assert.equal(first.children[0].props.testID, 'card-signal-press', 'line one starts with the state mark');
   assert.equal(jsonNodes(first, 'card-signal-icon')[0].props.accessibilityLabel, '입력·권한 대기', 'the most urgent agent leads');
   assert.equal(jsonNodes(first, 'card-state-alert-fill').length, 1, 'permission is the filled CircleAlert');
@@ -2228,11 +2230,14 @@ test('REQ-73 the card face: sidebar mark + title / provider mark + name (+N), fl
   assert.match(words, /provider-codex/, 'the lead\'s provider mark');
   assert.match(words, /"review_Astra-6"[\s\S]*"· 외 1명"/, 'profile label (REQ-126: with its version), then 외 n명');
   assert.doesNotMatch(words, /Link label/, 'link labels stay in the detail');
-  assert.match(words, /"응답 필요"[\s\S]*"차단"[\s\S]*"3일 전"/, 'flags stay on line two, the age ends it');
+  assert.match(words, /"3일 전"/, 'the age ends line two');
+  assert.doesNotMatch(words, /"응답 필요"|"차단"/, 'the chip and "Blocked" are not on line two');
+  assert.equal(replyRow.props.testID, 'card-reply-row'); assert.match(JSON.stringify(replyRow), /"응답 필요"/);
+  assert.equal(heldRow.props.testID, 'card-held-row'); assert.match(JSON.stringify(heldRow), /"차단"/);
   assert.doesNotMatch(text(root), /"보통"/, 'research/88: "Normal" is not written');
   assert.equal(jsonNodes(second, 'card-age')[0].props.accessibilityLabel, '마지막 변경 3일 전');
   assert.equal(third.children[0], '→ Pick one', 'the next action reads as the step after');
-  assert.equal(labelled(root, base.title).props.style.height, 104, 'height unchanged with a next action');
+  assert.equal(labelled(root, base.title).props.style.height, 104 + 48, 'a next action, and (REQ-145 ③) the reply row and the row of "Blocked"');
   // A working lead: the ring, and the model when the agent carries no profile label.
   const working = await tile({ ...card, awaiting: null, blocked: false, nextAction: '', priority: 'high', agentIds: [AGENT_B], agents: 1 },
     { [AGENT_B]: 'working' });
@@ -6381,6 +6386,39 @@ test('REQ-96 "Response needed" opens the agent that waits — the one asking, el
   await leaveOpen(root);
   assert.deepEqual(opened.at(-1), ['agent', AGENT_B]);
 });
+test('REQ-145 ③ (gate 366) a card that needs a response gets a reply row: the chip and its flags there, line two keeps the name\'s 72px', async t => {
+  const h = subCardHarness(), { navigation } = opener();
+  const lead = h.base.cards.find(c => c.title === 'Lead card');
+  h.addCard({ op: 'link', id: lead.id, agentId: AGENT_B, role: 'worker' });
+  h.external({ awaiting: 'user', priority: 'high' });
+  const { NAME_MIN_WIDTH, EXPENDABLE_SHRINK } = h.load('client/components.tsx');
+  const { cardDimensions } = h.load('client/swimlane-model.ts');
+  const root = await render(t, h.load('client/overview.tsx').OverviewScreen, { ...h.props, navigation });
+  const minOf = title => flatStyle(inCard(root, title, 'card-agent')[0].props.style).minWidth;
+  assert.equal(inCard(root, 'Lead card', 'card-reply-row').length, 0, 'nobody waits: no reply row');
+  await act(async () => h.agents.upsert(AGENT_B, { status: 'running', pendingPermissions: [{ id: 'p' }] }));
+  assert.equal(inCard(root, 'Lead card', 'card-reply-row').length, 1);
+  for (const title of ['Lead card', 'Example card']) assert.equal(minOf(title), NAME_MIN_WIDTH, title + ': the name keeps its 72px (REQ-126)');
+  // The chip and the priority are on the reply row, not on line two.
+  const row = inCard(root, 'Example card', 'card-reply-row')[0];
+  assert.equal(row.findAll(n => n.props?.testID === 'card-reply' && typeof n.type === 'string').length, 1);
+  assert.equal(row.findAll(n => n.props?.testID === 'card-priority' && typeof n.type === 'string').length, 1);
+  // Priority and draft give way first, the chip after them (gate 367: "Blocked" and the request's state never, on their own row).
+  const chip = flatStyle(inCard(root, 'Example card', 'card-reply')[0].props.style), high = flatStyle(inCard(root, 'Example card', 'card-priority')[0].props.style);
+  assert.deepEqual([chip.flexShrink, high.flexShrink, high.minWidth], [1, EXPENDABLE_SHRINK, 0]);
+  assert.ok(60 * 117 / (117 + EXPENDABLE_SHRINK * 20) < 1 / 64, 'the chip\'s share while the priority still has 20px');
+  assert.equal(allText(inCard(root, 'Example card', 'card-reply')[0]), 'Response needed');
+  assert.equal(cardDimensions(false, 1, false, 0, false, 2, 1).height - cardDimensions(false).height, 24, 'the reply row (18) and its gap (6)');
+  assert.equal(cardDimensions(false, 1, false, 0, false, 2, 2).height - cardDimensions(false).height, 48, 'and the row of "Blocked" and the request\'s state');
+  assert.equal(inCard(root, 'Example card', 'card-held-row').length, 0, 'no blocked flag or request: no second row');
+  // Gate 367: "Blocked" on any card — waiting for a person or not — has the row of its own and never shrinks.
+  const other = subCardHarness(); other.external({ awaiting: null, blockedReason: 'Waiting for a key' });
+  const plain = await render(t, other.load('client/overview.tsx').OverviewScreen, other.props);
+  const held = inCard(plain, 'Example card', 'card-held-row');
+  assert.equal(held.length, 1); assert.equal(inCard(plain, 'Example card', 'card-reply-row').length, 0);
+  const blocked = held[0].findAll(n => n.props?.testID === 'card-blocked' && typeof n.type === 'string')[0];
+  assert.equal(flatStyle(blocked.props.style).flexShrink, 0);
+});
 test('REQ-96 phone: the long-press sheet starts with "Go to agent"; "Response needed" takes a tap', async t => {
   const h = subCardHarness({ mobile: true, platform: 'ios', width: 390 }), { opened, navigation } = opener();
   const root = await render(t, h.load('client/overview.tsx').OverviewScreen, { ...h.props, navigation });
@@ -6897,12 +6935,15 @@ async function criteriaBoard(t, options = {}) {
 test('REQ-103 ② the card says "Criteria 2/3" on its second row, a check with "Criteria 3/3", nothing without a checklist', async t => {
   const { h, root } = await criteriaBoard(t), c = palette(h.props.theme);
   const plain = inCard(root, 'Two of three', 'card-criteria')[0];
-  assert.equal(allText(plain), 'Criteria 2/3');
+  // REQ-145 ③ (gate 367): the word and the numbers are two texts — on a narrow line the word gives way, the numbers never.
+  const words = node => node.findAllByType('Text').map(allText);
+  assert.deepEqual(words(plain), ['Criteria', '2/3']);
+  assert.deepEqual(plain.findAllByType('Text').map(t => flatStyle(t.props.style).flexShrink), [1, 0]);
   assert.equal(plain.findAllByType('Icon').length, 0, 'no check until every line is ticked');
   assert.equal(plain.findAllByType('Text')[0].props.style.color, readable(c.foregroundMuted, c.card), 'muted like the age');
   assert.ok(plain.parent === lineTwo(root, 'Two of three'), 'on the row with the assignee and the age');
   const all = inCard(root, 'All ticked', 'card-criteria')[0];
-  assert.equal(allText(all), 'Criteria 3/3');
+  assert.deepEqual(words(all), ['Criteria', '3/3']);
   assert.equal(all.findAllByType('Icon')[0].props.name, 'Check');
   assert.equal(all.props.accessibilityLabel, 'All 3 criteria ticked');
   assert.equal(inCard(root, 'Plain criteria', 'card-criteria').length + inCard(root, 'Plain criteria', 'card-criteria-unmet').length, 0);
@@ -6912,7 +6953,7 @@ test('REQ-103 ② the card says "Criteria 2/3" on its second row, a check with "
 test('REQ-103 ② a done card with unticked lines is marked "Criteria unchecked" in plain orange words, not a chip, and never counted', async t => {
   const { h, root } = await criteriaBoard(t), c = palette(h.props.theme);
   const mark = inCard(root, 'Done unticked', 'card-criteria-unmet')[0];
-  assert.equal(allText(mark), 'Criteria unchecked 1/2');
+  assert.deepEqual(mark.findAllByType('Text').map(allText), ['Criteria unchecked', '1/2'], 'gate 367: the numbers a text of their own');
   assert.equal(mark.props.accessibilityLabel, 'Done with criteria unchecked: 1 of 2 ticked');
   const words = mark.findAllByType('Text')[0].props.style;
   assert.equal(words.color, readable(c.statusWarning, c.card)); assert.notEqual(words.fontWeight, '600', 'not bold like "Response needed"');
@@ -6928,8 +6969,8 @@ test('REQ-103 ② a done card with unticked lines is marked "Criteria unchecked"
   assert.equal(nativeNode(plain, 'attention-count').children[0], '1', 'the same count without a checklist');
   // Korean.
   const ko = await criteriaBoard(t, { locale: 'ko' });
-  assert.equal(allText(inCard(ko.root, 'Done unticked', 'card-criteria-unmet')[0]), '기준 미확인 완료 1/2');
-  assert.equal(allText(inCard(ko.root, 'Two of three', 'card-criteria')[0]), '기준 2/3');
+  assert.deepEqual(inCard(ko.root, 'Done unticked', 'card-criteria-unmet')[0].findAllByType('Text').map(allText), ['기준 미확인 완료', '1/2']);
+  assert.deepEqual(inCard(ko.root, 'Two of three', 'card-criteria')[0].findAllByType('Text').map(allText), ['기준', '2/3']);
 });
 test('REQ-103 ③ the top and each lane head say "Cards N/M" beside the bar, with no percent', async t => {
   const { root } = await criteriaBoard(t);

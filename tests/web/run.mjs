@@ -485,6 +485,45 @@ const req138Reads = (locale = 'ko') => {
     boards: Object.fromEntries(all.map(x => [x.id, { board: view(x), revision: x.revision, locale, observedAt: T(6) }])),
     archived: Object.fromEntries(all.map(x => [x.id, archived52(x)])) };
 };
+// REQ-145 ③ (gate 366·367): "Response needed" on a 264px card and a phone's is never cut, with the name's 72px (REQ-126), a
+// checklist's numbers, "Blocked", a request's state and the age kept whole. In progress: a chip with a three-item checklist; a long
+// label with every flag (blocked, high) and a checklist whose request was sent from the board to a plain chat (applyOperations
+// 'dispatch', so "Waiting to send ⏳ · latest agent"); "· +1" with a low priority and a 1/10 checklist; in To Do a draft with no lead
+// and no assignee (its "No agent" put on the read card as the read handlers give it, 366 make-flags); in review a long label under
+// a busy mark over 2 hours. `req145-<locale>-<percent>`. Made-up names only.
+const R145_IDS = Object.fromEntries(['ask', 'long', 'pair', 'pairTwo', 'busy'].map((key, i) => [key, '00000000-0000-4000-8000-0000000145' + String(i).padStart(2, '0')]));
+const R145T = { ask: 'Fix flaky login test', long: 'Crowded reply card', pair: 'Shared reply card', none: 'Nobody assigned', busy: 'Busy long build' };
+const req145Reads = key => {
+  const [locale, percent = '100'] = key.split('-'), now = Date.now(), ago = minutes => new Date(now - minutes * 60000).toISOString();
+  let r = newBoard('e', 'wks_example01');
+  const three = '- [ ] First\n- [ ] Second\n- [ ] Third', ten = ['- [x] One', ...Array.from({ length: 9 }, (_, i) => '- [ ] Item ' + (i + 2))].join('\n');
+  for (const [title, stageId, agentIds, extra] of [[R145T.ask, 'doing', ['ask'], { acceptanceCriteria: three }],
+    [R145T.long, 'todo', ['long'], { intent: 'draft', awaiting: 'user', blockedReason: 'Waiting', priority: 'high', acceptanceCriteria: three }],
+    [R145T.pair, 'doing', ['pair', 'pairTwo'], { priority: 'low', acceptanceCriteria: ten }], [R145T.none, 'todo', [], { awaiting: 'user' }], [R145T.busy, 'review', ['busy']]]) {
+    r = applyOperations(r, [{ ...add(title, stageId), ...(extra ?? {}) }], actor, ctx(ago(0))).board;
+    for (const id of agentIds) r = applyOperations(r, [{ op: 'link', id: r.cards.at(-1).id, agentId: R145_IDS[id] }], actor, ctx(ago(0))).board;
+    // Gate 367: the crowded card's request goes the real way — sent from the board to In progress for a plain chat, so the read
+    // model says "Waiting to send ⏳ · latest agent" (dispatchFallback), the longest state.
+    if (title === R145T.long) r = applyOperations(r, [{ op: 'dispatch', id: r.cards.at(-1).id, to: 'doing', targetAgentId: R145_IDS.long }], actor, ctx(ago(0)), 'board').board;
+  }
+  const marks = new Map([[r.cards.find(c => c.title === R145T.busy).id, { text: 'Integration tests', since: ago(150), by: 'cli' }]]);
+  const request = { [R145T.none]: 'noLead' };
+  const view = x => { const v = toBoardDTO(x, locale, 'off', now, undefined, marks);
+    return { ...v, stages: v.stages.map(st => ({ ...st, cards: st.cards.map(c => request[c.title] ? { ...c, intent: 'draft', dispatch: { state: request[c.title], sentAt: null } } : c) })) }; };
+  const asking = { status: 'running', pendingPermissions: [{ requestId: 'q1' }], requiresAttention: true, attentionReason: 'permission', attentionTimestamp: ago(0) };
+  const agents = [R_AGENT(R145_IDS.ask, { provider: 'claude', model: 'claude-sonnet-5-5', thinkingOptionId: null, labels: {}, ...asking }),
+    R_AGENT(R145_IDS.long, { provider: 'codex', model: 'gpt-6-astra', thinkingOptionId: 'xhigh', labels: { profile: '실행_환경_장문검증_Astra' } }),
+    R_AGENT(R145_IDS.pair, { provider: 'claude', model: 'claude-opus-5-5', thinkingOptionId: 'high', labels: {}, ...asking }),
+    R_AGENT(R145_IDS.pairTwo, { provider: 'claude', model: 'claude-sonnet-5-5', labels: {} }),
+    R_AGENT(R145_IDS.busy, { provider: 'codex', model: 'gpt-6-astra', thinkingOptionId: 'xhigh', labels: { profile: '실행_환경_장문검증_Astra' } })];
+  return { agents: [...AGENTS, ...agents], models: M_MODELS, cardLocale: locale,
+    ui: { hiddenProjects: [], order: { projects: [], workspaces: [] }, ...(percent === '100' ? {} : { settings: { uiScale: Number(percent) } }) },
+    overview: { ...toOverview([r], locale, new Date(now).toISOString(), () => marks), boardViews: [r].map(view),
+      removedIds: [], workspaceLabels: { available: false, source: 'none', definitions: [], byWorkspace: {} } },
+    boards: { [r.id]: { board: view(r), revision: r.revision, locale, observedAt: new Date(now).toISOString() } },
+    cards: Object.fromEntries(r.cards.map(card => [card.id, { boardId: r.id, revision: r.revision, card, template: r.template,
+      history: r.history.filter(h => h.cardId === card.id), ...enteredOf(stageEntry(stageEntries(r), card)), busy: marks.get(card.id) ?? null }])) };
+};
 /**
  * REQ-142: `lead-panel…` is the lead fixture in the first workspace's panel; `lead-panel-foreign` gives every agent another
  * workspace (gate 340 F1: a card on this board whose agent belongs elsewhere), `…-ko` reads every reply in Korean.
@@ -507,7 +546,7 @@ const fixtureBase = (mode, mobile, remembered = false) => ({ mobile, width: mobi
   projects: { projects: [{ projectId: 'prj_example01', projectDisplayName: 'Example Project' }] }, agents: AGENTS,
   workspaces: { entries: [{ id: 'wks_example01', name: 'Example Workspace', projectId: 'prj_example01', projectDisplayName: 'Example Project' },
     { id: 'wks_example02', name: 'Second Workspace', projectId: 'prj_example01', projectDisplayName: 'Example Project' }], pageInfo: { nextCursor: null } },
-  ...(String(remembered).startsWith('req52-') ? req52Reads(remembered.slice(6)) : String(remembered).startsWith('req139-') ? req139Reads(remembered.slice(7)) : String(remembered).startsWith('req138-') ? req138Reads(remembered.slice(7)) : String(remembered).startsWith('req137-') ? req137Reads(remembered.slice(7)) : String(remembered).startsWith('req136f2-') ? req136f2Reads(remembered.slice(9)) : String(remembered).startsWith('req136-') ? req136Reads(remembered.slice(7)) : String(remembered).startsWith('req135-') ? req135Reads(remembered.slice(7)) : String(remembered).startsWith('req133-') ? req133Reads(remembered.slice(7)) : String(remembered).startsWith('req130-') ? req130Reads(remembered.slice(7)) : remembered === 'models' ? modelReads() : String(remembered).startsWith('modelsperm-') ? permReads(remembered.slice(11)) : String(remembered).startsWith('modelstate-') ? stateReads(remembered.slice(11)) : remembered === 'mail128long' ? mail128Reads(true) : remembered === 'mail128en' ? mail128Reads(false, 'en') : remembered === 'mailnodir' ? mailReads(MAIL, 'ko', '') : String(remembered).startsWith('wf-') ? workflowReads(remembered.slice(3)) : String(remembered).startsWith('bplong-') ? longNameReads({ locale: remembered.slice(7) }) : String(remembered).startsWith('dispatchheld-') ? heldReads(remembered.slice(13)) : String(remembered).startsWith('dispatch-') ? dispatchReads(remembered.slice(9)) : remembered === 'newlead' ? newLeadReads() : remembered === 'topic' ? topicReads() : remembered === 'lead' || String(remembered).startsWith('lead-panel') ? leadReads() : remembered === 'status' ? statusReads() : remembered === 'refs' ? refReads() : remembered === 'dwell' ? dwellReads() : remembered === 'busy' ? busyReads() : remembered === 'mail' ? mailReads() : remembered === 'mail128' ? mail128Reads() : remembered === 'mailtall' ? mailReads(MAIL_TALL) : remembered ? { ...lateReads(undefined), later: lateReads(LATE_OF) } : {}) });
+  ...(String(remembered).startsWith('req145-') ? req145Reads(remembered.slice(7)) : String(remembered).startsWith('req52-') ? req52Reads(remembered.slice(6)) : String(remembered).startsWith('req139-') ? req139Reads(remembered.slice(7)) : String(remembered).startsWith('req138-') ? req138Reads(remembered.slice(7)) : String(remembered).startsWith('req137-') ? req137Reads(remembered.slice(7)) : String(remembered).startsWith('req136f2-') ? req136f2Reads(remembered.slice(9)) : String(remembered).startsWith('req136-') ? req136Reads(remembered.slice(7)) : String(remembered).startsWith('req135-') ? req135Reads(remembered.slice(7)) : String(remembered).startsWith('req133-') ? req133Reads(remembered.slice(7)) : String(remembered).startsWith('req130-') ? req130Reads(remembered.slice(7)) : remembered === 'models' ? modelReads() : String(remembered).startsWith('modelsperm-') ? permReads(remembered.slice(11)) : String(remembered).startsWith('modelstate-') ? stateReads(remembered.slice(11)) : remembered === 'mail128long' ? mail128Reads(true) : remembered === 'mail128en' ? mail128Reads(false, 'en') : remembered === 'mailnodir' ? mailReads(MAIL, 'ko', '') : String(remembered).startsWith('wf-') ? workflowReads(remembered.slice(3)) : String(remembered).startsWith('bplong-') ? longNameReads({ locale: remembered.slice(7) }) : String(remembered).startsWith('dispatchheld-') ? heldReads(remembered.slice(13)) : String(remembered).startsWith('dispatch-') ? dispatchReads(remembered.slice(9)) : remembered === 'newlead' ? newLeadReads() : remembered === 'topic' ? topicReads() : remembered === 'lead' || String(remembered).startsWith('lead-panel') ? leadReads() : remembered === 'status' ? statusReads() : remembered === 'refs' ? refReads() : remembered === 'dwell' ? dwellReads() : remembered === 'busy' ? busyReads() : remembered === 'mail' ? mailReads() : remembered === 'mail128' ? mail128Reads() : remembered === 'mailtall' ? mailReads(MAIL_TALL) : remembered ? { ...lateReads(undefined), later: lateReads(LATE_OF) } : {}) });
 
 // REQ-126: agents named "<label>-<version>-<thinking>" — the version from the host's model list (`models`). A lead "총괄-09_…" in
 // review, a topic lead and its worker (two agents: "· +1") in progress, a label from before 09-30 ("실행_Sol-6"), a long label on a
@@ -1010,7 +1049,7 @@ try {
   // REQ-135: =req135 the family line. REQ-136: =req136 only the English screen fixes (research/277) — early1, early2, req124, d47, req130,
   // req133, req134, req135 and req136 are all of it.
   // REQ-143: =req143 only the built-in banner line, the wide flow's loop labels and the phone's 건 table heading (research/347 X4·X9·X10).
-  const ONLY = process.env.KANBAN_WEB_ONLY ?? '', D47 = ONLY === 'd47', R130 = ONLY === 'req130', R133 = ONLY === 'req133', R134 = ONLY === 'req134', R135 = ONLY === 'req135', R136 = ONLY === 'req136', R137 = ONLY === 'req137', R125 = ONLY === 'req125', R52 = ONLY === 'req52', R125U1 = ONLY === 'req125u1', R125U2 = ONLY === 'req125u2', R125U3 = ONLY === 'req125u3', R125U4 = ONLY === 'req125u4', R138 = ONLY === 'req138', R139 = ONLY === 'req139', R142 = ONLY === 'req142', R143 = ONLY === 'req143';
+  const ONLY = process.env.KANBAN_WEB_ONLY ?? '', D47 = ONLY === 'd47', R130 = ONLY === 'req130', R133 = ONLY === 'req133', R134 = ONLY === 'req134', R135 = ONLY === 'req135', R136 = ONLY === 'req136', R137 = ONLY === 'req137', R125 = ONLY === 'req125', R52 = ONLY === 'req52', R125U1 = ONLY === 'req125u1', R125U2 = ONLY === 'req125u2', R125U3 = ONLY === 'req125u3', R125U4 = ONLY === 'req125u4', R138 = ONLY === 'req138', R139 = ONLY === 'req139', R142 = ONLY === 'req142', R143 = ONLY === 'req143', R145 = ONLY === 'req145';
   const E1 = ONLY === 'early1', E2 = ONLY === 'early2', EARLY = ONLY === 'early' || E1 || E2;
   // Helpers the early scenes share across its two halves (=early1, =early2).
   const label = t => `[aria-label="${t}"]`;
@@ -1029,7 +1068,7 @@ try {
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] }); await p.waitForTimeout(900);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] }); await p.waitForTimeout(400);
   };
-  if (ONLY !== 'req124' && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !E2) {
+  if (ONLY !== 'req124' && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !E2) {
   for (const mode of ['light', 'dark']) {
     const c = palette(PASEO_THEMES[mode]), scene = `wide-${mode}`, line = selectedLine(c, c.surface0);
     const p = await (await browser.newContext({ viewport: { width: 1400, height: 900 } })).newPage();
@@ -1900,7 +1939,7 @@ try {
   }
   // REQ-133: =early grew past ten minutes (588 s at 0.1.48, over 595 s now), so it runs as =early1 (the scenes above) and =early2
   // (from here); =early is still both. Their shared helpers are declared before the first half.
-  if (ONLY !== 'req124' && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !E1) {
+  if (ONLY !== 'req124' && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !E1) {
   // ---- REQ-95·96 by real input: the lead card first whatever the order, its head title, crown and stage edge; the orange of
   // an awaited answer; "Go to agent ↗" on hover and atop ⋯; "Response needed" to the agent that waits; the phone's sheet ----
   const opened = p => p.evaluate(() => window.__opened.slice());
@@ -2111,8 +2150,10 @@ try {
     // The words themselves (the icon shim draws its glyph as a letter beside them).
     const words = ' > div[dir="auto"]:not([data-icon-glyph])';
     await p.waitForSelector(some + ' ' + byId('card-criteria'), { timeout: 15000 });
-    check(scene, '② "Criteria 2/3" on the card', (await p.locator(some + ' ' + byId('card-criteria') + words).innerText()).trim() === 'Criteria 2/3');
-    check(scene, '② "Criteria 3/3" with a check', (await p.locator(all + ' ' + byId('card-criteria') + words).innerText()).trim() === 'Criteria 3/3'
+    // REQ-145 ③ (gate 367): the word and the numbers are two texts, so the numbers stay when the word gives way.
+    const said = async sel => (await p.locator(sel + ' ' + byId('card-criteria') + words).allInnerTexts()).map(t => t.trim()).join(' ');
+    check(scene, '② "Criteria 2/3" on the card', await said(some) === 'Criteria 2/3', await said(some));
+    check(scene, '② "Criteria 3/3" with a check', await said(all) === 'Criteria 3/3'
       && (await p.locator(all + ' ' + byId('card-criteria') + ' [data-icon="Check"]').count()) === 1);
     // On the second row, inside the card, clear of the age and the name.
     const cb = await box(p, some + ' ' + byId('card-criteria')), nb = await box(p, some + ' ' + byId('card-agent')), card = await box(p, some);
@@ -2124,7 +2165,7 @@ try {
     if (mobile) { await p.locator(byId('mobile-tab-done')).first().tap(); await p.waitForTimeout(400); }
     await p.waitForSelector(done + ' ' + byId('card-criteria-unmet'), { timeout: 5000 }).catch(() => {});
     const mark = p.locator(done + ' ' + byId('card-criteria-unmet'));
-    check(scene, '② a done card with unticked lines says "Criteria unchecked 1/2"', (await mark.count()) === 1 && (await mark.locator(words.trim()).innerText()).trim() === 'Criteria unchecked 1/2');
+    check(scene, '② a done card with unticked lines says "Criteria unchecked 1/2"', (await mark.count()) === 1 && (await mark.locator(words.trim()).allInnerTexts()).map(t => t.trim()).join(' ') === 'Criteria unchecked 1/2');
     if (await mark.count()) {
       const look = await style(p, done + ' ' + byId('card-criteria-unmet'), ['borderTopWidth', 'backgroundColor']);
       const tone = await p.locator(done + ' ' + byId('card-criteria-unmet') + words).first().evaluate(el => [getComputedStyle(el).color, getComputedStyle(el).fontWeight]);
@@ -3047,7 +3088,7 @@ try {
       els.filter(e => e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1).map(e => e.innerText));
     check(scene, 'no label or note cut', cut.length === 0, JSON.stringify(cut));
   }
-  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143) {
+  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145) {
   // ---- REQ-124 2단위 (research/215·216·217): the wide lane heading's "보드 | 워크플로", only on the lane whose workspace holds
   // a workflow definition; the flow (steps, straight-angled lines, the diamond, the loops that went back, the chosen release's
   // way bold), the release × step table whose states are told apart ("기록 없음" is not "not done"), and a cell's evidence.
@@ -3192,7 +3233,7 @@ try {
     await p.context().close();
   }
   }
-  if (!EARLY && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143) {
+  if (!EARLY && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145) {
   // ---- REQ-126: every agent named "<label>-<version>-<thinking>" on the cards (a lead, a topic lead, a worker with "· +1", an old label, a
   // long label on a crowded card, no label, archived, unknown) and in the detail (assignees, author, the move's reason, the history) ----
   for (const [mode, mobile] of [['light', false], ['dark', false], ['light', true], ['dark', true]]) {
@@ -3252,7 +3293,7 @@ try {
     await p.context().close();
   }
   }
-  if (!EARLY && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143) {
+  if (!EARLY && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145) {
   // ---- D45: the wide detail's side panel (280px) keeps each assignee row on one line — a long label ("…_Astra-6-XHigh", also
   // the card's author), an old one ("실행_Sol-6-High"), new ones ("실행_Sol-6.1-High", with a second agent) — the name cut at its end,
   // the state and id whole; on 390px the rows read and wrap as before. ----
@@ -3480,7 +3521,7 @@ try {
   }
   fs.writeFileSync(path.join(out, 'd47.json'), JSON.stringify(d47Log, null, 2) + '\n');
   }
-  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143) {
+  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145) {
   // ---- research/210 (208-D1) kept, REQ-124 ③: on 390px no workflow button in this release (not even on the lane with a
   // definition); the gate's real names keep eight characters and more, the heading's parts side by side inside the screen. ----
   for (const [mode, lang] of [['light', 'en'], ['dark', 'en'], ['light', 'ko'], ['dark', 'ko']]) {
@@ -3518,7 +3559,7 @@ try {
     await p.context().close();
   }
   }
-  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143) {
+  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145) {
   // ---- REQ-127: the board screen a lane's name opens has the lane's "보드 | 워크플로" too, beside its title — only for a workspace
   // with a definition, only on a wide window. The workflow takes the board's whole width in place of its columns; the choice is the
   // lane's own (one session value), so the lane shows what its board showed when it is left. 1400 and 1920, light and dark. ----
@@ -4135,7 +4176,10 @@ try {
       check(scene, title + ': nothing cut', cut.length === 0, JSON.stringify(cut));
       const fb = await box(p, fam(title)), cb = await box(p, card(title) + byId('card-content'));
       check(scene, title + ': the line inside the card', fb && cb && fb.x + fb.width <= cb.x + cb.width - 11 && fb.x >= cb.x, JSON.stringify([fb, cb]));
-      check(scene, title + ': one line, the card as tall as before', fb && fb.height <= 17 && (await box(p, label(title))).height === 84 + 44 - 18, JSON.stringify(fb));
+      // REQ-145 ③ (gate 366): a lead asking you has its reply row (and a blocked one the row under it), 24px each.
+      const replyRows = await p.locator(label(title) + ' :is(' + byId('card-reply-row') + ', ' + byId('card-held-row') + ')').count();
+      check(scene, title + ': one line, the card as tall as before', fb && fb.height <= 17 && (await box(p, label(title))).height === 84 + 44 - 18 + replyRows * 24,
+        JSON.stringify({ fb, replyRows }));
     }
     // The narrow rule: what the full lead says at 264px (wide) and on a phone — written down, the counts always there.
     check(scene, 'Full lead: every count said (sub-cards 3, running 1, not done 3, awaiting 1)', ['all', 'running', 'open', 'awaiting'].every(k => (fits['Full lead'] ?? '') !== '?'));
@@ -4531,7 +4575,8 @@ try {
       const scene = `req137-281-sent-${step}-${width}-${locale}-${mode}`, { p, errors } = await open('sent-' + step);
       const face = cardOf(RL_HISTORY) + ' ' + byId('card-dispatch-sent');
       await p.waitForSelector(face, { timeout: 8000 }).catch(() => {});
-      const chip = (await p.locator(face).count()) ? (await p.locator(face).first().innerText()).trim() : '';
+      // REQ-145 ③ (gate 367): the state and " · latest agent" are two texts now (the agent's name may give way), so read their words.
+      const chip = (await p.locator(face).count()) ? (await p.locator(face).first().evaluate(el => el.textContent)).trim() : '';
       const said = step === 'never';
       check(scene, `F2 the card's line says "${m.dispatchSent('').trim()}"` + (said ? ' and the latest agent (a real fallback)' : ', never the latest agent'),
         chip.startsWith(m.dispatchSent('').trim()) && chip.endsWith(latest) === said, chip);
@@ -6527,6 +6572,95 @@ try {
       await p.context().close();
     }
   }
+  }
+  // ---- REQ-145 ③ (gate 366·367): on a 264px card (1920) and a phone's (390, 360), at 80% to 150%, in either language, light and
+  // dark: "Response needed" whole on its reply row, the name's 72px kept (REQ-126) beside a checklist's numbers and the age,
+  // "Blocked" and the request's state word for word on a row of their own, "· +1" and the busy mark's "Over 2h" whole, all inside
+  // the card. What may give way (req145-limits.json): the priority and "Draft", the word "Criteria", the agent a request goes to. ----
+  if (ONLY === '' || R145) {
+  const cards145 = (p, titles) => p.evaluate(titles => titles.map(title => {
+    const card = [...document.querySelectorAll('[data-testid^="kanban-card-"]')].find(e => e.getAttribute('aria-label') === title && e.getBoundingClientRect().width > 0);
+    if (!card) return { title, missing: true };
+    const content = card.querySelector('[data-testid="card-content"]'), inner = content.getBoundingClientRect(), cs = getComputedStyle(content);
+    const right = inner.right - (parseFloat(cs.paddingRight) || 0) - (parseFloat(cs.borderRightWidth) || 0), bottom = inner.bottom - (parseFloat(cs.borderBottomWidth) || 0);
+    const cut = el => !!el && el.scrollWidth > el.clientWidth + .5;
+    const leaf = el => el ? [...el.querySelectorAll('*')].concat(el).find(e => e.childElementCount === 0 && e.textContent.trim()) ?? null : null;
+    const part = (id, inside = false) => { const el = card.querySelector(`[data-testid="${id}"]`); if (!el) return null; const t = inside ? leaf(el) : el, r = el.getBoundingClientRect();
+      return { text: (t?.textContent ?? '').trim(), cut: cut(t), right: Math.round(r.right * 10) / 10, bottom: Math.round(r.bottom * 10) / 10, width: Math.round(r.width * 10) / 10 }; };
+    // The name's letters shown whole before its "…" (gate 366's names/ measure).
+    const nameEl = card.querySelector('[data-testid="card-agent-name"]');
+    let shown = null;
+    if (nameEl) { const edge = nameEl.getBoundingClientRect().right - (cut(nameEl) ? 8 : 0), walk = document.createTreeWalker(nameEl, 4), range = document.createRange(); let node; shown = 0;
+      while ((node = walk.nextNode())) for (let i = 0; i < node.length; i++) { range.setStart(node, i); range.setEnd(node, i + 1); if (range.getBoundingClientRect().right <= edge) shown++; } }
+    return { title, right: Math.round(right * 10) / 10, bottom: Math.round(bottom * 10) / 10, chip: part('card-reply-chip', true), replyText: part('card-reply-text'),
+      row: part('card-reply-row'), held: part('card-held-row'), agent: part('card-agent'), name: part('card-agent-name'), shown, others: part('card-agent-others'),
+      criteria: part('card-criteria', true) ?? part('card-criteria-unmet', true), age: part('card-age') ?? part('card-dwell-text'), overdue: part('card-busy-overdue-text'),
+      count: part('card-criteria-count'), blocked: part('card-blocked'),
+      dispatch: [...card.querySelectorAll('[data-testid^="card-dispatch-"]:not([data-testid="card-dispatch-detail"])')].map(e => {
+        const texts = e.childElementCount ? [...e.children] : [e], r = e.getBoundingClientRect();
+        return { label: e.getAttribute('aria-label'), head: { text: texts[0].textContent, cut: cut(texts[0]) },
+          tail: texts[1] ? { text: texts[1].textContent, cut: cut(texts[1]) } : null, right: Math.round(r.right * 10) / 10 }; })[0] ?? null,
+      priority: part('card-priority'), draft: part('card-draft') };
+  }), titles);
+  const scenes145 = [];
+  for (const width of [1920, 390, 360]) for (const percent of [80, 90, 100, 110, 120, 130, 140, 150]) for (const lang of ['en', 'ko'])
+    for (const mode of ['light', 'dark']) scenes145.push([lang, String(percent), width, mode]);
+  const limits145 = [];
+  for (const [lang, percent, width, mode] of scenes145) {
+    const mobile = width < 760, scene = `req145-${width}-${lang}-${percent}-${mode}`, m = copy(lang), k = Number(percent) / 100;
+    const p = await (await browser.newContext(mobile ? { viewport: { width, height: 800 }, hasTouch: true, isMobile: true } : { viewport: { width: 1920, height: 1000 } })).newPage();
+    p.setDefaultTimeout(5000);
+    const errors = []; p.on('pageerror', e => errors.push(String(e)));
+    await p.goto(page(mode, mobile, `req145-${lang}-${percent}`));
+    await p.waitForSelector(`[aria-label="${R145T.ask}"]`, { timeout: 15000 }).catch(() => {});
+    await p.waitForFunction(text => [...document.querySelectorAll('[data-testid="card-agent-name"]')].some(e => e.textContent.startsWith(text)), 'Sonnet-5.5', { timeout: 8000 }).catch(() => {});
+    await p.waitForTimeout(300);
+    const rows = [];
+    for (const [stage, titles] of [['doing', [R145T.ask, R145T.long, R145T.pair]], ['todo', [R145T.none]], ['review', [R145T.busy]]]) {
+      if (mobile) { await p.locator(byId('mobile-tab-' + stage)).first().tap(); await p.waitForTimeout(450); }
+      for (const title of titles) await p.locator(`[aria-label="${title}"]`).first().scrollIntoViewIfNeeded().catch(() => {});
+      rows.push(...await cards145(p, titles));
+      if (mobile && stage === 'doing' && (percent === '100' || percent === '150')) await p.screenshot({ path: path.join(out, `${scene}-doing.png`) });
+    }
+    console.log('REQ-145 rows:', JSON.stringify({ scene, rows }));
+    check(scene, 'every card found', rows.every(r => !r.missing), JSON.stringify(rows.filter(r => r.missing)));
+    const whole = (x, r) => !!x && !x.cut && x.right <= r.right + .5;
+    for (const r of rows.filter(r => !r.missing && r.title !== R145T.busy)) {
+      const reply = r.chip ?? r.replyText;
+      check(scene, `"${m.awaitingUser}" whole and inside the card ("${r.title}")`, !!reply && reply.text === m.awaitingUser && whole(reply, r), JSON.stringify({ reply, right: r.right }));
+      check(scene, `… on its own row, inside the card ("${r.title}")`, !!r.row && r.row.bottom <= r.bottom + .5 && (!r.held || r.held.bottom <= r.bottom + .5),
+        JSON.stringify({ row: r.row, held: r.held, bottom: r.bottom }));
+      // Gate 367: the essentials are read whole — "Blocked" word for word, a request's state before its " · " word for word (what
+      // follows, the agent it goes to, may give way), each inside the card.
+      if (r.blocked) check(scene, `"${m.blocked}" whole ("${r.title}")`, r.blocked.text === m.blocked && whole(r.blocked, r), JSON.stringify(r.blocked));
+      if (r.dispatch) {
+        const said = r.dispatch.label.slice((m.dispatchRequest + ' · ').length), head = said.split(' · ')[0];
+        check(scene, `the request's state "${head}" whole ("${r.title}")`, r.dispatch.head.text === head && !r.dispatch.head.cut && r.dispatch.right <= r.right + .5, JSON.stringify(r.dispatch));
+        if (r.dispatch.tail?.cut) limits145.push({ scene, title: r.title, gave: 'request target', text: r.dispatch.tail.text });
+      }
+      for (const spare of ['priority', 'draft']) if (r[spare]?.cut) limits145.push({ scene, title: r.title, gave: spare, ...r[spare] });
+    }
+    for (const r of rows.filter(r => !r.missing)) {
+      check(scene, `the age whole and inside the card ("${r.title}")`, whole(r.age, r), JSON.stringify({ age: r.age, right: r.right }));
+      // Gate 367: a checklist's numbers whole ("0/3", "1/10" word for word) and inside the card; its word may give way.
+      if (r.criteria) { const want = r.title === R145T.pair ? '1/10' : '0/3';
+        check(scene, `the checklist's numbers "${want}" whole and inside the card ("${r.title}")`, r.count?.text === want && whole(r.count, r), JSON.stringify({ count: r.count, right: r.right }));
+        if (r.criteria.cut) limits145.push({ scene, title: r.title, gave: 'criteria word', text: r.criteria.text }); }
+      if (r.name) check(scene, `REQ-126 the name keeps its 72px ("${r.title}")`, r.agent.width >= 72 * k - .5, JSON.stringify({ agent: r.agent, shown: r.shown }));
+    }
+    const long = rows.find(r => r.title === R145T.long);
+    check(scene, 'REQ-126 the long label\'s head shown (the role, "실행_환경")', (long?.shown ?? 0) >= 5, JSON.stringify({ name: long?.name, shown: long?.shown }));
+    const pair = rows.find(r => r.title === R145T.pair);
+    check(scene, '"· +1" whole beside the name', !!pair?.others && !pair.others.cut && pair.others.text === '· ' + m.otherAgents(1), JSON.stringify(pair?.others));
+    const busy = rows.find(r => r.title === R145T.busy);
+    check(scene, `"${m.busyOverdue}" whole and inside the card`, !!busy?.overdue && !busy.overdue.cut && busy.overdue.text === '· ' + m.busyOverdue && busy.overdue.right <= busy.right + .5,
+      JSON.stringify(busy?.overdue));
+    if (!mobile && (percent === '100' || percent === '150')) await p.screenshot({ path: path.join(out, `${scene}.png`), clip: { x: 0, y: 0, width: 1920, height: 560 } });
+    check(scene, 'no page errors', errors.length === 0, errors.join(' | '));
+    await p.context().close();
+  }
+  fs.writeFileSync(path.join(out, 'req145-limits.json'), JSON.stringify(limits145, null, 2) + '\n');
+  console.log('REQ-145 given way (priority, draft, the checklist word, a request\'s target):', limits145.length);
   }
 } catch (error) {
   // J3′: a scene that throws (a wait that timed out) is reported with the checks so far, not lost with them.

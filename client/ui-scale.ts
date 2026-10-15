@@ -37,10 +37,10 @@ export function px(n: number): number {
  */
 export function scaled<T extends Record<string, unknown>>(base: T, fixed: readonly (keyof T)[] = []): T {
   const table = {} as T;
-  for (const key of Object.keys(base) as (keyof T)[]) {
-    const value = base[key];
-    if (typeof value !== 'number' || fixed.includes(key)) Object.defineProperty(table, key, { value, enumerable: true });
-    else Object.defineProperty(table, key, { get: () => px(value), enumerable: true });
-  }
+  // D54 (research/364): Hermes, the phone apps' engine, has no block scope for let/const by default, so a getter made in the
+  // loop would read the loop's last value (every MOBILE size 12, every RING size 900). Each value is held by a call of its own.
+  const define = (key: keyof T, value: unknown) => Object.defineProperty(table, key, typeof value !== 'number' || fixed.includes(key)
+    ? { value, enumerable: true } : { get: () => px(value), enumerable: true });
+  for (const key of Object.keys(base) as (keyof T)[]) define(key, base[key]);
   return Object.freeze(table);
 }

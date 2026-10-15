@@ -202,12 +202,15 @@ export function useHovered() {
   return { hovered, onHoverIn: () => setHovered(true), onHoverOut: () => setHovered(false) };
 }
 /** Calls every handler given for one event, in order (a tip's and the hover look's, say). */
-type Handlers = { [event: string]: ((event?: never) => void) | undefined };
+type Handler = (event?: never) => void;
+type Handlers = { [event: string]: Handler | undefined };
 export function joinHandlers(...sets: Handlers[]): Handlers {
   const out: Handlers = {};
+  // D54: made outside the loop, so each pair is held by its own call — Hermes would give a function made in the loop the last pair.
+  const both = (before: Handler, handler: Handler) => (event?: never) => { before(event); handler(event); };
   for (const set of sets) for (const [key, handler] of Object.entries(set)) {
     const before = out[key];
-    if (handler) out[key] = before ? (event?: never) => { before(event); handler(event); } : handler;
+    if (handler) out[key] = before ? both(before, handler) : handler;
   }
   return out;
 }
@@ -576,6 +579,14 @@ export function familyWidth(items: readonly FamilyItem[], touch: boolean): numbe
  */
 export const NAME_MIN_WIDTH = 72;
 /**
+ * REQ-145 ③ (gate 366·367): what gives way on a crowded line comes first — "Draft" and the priority. A line's free space is
+ * shared out by each item's factor times its width, so at this factor the words beside them (a checklist's word, the agent
+ * a request goes to, the chip, all at 1) get far under a 64th of a pixel of it while they still have width. What must stay
+ * whole ("Response needed" beside them only once they are gone; "Blocked", a request's state, a checklist's numbers, the age)
+ * does not shrink at all or has a row of its own.
+ */
+export const EXPENDABLE_SHRINK = 1000000000000;
+/**
  * REQ-95 ②: the lead card's crown, before its title. REQ-122: 13 → 16, so its beads read at their real size and the title starts
  * where a topic lead's does (the title line stays 18px high).
  */
@@ -699,14 +710,37 @@ export function CardTile({ card, colors, m, onPress, countsAsDone = false, stage
   const familyLine = !!familySummary && leadRows(familySummary, topicLead) === LEAD_ROWS;
   // REQ-135: the card's inner width, read once laid out (a 264px card's until then), for how much the family line says.
   const [room, setRoom] = useState(0);
-  const size = cardDimensions(!!next, useWindowDimensions().fontScale, !!parentMark, familySummary ? leadRows(familySummary, topicLead) : 0, !!marked, titleLines);
+  // REQ-145 ③ (gate 366·367): the rows under line two — the chip's on a card that needs a response, and on any card one for
+  // "Blocked" and the request's state, which are never cut.
+  const held = !countsAsDone && (!!card.blocked || !!dispatchLook(card.dispatch)), replyRows = (needsReply ? 1 : 0) + (held ? 1 : 0) as 0 | 1 | 2;
+  const size = cardDimensions(!!next, useWindowDimensions().fontScale, !!parentMark, familySummary ? leadRows(familySummary, topicLead) : 0, !!marked, titleLines, replyRows);
   // D27: the card face is `colors.card`, not the panel behind it, so contrast is read against that.
   const mute = readable(colors.foregroundMuted, colors.card), warn = readable(colors.statusWarning, colors.card);
   const meta = { fontSize: px(11), lineHeight: size.metaLineHeight, includeFontPadding: false } as const;
-  const flag = { flexShrink: 1, minWidth: 0 } as const;
+  const spare = { flexShrink: EXPENDABLE_SHRINK, minWidth: 0 } as const;
   const criteria = card.criteria && card.criteria.total > 0 ? card.criteria : null;
+  const criteriaWord = criteria ? m.criteriaProgress(criteria.checked, criteria.total).replace(/\s*\d+\/\d+$/, '') : '';
   const sentLook = dispatchLook(card.dispatch);
   const sentText = sentLook ? dispatchLine(card.dispatch, m, dispatchFallback(card.dispatch, id => source.model?.(id))) : '';
+  // The flags that say where the card stands. REQ-145 ③ (gate 366·367): "Draft" and the priority on line two, or beside the chip
+  // on a card that needs a response — they give way first (EXPENDABLE_SHRINK). "Blocked" and the request's state are on a row of
+  // their own (`held`) and never cut; only what follows the state's " · " (the agent it goes to, why it is held) gives way.
+  const blockedFlag = !countsAsDone && card.blocked
+    && <Text testID="card-blocked" numberOfLines={1} style={{ ...meta, flexShrink: 0, color: colors.blocked, fontWeight: '600' }}>{m.blocked}</Text>;
+  const draftFlag = card.intent === 'draft' && <Text testID="card-draft" numberOfLines={1} style={{ ...meta, ...spare, color: colors.draft }}>{m.draft}</Text>;
+  // REQ-97: where the card's request to the lead stands — waiting (plain), sent at HH:MM (muted), no lead (a quiet orange, plain
+  // words). Gone once the card is done.
+  const sentColor = sentLook === 'pending' ? colors.foreground : sentLook === 'noLead' ? warn : mute, sentCut = sentText.indexOf(' · ');
+  const sentFlag = !countsAsDone && !!sentLook && (sentCut > 0
+    ? <View testID={'card-dispatch-' + sentLook} accessibilityLabel={m.dispatchRequest + ' · ' + sentText}
+      style={{ flexShrink: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' }}>
+      <Text numberOfLines={1} style={{ ...meta, flexShrink: 0, color: sentColor }}>{sentText.slice(0, sentCut)}</Text>
+      <Text testID="card-dispatch-detail" numberOfLines={1} style={{ ...meta, flexShrink: 1, minWidth: 0, color: sentColor }}>{sentText.slice(sentCut)}</Text>
+    </View>
+    : <Text testID={'card-dispatch-' + sentLook} numberOfLines={1} accessibilityLabel={m.dispatchRequest + ' · ' + sentText}
+      style={{ ...meta, flexShrink: 0, color: sentColor }}>{sentText}</Text>);
+  const priorityFlag = card.priority !== 'normal' && <Text testID="card-priority" numberOfLines={1}
+    style={{ ...meta, ...spare, color: card.priority === 'high' ? warn : mute }}>{m[card.priority]}</Text>;
   const criteriaMet = !!criteria && criteria.checked >= criteria.total, criteriaUnmet = !!criteria && countsAsDone && !criteriaMet;
   // REQ-103 ②: the warning orange in plain (not bold) words, its mark at the 3:1 of a glyph — quieter than "Response needed".
   const quietMark = readable(colors.statusWarning, colors.card, 3);
@@ -887,12 +921,14 @@ export function CardTile({ card, colors, m, onPress, countsAsDone = false, stage
         fontWeight: '600' }}>{title}</Text>
     </View>
     <View onLayout={event => { const { y, height } = event.nativeEvent.layout; layout.current.two = { y, height }; }}
-      style={{ flexDirection: 'row', alignItems: 'center', gap: px(6), ...(doneOffered || replyJump ? { minHeight: px(DONE_BUTTON_HEIGHT) } : {}) }}>
+      style={{ flexDirection: 'row', alignItems: 'center', gap: px(6), ...(doneOffered ? { minHeight: px(DONE_BUTTON_HEIGHT) } : {}) }}>
       {/* The name keeps room for its mark and a few letters however many flags follow; the flags give way first,
-          then the name, and the age never does. */}
+          then the name, and the age never does. REQ-145 ③: on a card that needs a response the flags are on the reply row
+          below, so this line keeps the name's 72px (REQ-126), the criteria and the age. */}
       <View testID="card-agent" onLayout={event => { layout.current.agent = event.nativeEvent.layout.x; }}
         {...(agent && modelText ? { onPointerEnter: hintIn('model'), onPointerLeave: hintOut } : {})}
-        style={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: agent || unassigned ? px(NAME_MIN_WIDTH) : 0,
+        style={{ flexGrow: 1, flexShrink: 1, flexBasis: 0,
+        minWidth: agent || unassigned ? px(NAME_MIN_WIDTH) : 0,
         flexDirection: 'row', alignItems: 'center', gap: px(4) }}>
         {/* REQ-51: the orphaned warning takes the provider mark's place, so line one keeps the sidebar's mark. */}
         {!!agent && (orphaned
@@ -916,31 +952,7 @@ export function CardTile({ card, colors, m, onPress, countsAsDone = false, stage
         {!!agent && !orphaned && others > 0 && <Text testID="card-agent-others" numberOfLines={1}
           style={{ ...meta, flexShrink: 0, color: quiet ? mute : colors.foreground }}>{'· ' + m.otherAgents(others)}</Text>}
       </View>
-      {/* REQ-96: pressing "Response needed" opens the agent that waits for it. J5 (research/149): a chip, the only part that
-          does — the rest of the card opens the detail. On a touch screen the press reaches the gap over it and 8px under it
-          (32px, the web too), never the title; the negative margins keep the rows where they were. */}
-      {needsReply && (replyJump
-        ? <Pressable testID="card-reply" accessibilityRole="button" accessibilityLabel={m.replyAt(card.title)} onPress={inner(replyJump.go)}
-          {...joinHandlers(reveal.inner, { onHoverIn: replyHover.onHoverIn, onHoverOut: replyHover.onHoverOut })}
-          style={{ ...flag, ...(touch ? { minWidth: px(MARK_TOUCH), marginTop: -size.gap, paddingTop: size.gap,
-            marginBottom: -(px(MARK_TOUCH) - px(DONE_BUTTON_HEIGHT) - size.gap), paddingBottom: px(MARK_TOUCH) - px(DONE_BUTTON_HEIGHT) - size.gap, zIndex: 1 } : {}) }}>
-          <View testID="card-reply-chip" style={{ height: px(DONE_BUTTON_HEIGHT), maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: px(1),
-            paddingHorizontal: px(5), borderRadius: px(DONE_BUTTON_HEIGHT) / 2, borderWidth: 1, borderColor: reply.borderColor, backgroundColor: reply.backgroundColor }}>
-            <Text numberOfLines={1} style={{ ...meta, flexShrink: 1, color: reply.color, fontWeight: '600',
-              textDecorationLine: replyLit ? 'underline' : 'none' }}>{m.awaitingUser}</Text>
-            <Icon name="ArrowUpRight" size={px(11)} color={reply.color} />
-          </View>
-        </Pressable>
-        : <Text testID="card-reply-text" numberOfLines={1} style={{ ...meta, ...flag, color: warn, fontWeight: '600' }}>{m.awaitingUser}</Text>)}
-      {!countsAsDone && card.blocked && <Text numberOfLines={1} style={{ ...meta, ...flag, color: colors.blocked, fontWeight: '600' }}>{m.blocked}</Text>}
-      {card.intent === 'draft' && <Text numberOfLines={1} style={{ ...meta, ...flag, color: colors.draft }}>{m.draft}</Text>}
-      {/* REQ-97: where the card's request to the lead stands — waiting (plain), sent at HH:MM (muted), no lead (a quiet
-          orange, plain words). Gone once the card is done. */}
-      {!countsAsDone && !!sentLook && <Text testID={'card-dispatch-' + sentLook} numberOfLines={1} accessibilityLabel={m.dispatchRequest + ' · ' + sentText}
-        style={{ ...meta, ...flag, color: sentLook === 'pending' ? colors.foreground : sentLook === 'noLead' ? warn : mute }}>{sentText}</Text>}
-      {/* research/88: "Normal" is on nearly every card and says nothing, so only high and low are written. */}
-      {card.priority !== 'normal' && <Text testID="card-priority" numberOfLines={1}
-        style={{ ...meta, ...flag, color: card.priority === 'high' ? warn : mute }}>{m[card.priority]}</Text>}
+      {!needsReply && <>{draftFlag}{priorityFlag}</>}
       {/* REQ-82 ②: one press moves the archived card to done. It keeps its room (line two is as tall with it hidden),
           so showing it on hover never moves the card; the flags give way first, as for the name. */}
       {doneOffered && shown && <Pressable testID="card-done" accessibilityRole="button" accessibilityLabel={m.moveToStage(done!.name)}
@@ -956,14 +968,17 @@ export function CardTile({ card, colors, m, onPress, countsAsDone = false, stage
           and never counted as needing attention. */}
       {!!criteria && (criteriaUnmet
         ? <View testID="card-criteria-unmet" accessibilityLabel={m.criteriaUnmetLabel(criteria.checked, criteria.total)}
-          style={{ ...flag, flexDirection: 'row', alignItems: 'center', gap: px(3) }}>
+          style={{ flexShrink: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: px(3) }}>
           <Icon name="CircleAlert" size={px(11)} color={quietMark} />
-          <Text numberOfLines={1} style={{ ...meta, flexShrink: 1, color: warn }}>{m.criteriaUnmet + ' ' + criteria.checked + '/' + criteria.total}</Text>
+          <Text numberOfLines={1} style={{ ...meta, flexShrink: 1, minWidth: 0, color: warn }}>{m.criteriaUnmet}</Text>
+          <Text testID="card-criteria-count" numberOfLines={1} style={{ ...meta, flexShrink: 0, color: warn }}>{criteria.checked + '/' + criteria.total}</Text>
         </View>
         : <View testID="card-criteria" accessibilityLabel={criteriaMet ? m.criteriaMetLabel(criteria.total) : m.criteriaProgress(criteria.checked, criteria.total)}
-          style={{ flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: px(2) }}>
+          style={{ flexShrink: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: px(2) }}>
           {criteriaMet && <Icon name="Check" size={px(11)} color={readable(colors.statusSuccess, colors.card)} />}
-          <Text numberOfLines={1} style={{ ...meta, color: mute }}>{m.criteriaProgress(criteria.checked, criteria.total)}</Text>
+          {/* REQ-145 ③ (gate 367): the word gives way on a narrow line, the numbers never. */}
+          <Text numberOfLines={1} style={{ ...meta, flexShrink: 1, minWidth: 0, color: mute, marginRight: px(1) }}>{criteriaWord}</Text>
+          <Text testID="card-criteria-count" numberOfLines={1} style={{ ...meta, flexShrink: 0, color: mute }}>{criteria.checked + '/' + criteria.total}</Text>
         </View>)}
       {/* REQ-86: the time in the column takes the age's place (it never gives way either); under an hour the age stays. */}
       {dwellShown ? <View testID={dwell!.warn ? 'card-dwell-warn' : 'card-dwell'} accessibilityRole="text"
@@ -977,6 +992,32 @@ export function CardTile({ card, colors, m, onPress, countsAsDone = false, stage
       : !!ageText && <Text testID="card-age" numberOfLines={1} accessibilityLabel={m.updatedAgo(ageText)}
         style={{ ...meta, flexShrink: 0, color: mute }}>{ageText}</Text>}
     </View>
+    {/* REQ-145 ③ (gate 366·367): a card that needs a response has a row of its own for the chip (with "Draft" and the priority);
+        any card with "Blocked" or a request's state has one for them — a row taller each (cardDimensions' `reply`) — so line two
+        keeps the name's 72px, the checklist's numbers and the age whole. */}
+    {needsReply && <View testID="card-reply-row" style={{ height: px(DONE_BUTTON_HEIGHT), flexDirection: 'row', alignItems: 'center', gap: px(6), minWidth: 0 }}>
+      {/* REQ-96: pressing "Response needed" opens the agent that waits for it. J5 (research/149): a chip, the only part that
+          does — the rest of the card opens the detail. On a touch screen the press reaches the gap over it and 8px under it
+          (32px, the web too), never the title; the negative margins keep the rows where they were. REQ-145 ③: it gives way
+          last — after "Draft" and the priority beside it (EXPENDABLE_SHRINK). */}
+      {replyJump
+        ? <Pressable testID="card-reply" accessibilityRole="button" accessibilityLabel={m.replyAt(card.title)} onPress={inner(replyJump.go)}
+          {...joinHandlers(reveal.inner, { onHoverIn: replyHover.onHoverIn, onHoverOut: replyHover.onHoverOut })}
+          style={{ flexShrink: 1, ...(touch ? { minWidth: px(MARK_TOUCH), marginTop: -size.gap, paddingTop: size.gap,
+            marginBottom: -(px(MARK_TOUCH) - px(DONE_BUTTON_HEIGHT) - size.gap), paddingBottom: px(MARK_TOUCH) - px(DONE_BUTTON_HEIGHT) - size.gap, zIndex: 1 } : {}) }}>
+          <View testID="card-reply-chip" style={{ height: px(DONE_BUTTON_HEIGHT), maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: px(1),
+            paddingHorizontal: px(5), borderRadius: px(DONE_BUTTON_HEIGHT) / 2, borderWidth: 1, borderColor: reply.borderColor, backgroundColor: reply.backgroundColor }}>
+            <Text numberOfLines={1} style={{ ...meta, flexShrink: 1, color: reply.color, fontWeight: '600',
+              textDecorationLine: replyLit ? 'underline' : 'none' }}>{m.awaitingUser}</Text>
+            <Icon name="ArrowUpRight" size={px(11)} color={reply.color} />
+          </View>
+        </Pressable>
+        : <Text testID="card-reply-text" numberOfLines={1} style={{ ...meta, flexShrink: 1, minWidth: 0, color: warn, fontWeight: '600' }}>{m.awaitingUser}</Text>}
+      {draftFlag}{priorityFlag}
+    </View>}
+    {held && <View testID="card-held-row" style={{ height: px(DONE_BUTTON_HEIGHT), flexDirection: 'row', alignItems: 'center', gap: px(6), minWidth: 0 }}>
+      {blockedFlag}{sentFlag}
+    </View>}
     {!!marked && !memo && <View testID={marked.overdue ? 'card-busy-overdue' : 'card-busy'} accessibilityRole="text"
       accessibilityLabel={m.busyLabel(busyLine, marked.overdue)} {...{ onPointerEnter: hintIn('busy'), onPointerLeave: hintOut }}
       onLayout={event => { const { y, height } = event.nativeEvent.layout; layout.current.busy = { y, height }; }}

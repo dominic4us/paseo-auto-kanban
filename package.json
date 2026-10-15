@@ -1,6 +1,6 @@
 {
   "name": "paseo-auto-kanban",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "A Kanban board for Paseo that follows your coding agents: cards for each agent, stages per workspace, and a local ledger you can read and edit from the CLI.",
   "license": "Apache-2.0",
   "author": "panto-dominic",
