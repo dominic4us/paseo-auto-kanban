@@ -229,6 +229,7 @@ export function BuiltinBanner({ workspaceId, template, locale, onChange, onStopp
       {!mobile && button('workflow-stop', m.workflowStop, () => { void stop(); })}
       {!mobile && !confirming && button('workflow-export', m.workflowExport, ask)}
     </View>
+    <Text testID="workflow-builtin-reads" style={{ color: muted, fontSize: mobile ? px(13) : px(12) }}>{m.workflowBuiltinReadsNothing}</Text>
     {mobile && <View style={{ flexDirection: 'row', gap: px(8) }}>
       {button('workflow-change', m.workflowChange, onChange)}
       {button('workflow-stop', m.workflowStop, () => { void stop(); })}

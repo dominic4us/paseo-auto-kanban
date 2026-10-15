@@ -266,6 +266,75 @@ export function route(a: FlowNode, b: FlowNode, back: boolean, offset = 0, under
   const into = b.cx > a.cx ? b.left : b.right;
   return [{ x1: a.cx, y1: a.bottom, x2: a.cx, y2: b.cy }, { x1: a.cx, y1: b.cy, x2: into, y2: b.cy }];
 }
+/** Where a label chip sits: its anchor `x` (its middle, or its left or right edge per `align`) and its top `y`. */
+export interface LabelSpot { x: number; y: number; align: 'center' | 'left' | 'right' }
+export interface Rect { l: number; r: number; t: number; b: number }
+/** The box a one-line chip of `text` takes at `spot` (workflow.tsx `Chip`: 6 px either side and a 1 px line). */
+export function spotRect(spot: LabelSpot, text: string): Rect {
+  const w = textWidth(text, FLOW.note) + px(12) + 2;
+  const l = spot.align === 'center' ? spot.x - w / 2 : spot.align === 'right' ? spot.x - w : spot.x;
+  return { l, r: l + w, t: spot.y, b: spot.y + FLOW.chipH };
+}
+/** A forward line's label: beside a vertical line, over a level one. */
+export function edgeLabelSpot(s: Segment): LabelSpot {
+  const vertical = s.x1 === s.x2;
+  return vertical ? { x: s.x1 + px(6), y: (s.y1 + s.y2) / 2 - px(9), align: 'left' } : { x: (s.x1 + s.x2) / 2, y: s.y1 - px(21), align: 'center' };
+}
+const overlapArea = (a: Rect, b: Rect) => Math.max(0, Math.min(a.r, b.r) - Math.max(a.l, b.l)) * Math.max(0, Math.min(a.b, b.b) - Math.max(a.t, b.t));
+/** What a label must keep clear of on the flow: every step and every step's count chip. */
+export function flowObstacles(layout: FlowLayout): Rect[] {
+  const out: Rect[] = [];
+  for (const node of layout.at.values()) {
+    out.push({ l: node.left, r: node.right, t: node.top, b: node.bottom });
+    if (node.chip.length) {
+      const w = Math.max(...node.chip.map(v => textWidth(v, FLOW.note))) + px(12) + 2;
+      out.push({ l: node.cx - w / 2, r: node.cx + w / 2, t: node.chipTop, b: node.chipTop + FLOW.chipH + (node.chip.length - 1) * FLOW.chipLine });
+    }
+  }
+  return out;
+}
+/**
+ * 347 X10 (gate 351 F1): where a loop's label goes (`n` lines drawn for it, `segs` its `route`). Every spot along the line is
+ * tried in order — a loop under a row: below its detour in the middle (where it always was), along it, above it, then a level or two lower;
+ * any other: before the corner of the sideways run (where it always was), beside the line going up — left first, as a
+ * forward line down the same column has its label on the right — middle first, then along the sideways run; last, under or over the two steps it joins. The first that
+ * keeps `px(2)` clear of every step, count chip and label in `taken` (the forward lines' labels and the loop labels placed
+ * before) and stays on the canvas wins; none free: the one that covers least, a step counting most. A loop straight up a
+ * column used to put its label on the top edge of the step it leaves, a loop under a row on a forward line's label.
+ * workflow.tsx draws loop labels after the steps, so nothing hides them.
+ */
+export function loopLabelSpot(layout: FlowLayout, segs: readonly Segment[], n: number, text: string, taken: readonly Rect[] = []): LabelSpot {
+  const h = FLOW.chipH, along = [.5, .35, .65, .2, .8, .08, .92], spots: LabelSpot[] = [];
+  const level = (s: Segment) => s.y1 === s.y2, lo = (s: Segment) => Math.min(s.x1, s.x2), hi = (s: Segment) => Math.max(s.x1, s.x2);
+  const beside = (s: Segment) => { const top = Math.min(s.y1, s.y2), bottom = Math.max(s.y1, s.y2);
+    for (const f of along) { const y = top + (bottom - top) * f - h / 2; spots.push({ x: s.x1 - px(6), y, align: 'right' }, { x: s.x1 + px(6), y, align: 'left' }); } };
+  if (segs.length === 3) {
+    const s = segs[1]!, below = s.y1 + (n + 1) * FLOW.loopGap / 2 + px(2), above = s.y1 - (n - 1) * FLOW.loopGap / 2 - h - px(2);
+    for (const y of [below, above, below + h + px(4), below + 2 * (h + px(4))]) for (const f of along) spots.push({ x: lo(s) + (hi(s) - lo(s)) * f, y, align: 'center' });
+    beside(segs[0]!); beside(segs[2]!);
+  } else {
+    const first = segs[0]!, up = segs.at(-1)!;
+    if (segs.length === 2) spots.push({ x: first.x2 - (n - 1) * FLOW.loopGap / 2 - px(8), y: first.y1 - px(9), align: 'right' });
+    if (!level(up)) beside(up);
+    if (level(first)) for (const f of along) spots.push({ x: lo(first) + (hi(first) - lo(first)) * f, y: first.y1 - px(9), align: 'center' });
+  }
+  // Last, by the two steps it joins: under the one it leaves, over the one it comes back to (a long label of many rounds).
+  const nodeAt = (x: number, y: number) => [...layout.at.values()].find(v => x >= v.left - 1 && x <= v.right + 1 && y >= v.top - 1 && y <= v.bottom + 1);
+  const from = nodeAt(segs[0]!.x1, segs[0]!.y1), to = nodeAt(segs.at(-1)!.x2, segs.at(-1)!.y2);
+  for (const [v, y] of [[from, from ? from.bottom + px(4) : 0], [to, to ? to.top - h - px(4) : 0], [to, to ? to.bottom + px(4) : 0], [from, from ? from.top - h - px(4) : 0]] as const)
+    if (v) spots.push({ x: v.cx, y, align: 'center' }, { x: v.left, y, align: 'left' }, { x: v.right, y, align: 'right' });
+  const steps = flowObstacles(layout), labels = [...taken], gap = px(2);
+  const grow = (r: Rect): Rect => ({ l: r.l - gap, r: r.r + gap, t: r.t - gap, b: r.b + gap });
+  const cost = (spot: LabelSpot) => {
+    const r = spotRect(spot, text);
+    if (r.l < 0 || r.r > layout.width || r.t < 0 || r.b > layout.height) return Infinity;
+    const g = grow(r);
+    return steps.reduce((sum, b) => sum + 4 * overlapArea(g, b), 0) + labels.reduce((sum, b) => sum + overlapArea(g, b), 0);
+  };
+  let best = spots[0]!, least = Infinity;
+  for (const spot of spots) { const c = cost(spot); if (c === 0) return spot; if (c < least) { least = c; best = spot; } }
+  return best;
+}
 /** The lowest edge of the nodes in `row` — where a line going back along that row runs under. */
 export function rowBottom(layout: FlowLayout, row: number): number {
   return Math.max(...[...layout.at.values()].filter(n => n.stage.row === row).map(n => n.bottom));

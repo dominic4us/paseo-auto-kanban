@@ -420,6 +420,8 @@ const en = {
   evidenceAmbiguous: 'The evidence disagrees, so no answer is chosen.',
   workflowInstanceLadderLegend: (name: string) => 'Bold line = the steps where ' + name + ' has data · decisions (◇) are not read yet · dashed = a person\'s step or one not reached · the figure on the right = cases with data',
   workflowInstanceMarksTitle: 'Evidence by case', workflowInstanceMarksNote: 'folder and file names only',
+  // 347 X9: with a record section the table also reads its tag lines, so the heading says so.
+  workflowInstanceMarksNoteLog: 'folder and file names, and the record section\'s tag lines',
   workflowInstanceMarksLegend: '● data there · ◌ candidate · ⚠ ambiguous · ▨ partly read · ? unknown format · – no record. Press a cell for its evidence.',
   evidenceClose: 'Close the evidence', evidencePaths: 'Paths are relative to the workspace folder (a plugin cannot open files).',
   evidenceNoRecord: 'The reading rule for this step found nothing for this release. That does not say it was not done.',
@@ -441,6 +443,8 @@ const en = {
   workflowTrying: (name: string) => 'Trying the built-in "' + name + '"',
   workflowKeptInKanban: 'Kept in Kanban only — no file in the project folder',
   workflowChange: 'Change', workflowStop: 'Stop using',
+  // 347 X4: said at the top of the banner, so an empty table does not read as a broken one.
+  workflowBuiltinReadsNothing: 'This template reads no documents — it shows the flow for reference. Export it and add reading rules to .kanban/workflow.json to fill the evidence table.',
   workflowBuiltinEmpty: 'No records yet — a built-in workflow has no rules for reading documents, so only the flow is shown.',
   workflowResting: (name: string) => 'The built-in "' + name + '" picked in Kanban is resting — this workspace\'s definition file comes first.',
   workflowClearPick: 'Clear the pick',
@@ -835,6 +839,7 @@ const ko: Copy = {
   evidenceAmbiguous: '근거가 서로 어긋나 답을 고르지 않았습니다.',
   workflowInstanceLadderLegend: (name: string) => '굵은 선 = ' + name + '에서 자료가 있는 단계 · 판단(◇)은 아직 읽지 않음 · 점선 = 사람이 확인하는 단계·아직 안 간 단계 · 오른쪽 숫자 = 자료 있는 건 수',
   workflowInstanceMarksTitle: '건별 근거', workflowInstanceMarksNote: '폴더·파일 이름만 읽음',
+  workflowInstanceMarksNoteLog: '폴더·파일 이름과 기록 구역의 태그 줄을 읽음',
   workflowInstanceMarksLegend: '● 자료 있음 · ◌ 후보 · ⚠ 모호 · ▨ 일부만 읽음 · ? 형식 모름 · – 기록 없음. 칸을 누르면 근거가 아래에.',
   evidenceClose: '근거 닫기', evidencePaths: '경로는 워크스페이스 폴더 기준입니다(플러그인은 파일을 열 수 없습니다).',
   evidenceNoRecord: '이 단계의 읽기 규칙으로 이 판의 기록을 찾지 못했습니다. 안 했다는 뜻은 아닙니다.',
@@ -854,6 +859,7 @@ const ko: Copy = {
   workflowTrying: (name: string) => '기본 틀 ‘' + name + '’ 써 보는 중',
   workflowKeptInKanban: '칸반 안에만 저장 — 프로젝트 폴더에는 파일이 없습니다',
   workflowChange: '틀 바꾸기', workflowStop: '그만 쓰기',
+  workflowBuiltinReadsNothing: '이 틀은 문서를 읽지 않는 흐름 참고용입니다 — 내보낸 정의 파일(.kanban/workflow.json)에 읽기 규칙을 넣으면 근거 표가 채워집니다.',
   workflowBuiltinEmpty: '아직 읽은 기록이 없습니다 — 기본 틀에는 문서를 읽는 규칙이 없어 흐름도만 보입니다.',
   workflowResting: (name: string) => '칸반 안에서 고른 기본 틀 ‘' + name + '’ 선택은 쉬는 중 — 이 워크스페이스의 정의 파일이 우선합니다.',
   workflowClearPick: '선택 지우기',

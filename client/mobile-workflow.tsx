@@ -306,7 +306,7 @@ function MarkTable({ model, release, cell, colors: c, m, onPress }: {
   return <View testID="mobile-workflow-table" style={{ gap: px(6) }}>
     <View style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: px(8) }}>
       <Text style={{ color: c.foreground, fontSize: px(15), fontWeight: '700' }}>{instances ? m.workflowInstanceMarksTitle : m.workflowMarksTitle}</Text>
-      <Text style={{ color: readable(c.foregroundMuted, bg), fontSize: px(12) }}>{instances ? m.workflowInstanceMarksNote : m.workflowMarksNote}</Text>
+      <Text testID="mobile-workflow-marks-note" style={{ color: readable(c.foregroundMuted, bg), fontSize: px(12) }}>{instances ? model.logNotes ? m.workflowInstanceMarksNoteLog : m.workflowInstanceMarksNote : m.workflowMarksNote}</Text>
     </View>
     <View onLayout={e => { const next = Math.floor(e.nativeEvent.layout.width) - 2; setRoom(v => v === next ? v : next); }}
       style={{ borderRadius: px(8), borderWidth: 1, borderColor: c.border, overflow: 'hidden' }}>

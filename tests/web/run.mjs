@@ -768,6 +768,18 @@ for (const t of BUILTIN_WORKFLOWS) for (const locale of ['ko', 'en']) {
   fs.mkdirSync(folder); await exportDefinition(folder, exportedDefinition(t, locale));
   EXPORTED_READS[t.id + '-' + locale] = await readWorkflow(folder, { now: WF_NOW });
 }
+// REQ-143 gate 351: an exported built-in whose newest release went round one loop three times ('rounds<id><locale>') — a loop
+// between rows for 지원사업, one under its row for 공통 기본. Made up over the exported definition, as the server's path reads.
+const ROUNDS143 = {};
+for (const [id, sameRow] of [['gov-grant', false], ['common', true]]) for (const locale of ['ko', 'en']) {
+  const model = JSON.parse(JSON.stringify(EXPORTED_READS[id + '-' + locale])), { stages, edges } = model.definition, row = sid => stages.find(s => s.id === sid).row;
+  const loop = edges.find(e => e.back && (row(e.from) === row(e.to)) === sameRow), path = [{ stage: loop.to, doc: 301, round: 'first', verdict: 'fail' }];
+  for (let i = 0; i < 3; i++) path.push({ stage: loop.from, doc: 302 + i * 2 }, { stage: loop.to, doc: 303 + i * 2, round: 'again', verdict: i === 2 ? 'pass' : 'fail' });
+  model.releases = [{ release: '0.2.1', reqs: [], firstVerdict: 'fail', finalVerdict: 'pass', regates: 3, warnings: [], path,
+    cells: stages.map(s => ({ stage: s.id, state: s.shape === 'diamond' ? 'decision' : 'no-record', events: [] })) }];
+  model.key += '-rounds';
+  WF['rounds' + id.replace('-', '') + locale] = model; ROUNDS143[id + '-' + locale] = loop.label;
+}
 // REQ-125 U1 (research/301): a `/2` definition — rows of 건, one per made-up company folder right under the 건 folder, read by
 // the real reader. `inst`: A사 (data in three steps, dated), B사 (a README-only folder), C사 (its 선정·계약 folder cut at the
 // per-folder cap, so "일부만 읽음"), a link and a hidden folder left out. `instzero`: the 건 folder with no 건. `instlong`: a 40-character name.
@@ -997,7 +1009,8 @@ try {
   // REQ-134: =req134 only the phone's workflow sheet and message list — early1, early2, req124, d47, req130, req133 and req134 are all of it.
   // REQ-135: =req135 the family line. REQ-136: =req136 only the English screen fixes (research/277) — early1, early2, req124, d47, req130,
   // req133, req134, req135 and req136 are all of it.
-  const ONLY = process.env.KANBAN_WEB_ONLY ?? '', D47 = ONLY === 'd47', R130 = ONLY === 'req130', R133 = ONLY === 'req133', R134 = ONLY === 'req134', R135 = ONLY === 'req135', R136 = ONLY === 'req136', R137 = ONLY === 'req137', R125 = ONLY === 'req125', R52 = ONLY === 'req52', R125U1 = ONLY === 'req125u1', R125U2 = ONLY === 'req125u2', R125U3 = ONLY === 'req125u3', R125U4 = ONLY === 'req125u4', R138 = ONLY === 'req138', R139 = ONLY === 'req139', R142 = ONLY === 'req142';
+  // REQ-143: =req143 only the built-in banner line, the wide flow's loop labels and the phone's 건 table heading (research/347 X4·X9·X10).
+  const ONLY = process.env.KANBAN_WEB_ONLY ?? '', D47 = ONLY === 'd47', R130 = ONLY === 'req130', R133 = ONLY === 'req133', R134 = ONLY === 'req134', R135 = ONLY === 'req135', R136 = ONLY === 'req136', R137 = ONLY === 'req137', R125 = ONLY === 'req125', R52 = ONLY === 'req52', R125U1 = ONLY === 'req125u1', R125U2 = ONLY === 'req125u2', R125U3 = ONLY === 'req125u3', R125U4 = ONLY === 'req125u4', R138 = ONLY === 'req138', R139 = ONLY === 'req139', R142 = ONLY === 'req142', R143 = ONLY === 'req143';
   const E1 = ONLY === 'early1', E2 = ONLY === 'early2', EARLY = ONLY === 'early' || E1 || E2;
   // Helpers the early scenes share across its two halves (=early1, =early2).
   const label = t => `[aria-label="${t}"]`;
@@ -1016,7 +1029,7 @@ try {
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] }); await p.waitForTimeout(900);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] }); await p.waitForTimeout(400);
   };
-  if (ONLY !== 'req124' && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !E2) {
+  if (ONLY !== 'req124' && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !E2) {
   for (const mode of ['light', 'dark']) {
     const c = palette(PASEO_THEMES[mode]), scene = `wide-${mode}`, line = selectedLine(c, c.surface0);
     const p = await (await browser.newContext({ viewport: { width: 1400, height: 900 } })).newPage();
@@ -1887,7 +1900,7 @@ try {
   }
   // REQ-133: =early grew past ten minutes (588 s at 0.1.48, over 595 s now), so it runs as =early1 (the scenes above) and =early2
   // (from here); =early is still both. Their shared helpers are declared before the first half.
-  if (ONLY !== 'req124' && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !E1) {
+  if (ONLY !== 'req124' && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !E1) {
   // ---- REQ-95·96 by real input: the lead card first whatever the order, its head title, crown and stage edge; the orange of
   // an awaited answer; "Go to agent ↗" on hover and atop ⋯; "Response needed" to the agent that waits; the phone's sheet ----
   const opened = p => p.evaluate(() => window.__opened.slice());
@@ -3034,7 +3047,7 @@ try {
       els.filter(e => e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1).map(e => e.innerText));
     check(scene, 'no label or note cut', cut.length === 0, JSON.stringify(cut));
   }
-  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142) {
+  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143) {
   // ---- REQ-124 2단위 (research/215·216·217): the wide lane heading's "보드 | 워크플로", only on the lane whose workspace holds
   // a workflow definition; the flow (steps, straight-angled lines, the diamond, the loops that went back, the chosen release's
   // way bold), the release × step table whose states are told apart ("기록 없음" is not "not done"), and a cell's evidence.
@@ -3179,7 +3192,7 @@ try {
     await p.context().close();
   }
   }
-  if (!EARLY && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142) {
+  if (!EARLY && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143) {
   // ---- REQ-126: every agent named "<label>-<version>-<thinking>" on the cards (a lead, a topic lead, a worker with "· +1", an old label, a
   // long label on a crowded card, no label, archived, unknown) and in the detail (assignees, author, the move's reason, the history) ----
   for (const [mode, mobile] of [['light', false], ['dark', false], ['light', true], ['dark', true]]) {
@@ -3239,7 +3252,7 @@ try {
     await p.context().close();
   }
   }
-  if (!EARLY && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142) {
+  if (!EARLY && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143) {
   // ---- D45: the wide detail's side panel (280px) keeps each assignee row on one line — a long label ("…_Astra-6-XHigh", also
   // the card's author), an old one ("실행_Sol-6-High"), new ones ("실행_Sol-6.1-High", with a second agent) — the name cut at its end,
   // the state and id whole; on 390px the rows read and wrap as before. ----
@@ -3467,7 +3480,7 @@ try {
   }
   fs.writeFileSync(path.join(out, 'd47.json'), JSON.stringify(d47Log, null, 2) + '\n');
   }
-  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142) {
+  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143) {
   // ---- research/210 (208-D1) kept, REQ-124 ③: on 390px no workflow button in this release (not even on the lane with a
   // definition); the gate's real names keep eight characters and more, the heading's parts side by side inside the screen. ----
   for (const [mode, lang] of [['light', 'en'], ['dark', 'en'], ['light', 'ko'], ['dark', 'ko']]) {
@@ -3505,7 +3518,7 @@ try {
     await p.context().close();
   }
   }
-  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142) {
+  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143) {
   // ---- REQ-127: the board screen a lane's name opens has the lane's "보드 | 워크플로" too, beside its title — only for a workspace
   // with a definition, only on a wide window. The workflow takes the board's whole width in place of its columns; the choice is the
   // lane's own (one session value), so the lane shows what its board showed when it is left. 1400 and 1920, light and dark. ----
@@ -6390,6 +6403,129 @@ try {
     }
     check(scene, 'no page errors', errors.length === 0, errors.join(' | '));
     await p.context().close();
+  }
+  }
+  // ---- REQ-143 (research/347 X4·X9·X10): a built-in's banner says at the top that it reads no documents and what fills the
+  // table; a loop's label on the wide flow touches no step and nothing covers it (a loop straight up a column had it under
+  // the step it leaves — "재확인" read as "재하인"); the phone's 건 table heading says it also reads the record section when
+  // the definition has one, and "folder and file names only" when not. 1920 and 390, ko/en, light/dark. ----
+  if (ONLY === '' || R143) {
+  const t143 = async (p, sel) => (await p.locator(sel).first().innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
+  const hangul143 = /[ᄀ-ᇿ㄰-㆏가-힣]/;
+  const tryLane143 = `[data-testid="swimlane-lane-section"]:has(${byId('workspace-name-primary')}:text-is("Second Workspace"))`;
+  const cut143 = (p, sel) => p.locator(sel).evaluateAll(els => els.filter(e => e.innerText.trim() && ((e.scrollWidth > e.clientWidth + 1 && getComputedStyle(e).overflowX !== 'visible')
+    || (e.scrollHeight > e.clientHeight + 1 && getComputedStyle(e).overflowY !== 'visible'))).map(e => e.innerText.trim()));
+  const phone143 = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
+  const tap143 = async (p, sel) => { await p.locator(sel).first().scrollIntoViewIfNeeded().catch(() => {}); await p.locator(sel).first().tap(); await p.waitForTimeout(450); };
+  const fileLane143 = `[data-testid="swimlane-lane-section"]:has(${byId('workspace-name-primary')}:text-is("Example Workspace"))`;
+  // X10 (gate 351 F1): every loop label against every step, count chip, forward line label and other loop label by the
+  // browser's own boxes; inside the canvas; drawn after every step (its chip takes no pointer, so elementFromPoint cannot say
+  // what is on top; the later one in the canvas is). Returns the labels' words.
+  const loopLabels143 = async (p, scene, lane, want) => {
+    const geo = await p.locator(lane + ' ' + byId('flow-canvas')).first().evaluate(el => {
+      const r = e => { const b = e.getBoundingClientRect(); return { l: b.left, r: b.right, t: b.top, b: b.bottom }; };
+      const hit = (a, b) => Math.min(a.r, b.r) - Math.max(a.l, b.l) > .5 && Math.min(a.b, b.b) - Math.max(a.t, b.t) > .5;
+      const cv = r(el), steps = [...el.querySelectorAll('[data-testid^="flow-node-"]')];
+      const others = [...steps, ...el.querySelectorAll('[data-testid^="flow-count-"], [data-testid="flow-edge-label"]')].map(e => ({ what: e.dataset.testid + ' ' + e.innerText.trim(), box: r(e) }));
+      const loops = [...el.querySelectorAll('[data-testid="flow-loop-label"]')].map(e => ({ el: e, text: e.innerText.trim(), box: r(e) }));
+      return loops.map(l => ({ text: l.text, box: l.box,
+        hits: [...others, ...loops.filter(o => o !== l).map(o => ({ what: 'loop ' + o.text, box: o.box }))].filter(o => hit(l.box, o.box)).map(o => o.what),
+        inside: l.box.l >= cv.l - .5 && l.box.r <= cv.r + .5 && l.box.t >= cv.t - .5 && l.box.b <= cv.b + .5,
+        onTop: steps.every(n => n.compareDocumentPosition(l.el) & Node.DOCUMENT_POSITION_FOLLOWING) }));
+    });
+    check(scene, 'X10: every loop label drawn', geo.length === want, JSON.stringify(geo.map(g => g.text)));
+    check(scene, 'X10: no loop label on a step, a count, a line\'s label or another loop label', geo.every(g => !g.hits.length), JSON.stringify(geo.filter(g => g.hits.length)));
+    check(scene, 'X10: all inside the flow, drawn after the steps', geo.every(g => g.inside && g.onTop), JSON.stringify(geo.filter(g => !g.inside || !g.onTop)));
+    return geo.map(g => g.text);
+  };
+  for (const lang of ['ko', 'en']) for (const mode of ['light', 'dark']) {
+    const c = palette(PASEO_THEMES[mode]), m = copy(lang);
+    for (const id of BUILTIN_WORKFLOWS.map(t => t.id)) {
+      const scene = `req143-1920-${lang}-${mode}-${id}`;
+      const p = await (await browser.newContext({ viewport: { width: 1920, height: 1080 } })).newPage(); p.setDefaultTimeout(5000);
+      const errors = []; p.on('pageerror', e => errors.push(String(e)));
+      await p.goto(page(mode, false, 'wf-gate-' + lang + '-' + id));
+      await p.waitForSelector(tryLane143 + ' ' + byId('lane-view-workflow'), { timeout: 15000 });
+      await clickAt(p, tryLane143 + ' ' + byId('lane-view-workflow'));
+      await p.waitForSelector(tryLane143 + ' ' + byId('workflow-builtin-reads'), { timeout: 8000 }).catch(() => {});
+      await p.waitForSelector(tryLane143 + ' ' + byId('flow-canvas'), { timeout: 8000 }).catch(() => {});
+      const reads = tryLane143 + ' ' + byId('workflow-builtin-reads');
+      check(scene, 'X4: the banner says it reads no documents', await t143(p, reads) === m.workflowBuiltinReadsNothing && (await cut143(p, reads)).length === 0, await t143(p, reads));
+      const banner = await box(p, tryLane143 + ' ' + byId('workflow-builtin-banner')), line = await box(p, reads), canvas = await box(p, tryLane143 + ' ' + byId('flow-canvas'));
+      check(scene, 'X4: in the banner, above the flow', !!banner && !!line && !!canvas && line.y >= banner.y - .5 && line.y + line.height <= banner.y + banner.height + .5
+        && line.y + line.height <= canvas.y, JSON.stringify({ banner, line, canvas }));
+      const bannerBg = rgb((await style(p, tryLane143 + ' ' + byId('workflow-builtin-banner'), ['backgroundColor'])).backgroundColor);
+      const readsFg = rgb((await style(p, reads, ['color'])).color);
+      check(scene, 'X4: the line 4.5:1 on the banner', contrast(readsFg, bannerBg) >= 4.5, contrast(readsFg, bannerBg).toFixed(2));
+      if (lang === 'en') check(scene, 'X4: English, no Hangul', !hangul143.test(await t143(p, reads)));
+      const want = BUILTIN_WORKFLOWS.find(t => t.id === id).edges.filter(e => e.back && e[lang]).length;
+      await loopLabels143(p, scene, tryLane143, want);
+      await away(p).catch(() => {});
+      await p.locator(tryLane143 + ' ' + byId('workflow-builtin-banner')).first().scrollIntoViewIfNeeded().catch(() => {});
+      await p.screenshot({ path: path.join(out, `${scene}.png`) });
+      check(scene, 'no page errors', errors.length === 0, errors.join(' | '));
+      await p.context().close();
+    }
+    // Gate 351: a definition whose newest release went round one loop three times — the label grows to "… 3회: 301→302 · …",
+    // three lines beside the loop. A loop between rows (지원사업 재확인) and one under its row (공통 기본 정정).
+    for (const id of ['gov-grant', 'common']) {
+      const scene = `req143-1920-${lang}-${mode}-rounds-${id}`;
+      const p = await (await browser.newContext({ viewport: { width: 1920, height: 1080 } })).newPage(); p.setDefaultTimeout(5000);
+      const errors = []; p.on('pageerror', e => errors.push(String(e)));
+      await p.goto(page(mode, false, 'wf-rounds' + id.replace('-', '') + lang + '-' + lang));
+      await p.waitForSelector(fileLane143 + ' ' + byId('lane-view-workflow'), { timeout: 15000 });
+      await clickAt(p, fileLane143 + ' ' + byId('lane-view-workflow'));
+      await p.waitForSelector(fileLane143 + ' ' + byId('flow-canvas'), { timeout: 8000 }).catch(() => {});
+      const texts = await loopLabels143(p, scene, fileLane143, BUILTIN_WORKFLOWS.find(t => t.id === id).edges.filter(e => e.back && e[lang]).length);
+      check(scene, 'the three rounds said on the label', texts.includes(m.loopTimes(ROUNDS143[id + '-' + lang], 3) + ': 302→303 · 304→305 · 306→307'), JSON.stringify(texts));
+      await away(p).catch(() => {});
+      await p.locator(fileLane143 + ' ' + byId('flow-canvas')).first().scrollIntoViewIfNeeded().catch(() => {});
+      await p.screenshot({ path: path.join(out, `${scene}.png`) });
+      check(scene, 'no page errors', errors.length === 0, errors.join(' | '));
+      await p.context().close();
+    }
+    {
+      const scene = `req143-390-${lang}-${mode}-builtin`;
+      const p = await (await browser.newContext(phone143)).newPage(); p.setDefaultTimeout(5000);
+      const errors = []; p.on('pageerror', e => errors.push(String(e)));
+      await p.goto(page(mode, true, 'wf-gate-' + lang + '-gov-grant'));
+      await p.waitForSelector(byId('mobile-workspace-' + b.id) + ' ' + byId('lane-order-menu'), { timeout: 15000 });
+      await tap143(p, byId('mobile-workspace-' + b.id) + ' ' + byId('lane-order-menu'));
+      await p.waitForSelector(byId('order-workflow'), { timeout: 5000 }).catch(() => {});
+      await tap143(p, byId('order-workflow'));
+      const reads = byId('workflow-sheet') + ' ' + byId('workflow-builtin-reads');
+      await p.waitForSelector(reads, { timeout: 8000 }).catch(() => {});
+      const line = await box(p, reads);
+      check(scene, 'X4: the banner line on the phone, whole and inside 390', await t143(p, reads) === m.workflowBuiltinReadsNothing && (await cut143(p, reads)).length === 0
+        && !!line && line.x >= -.5 && line.x + line.width <= 390.5, JSON.stringify(line));
+      const bannerBg = rgb((await style(p, byId('workflow-sheet') + ' ' + byId('workflow-builtin-banner'), ['backgroundColor'])).backgroundColor);
+      const readsFg = rgb((await style(p, reads, ['color'])).color);
+      check(scene, 'X4: 4.5:1 on the phone', contrast(readsFg, bannerBg) >= 4.5, contrast(readsFg, bannerBg).toFixed(2));
+      await p.screenshot({ path: path.join(out, `${scene}.png`) });
+      check(scene, 'no page errors', errors.length === 0, errors.join(' | '));
+      await p.context().close();
+    }
+    for (const data of ['instlog', 'inst']) {
+      const scene = `req143-390-${lang}-${mode}-${data}`;
+      const p = await (await browser.newContext(phone143)).newPage(); p.setDefaultTimeout(5000);
+      const errors = []; p.on('pageerror', e => errors.push(String(e)));
+      await p.goto(page(mode, true, 'wf-' + data + '-' + lang));
+      await p.waitForSelector(byId('mobile-workspace-' + a.id) + ' ' + byId('lane-order-menu'), { timeout: 15000 });
+      await tap143(p, byId('mobile-workspace-' + a.id) + ' ' + byId('lane-order-menu'));
+      await p.waitForSelector(byId('order-workflow'), { timeout: 5000 }).catch(() => {});
+      await tap143(p, byId('order-workflow'));
+      const note = byId('workflow-sheet') + ' ' + byId('mobile-workflow-marks-note');
+      await p.waitForSelector(note, { timeout: 8000 }).catch(() => {});
+      const want = data === 'instlog' ? m.workflowInstanceMarksNoteLog : m.workflowInstanceMarksNote;
+      check(scene, 'X9: the table heading says what is read' + (data === 'instlog' ? ' (the record section too)' : ' (names only)'), await t143(p, note) === want
+        && (await cut143(p, note)).length === 0, await t143(p, note));
+      await p.locator(note).first().scrollIntoViewIfNeeded().catch(() => {});
+      const nb = await box(p, note);
+      check(scene, 'X9: inside 390', !!nb && nb.x >= -.5 && nb.x + nb.width <= 390.5, JSON.stringify(nb));
+      await p.screenshot({ path: path.join(out, `${scene}.png`) });
+      check(scene, 'no page errors', errors.length === 0, errors.join(' | '));
+      await p.context().close();
+    }
   }
   }
 } catch (error) {

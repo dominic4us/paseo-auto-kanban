@@ -12,7 +12,7 @@ test('build layout supports optional external cache links', async () => {
     assert.ok(rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel));
   }
   const pkg = JSON.parse(await fs.readFile('package.json', 'utf8'));
-  assert.equal(pkg.private, true); assert.deepEqual(pkg.dependencies ?? {}, {});
+  assert.notEqual(pkg.private, true); assert.deepEqual(pkg.dependencies ?? {}, {});
   assert.ok(pkg.devDependencies.typescript);
   assert.ok(pkg.devDependencies['@getpaseo/plugin']);
   assert.equal(pkg.exports['./core'].import, './dist/server/core/index.js');

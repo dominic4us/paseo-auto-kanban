@@ -37,8 +37,17 @@ a person has to act on.
 1. Run this where the Paseo server (daemon) runs:
 
    ```sh
-   paseo plugin install https://github.com/panto-dominic/paseo-auto-kanban --ref v0.2.0
+   paseo plugin install npm:paseo-auto-kanban
    ```
+
+   or, from Git at a release tag:
+
+   ```sh
+   paseo plugin install https://github.com/panto-dominic/paseo-auto-kanban --ref v0.2.1
+   ```
+
+   Both install the same plugin. The npm package is published from 0.2.1 on; Paseo installs it without running any
+   package scripts.
 
 2. In Paseo, open **Settings → Plugins** and turn on **Enable plugins**. This switch covers all plugins and can
    still be off if you have not used a plugin before; until it is on, an installed plugin stays `disabled`.
@@ -53,12 +62,13 @@ a person has to act on.
    enabled state) is off; a load error is shown in the same list.
 
 A **Kanban** item then appears in the Paseo sidebar. To update later: `paseo plugin update paseo-auto-kanban`
-(to move to a specific tag: `paseo plugin update paseo-auto-kanban --ref <tag>`; `install` again refuses an ID that is
-already installed).
+(to a specific release: `--version <version>` for an npm install, `--ref <tag>` for a Git install; `install` again
+refuses an ID that is already installed).
 
 **Requirements:** Paseo `>=0.8.0 <1.0.0` (declared in `paseo-plugin.json`; see [compatibility](#compatibility)
-for what has actually been checked). Paseo compiles the TypeScript sources itself — no npm install or build
-is needed for the plugin. The optional CLI needs Node.js 22 or newer; see [Command line](#command-line).
+for what has actually been checked). Paseo compiles the TypeScript sources itself, from either source — no build
+step is needed for the plugin. An npm install needs `npm` on the Paseo server's machine. The optional CLI needs
+Node.js 22 or newer; see [Command line](#command-line).
 
 > **Plugins are not sandboxed.** Like every Paseo plugin, this one runs with the Paseo server's file system
 > access and can use Paseo's agent API. Read the code before installing, and read
@@ -107,7 +117,14 @@ The `kanban` CLI is optional. It lets orchestrator agents (and you) create and m
 It needs Node.js 22+, no network, and no running Paseo.
 
 ```sh
-git clone https://github.com/panto-dominic/paseo-auto-kanban --branch v0.2.0
+npm install -g paseo-auto-kanban
+kanban --version
+```
+
+The package has no runtime dependencies and runs no install scripts. To build it from source instead:
+
+```sh
+git clone https://github.com/panto-dominic/paseo-auto-kanban --branch v0.2.1
 cd paseo-auto-kanban && npm ci --ignore-scripts && npm run build
 npm link            # or link dist/src/cli/main.js into a folder on your PATH yourself
 kanban --version
@@ -152,7 +169,7 @@ so Paseo treats it as a new plugin. Your boards are not tied to the ID and stay 
 
 ```sh
 paseo plugin remove paseo-kanban
-paseo plugin install https://github.com/panto-dominic/paseo-auto-kanban --ref v0.2.0
+paseo plugin install https://github.com/panto-dominic/paseo-auto-kanban --ref v0.2.1
 ```
 
 Remove the old plugin **before** installing the new one, and do not keep both enabled: they would share the same
@@ -171,7 +188,8 @@ This stops the plugin. Your data is left in place; delete it yourself if you no 
 
 - `~/paseo-kanban-data/` (all boards, backups and settings),
 - `PROCESS.md` in workspace folders, and `.kanban/workflow.json` if you exported one,
-- the `kanban` command if you linked it (`npm rm -g paseo-auto-kanban` after `npm link`, or remove your own link).
+- the `kanban` command if you installed or linked it (`npm rm -g paseo-auto-kanban` after `npm install -g` or
+  `npm link`, or remove your own link).
 
 ## Known limitations
 

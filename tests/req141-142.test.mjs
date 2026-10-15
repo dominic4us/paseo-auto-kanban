@@ -43,7 +43,7 @@ test('REQ-141 W5·W7 Apache-2.0: the full license text with its copyright line, 
   const home = 'https://github.com/panto-dominic/paseo-auto-kanban';
   assert.deepEqual([pkg.homepage, pkg.repository, pkg.bugs], [home + '#readme', { type: 'git', url: 'git+' + home + '.git' }, { url: home + '/issues' }]);
   assert.ok(pkg.keywords.includes('paseo') && pkg.keywords.includes('kanban'));
-  assert.equal(pkg.private, true, 'still not published to npm — it installs from git');
+  assert.notEqual(pkg.private, true, 'publishable to npm since 0.2.1; git installs keep compiling the sources');
   assert.ok((await read('NOTICE')).startsWith('paseo-auto-kanban\n'));
   // The Lucide-derived crown and medal ship with Lucide's full licence text (ISC and the Feather MIT it carries), linked from NOTICE.
   const notice = await read('NOTICE'), lucide = await read('licenses/lucide-LICENSE.txt');

@@ -3,6 +3,18 @@
 All notable changes, newest first. Versions before 0.2.0 were private test builds published under the plugin
 ID `paseo-kanban`; this summary groups them by theme.
 
+## 0.2.1
+
+- **Install from npm.** The plugin can be installed with `paseo plugin install npm:paseo-auto-kanban`, and the
+  `kanban` CLI with `npm install -g paseo-auto-kanban`. The package carries the plugin sources Paseo compiles, the
+  built CLI and the licence notices — no tests or development files — and runs no install scripts. Installing from Git works as before.
+- **Workflow view:** a built-in workflow now says at the top that it reads no documents and shows the flow for
+  reference, and how to fill the table (export it and add reading rules). On a phone, the table heading of a
+  case-per-row workflow says when it also reads the record section, not only folder and file names. On wide
+  screens, the label of a line that goes back is no longer hidden under the step it leaves and avoids other
+  labels. Known limit: when a loop has been taken three times and steps show counts, its label can still touch a
+  neighbouring label or step by a few pixels.
+
 ## 0.2.0 — first public release
 
 - **Renamed** to `paseo-auto-kanban`. The plugin ID changed from `paseo-kanban`, so an existing installation must

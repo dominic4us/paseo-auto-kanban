@@ -15,8 +15,17 @@ Paseo에서 에이전트를 만들면 그 워크스페이스 보드에 카드가
 1. Paseo 서버(데몬)가 도는 기기의 터미널에서:
 
    ```sh
-   paseo plugin install https://github.com/panto-dominic/paseo-auto-kanban --ref v0.2.0
+   paseo plugin install npm:paseo-auto-kanban
    ```
+
+   또는 Git에서 릴리스 태그로:
+
+   ```sh
+   paseo plugin install https://github.com/panto-dominic/paseo-auto-kanban --ref v0.2.1
+   ```
+
+   어느 쪽이든 같은 플러그인입니다. npm 패키지는 0.2.1부터 올라가며, Paseo는 패키지 스크립트를 실행하지 않고 설치합니다.
+   npm으로 설치하려면 Paseo 서버 기기에 `npm`이 있어야 합니다.
 
 2. Paseo **설정 → Plugins**에서 **Enable plugins**를 켭니다. 모든 플러그인에 걸리는 스위치라서, 플러그인을 처음 쓰면
    꺼져 있을 수 있고, 꺼져 있으면 설치한 플러그인도 `disabled`로 남습니다(`paseo plugin enable <id>`는 플러그인 하나만
@@ -31,7 +40,10 @@ Paseo에서 에이전트를 만들면 그 워크스페이스 보드에 카드가
    불러오기 오류도 같은 목록에 나옵니다.
 
 그러면 Paseo 사이드바에 **Kanban** 항목이 생깁니다. 필요한 Paseo 버전은 `>=0.8.0 <1.0.0`입니다(실제로 확인한 조합은
-영어 README의 호환 표). 업데이트: `paseo plugin update paseo-auto-kanban`(특정 태그로: `--ref <태그>`. 이미 설치된 ID에 `install`을 다시 하면 거부됩니다).
+영어 README의 호환 표). 업데이트: `paseo plugin update paseo-auto-kanban`(특정 판으로: npm 설치는 `--version <버전>`, Git 설치는 `--ref <태그>`. 이미 설치된 ID에 `install`을 다시 하면 거부됩니다).
+
+`kanban` 명령(선택, Node.js 22 이상)은 `npm install -g paseo-auto-kanban`으로 설치합니다. 소스에서 빌드하는 방법과 명령 설명은
+영어 README의 Command line 절에 있습니다.
 
 이전 ID `paseo-kanban`으로 설치해 쓰던 분은 `paseo plugin remove paseo-kanban` 뒤 위 명령으로 다시 설치하세요.
 옛 플러그인을 **먼저 제거**하고, 둘을 함께 켜 두지 마세요(같은 데이터 폴더를 쓰며 같은 에이전트 이벤트에 둘 다 반응합니다).
@@ -57,6 +69,6 @@ Paseo에서 에이전트를 만들면 그 워크스페이스 보드에 카드가
 - 새로 설치하면 화면이 영어로 시작합니다. 한국어로 쓰려면 `config.json`에 `"locale": "ko"`를 넣으세요.
   이전 버전에서 쓰던 설정은 한국어가 유지됩니다.
 - 제거: `paseo plugin remove paseo-auto-kanban`. 데이터 폴더와 워크스페이스의 `PROCESS.md`는 남으니 필요 없으면
-  직접 지우세요.
+  직접 지우세요. npm으로 설치한 `kanban` 명령은 `npm rm -g paseo-auto-kanban`으로 지웁니다.
 
 라이선스: [Apache-2.0](LICENSE)
