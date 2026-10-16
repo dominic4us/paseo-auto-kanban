@@ -3,18 +3,18 @@
 **A Paseo kanban your agents update themselves.**
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/lead-dark-still.png">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/lead.gif" width="802" alt="Animated demo: a lead agent's card, marked with a gold crown, splits the work between two sub-agents; each sub-agent gets its own card tagged with the lead's name, the lead card counts its sub-cards and how many are running, and when one sub-agent finishes its card moves to Review.">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/lead-dark.gif">
+  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/lead.gif" width="802" alt="Animated demo: a lead agent's card, marked with a gold crown, splits the work between two sub-agents; each sub-agent gets its own card tagged with the lead's name, the lead card counts its sub-cards and how many are running, and when one sub-agent finishes its card moves to Review.">
 </picture>
 
-<sub>A lead agent hands work to sub-agents — recorded in Paseo with real agents and a demo project. <a href="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/lead-dark-still.png">Still image</a></sub>
+<sub>A lead agent hands work to sub-agents — recorded in Paseo with real agents and a demo project. <a href="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/lead-dark-still.png">Still image</a></sub>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/hero-dark-still.png">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/hero.gif" width="802" alt="An agent starts in Paseo and a card appears on its own in To Do, moves to In progress while the agent works, asks for you when the agent requests a permission, and waits in Review when the agent stops.">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/hero-dark.gif">
+  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/hero.gif" width="802" alt="An agent starts in Paseo and a card appears on its own in To Do, moves to In progress while the agent works, asks for you when the agent requests a permission, and waits in Review when the agent stops.">
 </picture>
 
-<sub>Recorded in Paseo with a real agent and a demo project. <a href="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/hero-dark-still.png">Still image</a></sub>
+<sub>Recorded in Paseo with a real agent and a demo project. <a href="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/hero-dark-still.png">Still image</a></sub>
 
 ```sh
 paseo plugin install npm:paseo-auto-kanban
@@ -40,11 +40,11 @@ work. One board per workspace, every project on one screen, and a "needs you" co
 a person has to act on.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/overview-dark-still.png">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/overview.gif" width="800" alt="One board shows several projects with agents at work, highlights the card whose agent is waiting for a response, then shows the same board on a phone.">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/overview-dark.gif">
+  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/overview.gif" width="800" alt="One board shows several projects with agents at work, highlights the card whose agent is waiting for a response, then shows the same board on a phone.">
 </picture>
 
-<sub>Demo data. <a href="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/overview-poster.png">View without motion</a></sub>
+<sub>Demo data. <a href="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/overview-poster.png">View without motion</a></sub>
 
 - **Automatic cards.** Every top-level agent gets a card. Turn started → In progress, permission request →
   needs you, turn ended → Review, agent archived → still Review. If you move a card yourself, it stays where
@@ -58,13 +58,13 @@ a person has to act on.
   each card, automatic refresh, a phone layout, English and Korean, light and dark.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/busy-dark-still.png">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/busy.gif" width="800" alt="A card in Review gets a dashed border when it is marked busy, then turns orange after two hours and the board's &quot;Needs attention&quot; count goes up.">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/busy-dark.gif">
+  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/busy.gif" width="800" alt="A card in Review gets a dashed border when it is marked busy, then turns orange after two hours and the board's &quot;Needs attention&quot; count goes up.">
 </picture>
 
-<sub>Demo data. <a href="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/busy-poster.png">View without motion</a></sub>
+<sub>Demo data. <a href="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/busy-poster.png">View without motion</a></sub>
 
-<img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/card-detail.png" width="800" alt="Card details (demo data, dark theme): title, stage, next action, priority and the linked agent with its state">
+<img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/card-detail.png" width="800" alt="Card details (demo data, dark theme): title, stage, next action, priority and the linked agent with its state">
 
 ## Install
 

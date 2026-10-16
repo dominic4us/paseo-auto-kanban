@@ -3,18 +3,18 @@
 **Paseo 에이전트가 스스로 갱신하는 업무 보드입니다.**
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/lead-dark-still.png">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/lead.gif" width="802" alt="총괄(lead) 에이전트 카드에 금색 왕관이 붙고, 총괄이 하위 에이전트 둘에게 일을 나누면 하위마다 총괄 이름이 달린 카드가 생깁니다. 총괄 카드는 하위 카드 수와 실행 중인 수를 세고, 하위 하나가 끝나면 그 카드가 Review로 옮겨 갑니다.">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/lead-dark.gif">
+  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/lead.gif" width="802" alt="총괄(lead) 에이전트 카드에 금색 왕관이 붙고, 총괄이 하위 에이전트 둘에게 일을 나누면 하위마다 총괄 이름이 달린 카드가 생깁니다. 총괄 카드는 하위 카드 수와 실행 중인 수를 세고, 하위 하나가 끝나면 그 카드가 Review로 옮겨 갑니다.">
 </picture>
 
-<sub>총괄 에이전트가 하위 에이전트에게 일을 나눠 주는 모습 — 실제 에이전트와 예시 프로젝트로 Paseo에서 녹화했습니다(화면은 영어). <a href="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/lead-dark-still.png">정지 이미지</a></sub>
+<sub>총괄 에이전트가 하위 에이전트에게 일을 나눠 주는 모습 — 실제 에이전트와 예시 프로젝트로 Paseo에서 녹화했습니다(화면은 영어). <a href="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/lead-dark-still.png">정지 이미지</a></sub>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/hero-dark-still.png">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/hero.gif" width="802" alt="Paseo에서 에이전트를 시작하면 To Do에 카드가 저절로 생기고, 에이전트가 일하는 동안 In progress로 옮겨 가고, 권한을 요청하면 사람을 부르고, 에이전트가 멈추면 Review에서 기다립니다.">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/hero-dark.gif">
+  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/hero.gif" width="802" alt="Paseo에서 에이전트를 시작하면 To Do에 카드가 저절로 생기고, 에이전트가 일하는 동안 In progress로 옮겨 가고, 권한을 요청하면 사람을 부르고, 에이전트가 멈추면 Review에서 기다립니다.">
 </picture>
 
-<sub>실제 에이전트와 예시 프로젝트로 Paseo에서 녹화했습니다(화면은 영어). <a href="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/hero-dark-still.png">정지 이미지</a></sub>
+<sub>실제 에이전트와 예시 프로젝트로 Paseo에서 녹화했습니다(화면은 영어). <a href="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/hero-dark-still.png">정지 이미지</a></sub>
 
 ```sh
 paseo plugin install npm:paseo-auto-kanban
@@ -38,22 +38,22 @@ Paseo에서 에이전트를 만들면 그 워크스페이스 보드에 카드가
 사람이 손대야 하는 것만 "확인 필요"로 셉니다.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/overview-dark-still.png">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/overview.gif" width="800" alt="보드 하나에 여러 프로젝트와 일하는 에이전트가 보이고, 응답을 기다리는 에이전트의 카드를 강조한 뒤, 같은 보드를 휴대폰 화면으로 보여 줍니다.">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/overview-dark.gif">
+  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/overview.gif" width="800" alt="보드 하나에 여러 프로젝트와 일하는 에이전트가 보이고, 응답을 기다리는 에이전트의 카드를 강조한 뒤, 같은 보드를 휴대폰 화면으로 보여 줍니다.">
 </picture>
 
-<sub>예시 데이터. <a href="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/overview-poster.png">움직임 없이 보기</a></sub>
+<sub>예시 데이터. <a href="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/overview-poster.png">움직임 없이 보기</a></sub>
 
 에이전트가 멈췄어도 시험이나 빌드가 아직 돌고 있을 수 있습니다. 그 카드에 진행 표시를 켜면
 (`kanban card busy 카드 "Testing"`) 테두리가 점선이 되고, 2시간이 지나면 주황으로 바뀌어 사람을 부릅니다.
 카드 상세에서 표시를 보고 끌 수 있습니다.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/busy-dark-still.png">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/busy.gif" width="800" alt="검토 칸의 카드에 진행 표시를 켜면 테두리가 점선이 되고, 2시간이 지나면 주황으로 바뀌며 보드의 &quot;Needs attention&quot; 수가 올라갑니다.">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/busy-dark.gif">
+  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/busy.gif" width="800" alt="검토 칸의 카드에 진행 표시를 켜면 테두리가 점선이 되고, 2시간이 지나면 주황으로 바뀌며 보드의 &quot;Needs attention&quot; 수가 올라갑니다.">
 </picture>
 
-<sub>예시 데이터. <a href="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/v0.2.2/docs/images/busy-poster.png">움직임 없이 보기</a></sub>
+<sub>예시 데이터. <a href="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/busy-poster.png">움직임 없이 보기</a></sub>
 
 ## 설치
 

@@ -14,7 +14,7 @@ ID `paseo-kanban`; this summary groups them by theme.
   a row or two taller. The agent's name keeps its usual room, and a checklist's numbers ("0/3") and the age stay whole beside
   it. On a small phone at a large screen size, the word "Criteria" and the agent a request goes to are what get shortened.
 - **README:** animations at the top of a lead agent handing work to sub-agents and of a real agent's card, the overview and busy-mark animations under *Why*
-  (still images for dark themes and "View without motion" links), and the images load from GitHub so they show on
+  (light and dark versions that follow the GitHub theme, each with a still-image link for viewing without motion), and the images load from GitHub so they show on
   npm too. Install now says which Paseo (0.9.0+) and Node.js (22+) are needed, installs the CLI with
   `npm install -g --prefix ~/.local` (a root-owned npm folder fails with `EACCES`), updates the plugin and the CLI
   with two commands, explains where the first board comes from, and walks through moving from `paseo-kanban`,
