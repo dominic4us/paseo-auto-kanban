@@ -2,6 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { folderKey, folderSwitch, normalizeCwd, type Board, type FolderSwitch } from '../../shared/core/domain.js';
+import { renameOver } from './durable.js';
 
 /**
  * `auto-cards.json`, the plugin's own file beside `ui-state.json` (never inside a board): the agent auto cards' switches,
@@ -187,7 +188,7 @@ async function replaceFile(dataDir: string, name: string, bytes: string): Promis
   const temporary = path.join(dataDir, `.${name}.tmp-${randomUUID()}`);
   try {
     await fs.writeFile(temporary, bytes, { flag: 'wx', mode: 0o600 });
-    await fs.rename(temporary, path.join(dataDir, name));
+    await renameOver(temporary, path.join(dataDir, name));
   } catch (error) { await fs.rm(temporary, { force: true }).catch(() => {}); throw error; }
 }
 const codeOf = (error: unknown) => (error as NodeJS.ErrnoException)?.code;

@@ -6,7 +6,7 @@ import { MenuSheet } from './menu-sheet.js';
 import { stageColor } from './stage-color.js';
 import { CellPanel } from './cell-panel.js';
 import { useSessionValue } from './session.js';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { knownRevisions, noteActivity, useAutoRefresh, useShownWatch } from './auto-refresh.js';
 import { answeredSettings, useCardOrder, useKanbanSettings, useKanbanTheme, useUiScale } from './settings.js';
 import { sortCards } from './card-order.js';
@@ -26,7 +26,7 @@ import { FamilyFocusContext, LinkedCard, useFamilyFocus } from './card-group.js'
 import { boardMark, leadAgentIds, linkStages } from './card-groups.js';
 import { MobileControls } from './mobile-controls.js';
 import { crowdedTitleRow, MOBILE } from './mobile-layout.js';
-import { attentionStage } from './mobile-model.js';
+import { attentionStage, openingStage } from './mobile-model.js';
 import { cardNeedsAttention } from './swimlane-model.js';
 import { ArchivedSheet, archivedDoneOf, DoneHeadTools, TidyConfirm, TidyNote, useAutoArchive } from './archive.js';
 import { boardLayout, bottomClearance } from './layout.js';
@@ -115,7 +115,12 @@ export function BoardScreen({ selector, onBack, workspaceTitle, panel = false, .
   const [views, setViews] = useSessionValue<LaneViews>(props.host.id + ':surface', 'laneViews', {});
   const offered = !!b && offersWorkflow(b) && !mobile && !compact && !panel, big = offered && views[b!.summary.id] === 'workflow';
   const bottom = bottomClearance(props.layout.platform);
-  const selected = b?.stages.find(s => s.stageId === selectedStage)?.stageId ?? b?.stages[0]?.stageId;
+  // REQ-148: a tab not chosen yet (nor handed over by the Kanban screen) is the first stage, or the first with cards while
+  // that one is empty; on the tabs it is then kept as if chosen, so it does not jump when its cards move on.
+  const opening = b ? openingStage(b.stages.map(s => ({ stageId: s.stageId, count: s.totalCount })), b.stages[0]?.stageId ?? '') : '';
+  const selected = b?.stages.find(s => s.stageId === selectedStage)?.stageId ?? (opening || undefined);
+  const opened = tabs && !selectedStage && !!b && b.stages.some(s => s.totalCount > 0);
+  useEffect(() => { if (opened) setStage(opening); }, [opened, opening]);
   const title = workspaceTitle || (b ? workspaceName(b.summary.workspaceId, b.summary.cwd, names.directory) : m.loading);
   // REQ-77 ④: the title reads like the flat board's lane heading (REQ-75 A1) — the workspace in bold, then, muted,
   // its project when it is called something else. REQ-65 ⑧'s `branch · folder` stays last in the muted part, so a
@@ -222,9 +227,7 @@ export function BoardScreen({ selector, onBack, workspaceTitle, panel = false, .
     <DirectoryStatus placing={false} error={names.error} colors={c} m={m} />
     <TrackingStatus signals={signalProblem} health={looks.health ?? state.data?.autoHealth} autoCards={autoCards[0]}
       refreshFailing={!!looks.failing} colors={c} m={m} />
-    {tabs && b && (compact ? <MobileControls width={width} stages={stages.map(s => ({ stageId: s.stageId, name: s.name, count: s.cards.length, color: stageColor(s.stageId, b!.template.stages, c),
-      // REQ-136 H6: the built-in "In progress" is said shorter on the tab's face, as on every board's tabs; a stage named otherwise keeps its name.
-      ...(s.name === m.doingStage ? { tab: m.doingStageTab } : {}) }))}
+    {tabs && b && (compact ? <MobileControls stages={stages.map(s => ({ stageId: s.stageId, name: s.name, count: s.cards.length, color: stageColor(s.stageId, b!.template.stages, c) }))}
       actions={panelCompact ? <>
         <IconButton name="Ellipsis" label={m.more} onPress={() => setMenu(true)} colors={c} mobile buttonRef={settingsWindow.opener} />
       </> : undefined} selected={selected ?? ''} attention={attention} count={count} onStage={setStage} onAttention={toggleAttention} colors={c} m={m} />

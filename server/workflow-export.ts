@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { WORKFLOW_DEFINITION_PATH, workflowDefinitionSchema, type WorkflowDefinition } from '../shared/workflow.js';
 import { createKanbanError } from '../shared/core/domain.js';
 import { WORKFLOW_LIMITS, confine, type Limits } from './workflow.js';
+import { O_DIRECTORY, O_NOFOLLOW } from './core/durable.js';
 
 /**
  * REQ-125 2단계 (research/288): "Export to the project folder" — the one place the plugin writes into a workspace folder,
@@ -70,7 +71,7 @@ export async function exportDefinition(cwd: string, def: WorkflowDefinition, lim
   if (await present(path.join(checked, fileName))) throw exists();
   // The folder that passed the check, held open: from here on it is reached through the handle only.
   let dir: Awaited<ReturnType<typeof fs.open>>;
-  try { dir = await fs.open(checked, fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW); }
+  try { dir = await fs.open(checked, fs.constants.O_RDONLY | O_DIRECTORY | O_NOFOLLOW); }
   catch { throw outside(); }
   try {
     const via = '/proc/self/fd/' + dir.fd, held = await dir.stat();

@@ -9,9 +9,11 @@ import fs from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { join } from 'node:path';
+import { setUiScale } from '../dist/client/ui-scale.js';
 import { copy } from '../dist/client/i18n.js';
 import { BUILTIN_WORKFLOWS, builtinDefinition } from '../dist/shared/workflow-templates.js';
-import { edgeLabelSpot, flowLayout, flowObstacles, loopLabelSpot, route, rowBottom, spotRect } from '../dist/client/workflow-model.js';
+import { flowLayout, flowLabelLayout, flowObstacles, flowOverlay, loopLabel, stageCounts, spotRect } from '../dist/client/workflow-model.js';
+import { d53History, d53Reading } from './fixtures/d53.mjs';
 import { testTmpdir } from './helpers.mjs';
 
 const run = promisify(execFile);
@@ -87,18 +89,14 @@ test('REQ-143 X4·X9 the words, in both languages', () => {
 
 // The flow's own order (workflow.tsx FlowView): forward labels first, then loop labels — those under a row first — each placed
 // against everything before it. Checked here against all of it again, not only what it was given.
-function placeAll(def, width, loopText = e => e.label, rounds = () => 1) {
-  const L = flowLayout(def.stages, width), node = id => L.at.get(id), forward = [];
-  for (const e of def.edges) if (!e.back && e.label)
-    forward.push({ text: e.label, rect: spotRect(edgeLabelSpot(route(node(e.from), node(e.to), false, 0, rowBottom(L, node(e.from).stage.row))[0]), e.label) });
-  const loops = def.edges.filter(e => e.back && loopText(e)).map(e => ({ e, text: loopText(e), n: rounds(e), segs: route(node(e.from), node(e.to), true, 0, rowBottom(L, node(e.from).stage.row)) }));
-  const placed = [];
-  for (const job of [...loops.filter(x => x.segs.length === 3), ...loops.filter(x => x.segs.length !== 3)]) {
-    const rect = spotRect(loopLabelSpot(L, job.segs, job.n, job.text, [...forward.map(f => f.rect), ...placed.map(p => p.rect)]), job.text);
-    placed.push({ text: job.text, rect });
-  }
+function placeAll(def, width, loopText = e => e.label, rounds = () => 1, notes = {}, counts = {}) {
+  const labels = new Map(def.edges.flatMap((e, i) => e.back ? [[i, { text: loopText(e), n: rounds(e) }]] : []));
+  const { layout: L, forward: f, loops: p } = flowLabelLayout(flowLayout(def.stages, width, notes, counts), def.edges, labels);
+  const forward = [...f].map(([i, spot]) => ({ text: def.edges[i].label, rect: spotRect(spot, def.edges[i].label) }));
+  const placed = [...p].map(([i, spot]) => ({ text: labels.get(i).text, rect: spotRect(spot, labels.get(i).text) }));
   return { L, forward, placed };
 }
+
 function clashes({ L, forward, placed }) {
   const overlaps = (a, b) => Math.min(a.r, b.r) - Math.max(a.l, b.l) > 0 && Math.min(a.b, b.b) - Math.max(a.t, b.t) > 0;
   const out = [];
@@ -120,9 +118,93 @@ test('REQ-143 X10 (gate 351) a loop gone round three times — a long label, thr
   for (const t of BUILTIN_WORKFLOWS) for (const locale of ['ko', 'en']) for (const width of [1118, 760]) {
     const def = builtinDefinition(t, locale);
     const text = e => (locale === 'ko' ? e.label + ' 3회: ' : e.label + ' 3 times: ') + '301→302 · 303→304 · 305→306';
-    // At the 1920 lane's width nothing may touch; narrower, a label this long can find no free place by a busy row (sales-b2b at
-    // 760–900): the least-covering one is taken, never on a step.
+    // Narrow flows must also allocate enough space for the complete labels.
     const found = clashes(placeAll(def, width, text, () => 3));
-    assert.deepEqual(width === 1118 ? found : found.filter(v => / on a step or count$| outside$/.test(v)), [], `${t.id} ${locale} ${width}`);
+    assert.deepEqual(found, [], `${t.id} ${locale} ${width}`);
   }
+});
+
+const words53 = locale => { const m = copy(locale); return { ...m, verdict: { pass: m.verdictPass, fail: m.verdictFail, conditional: m.verdictConditional, unknown: m.verdictUnknown } }; };
+function placeModel53(model, locale, width) {
+  const w = words53(locale), overlay = flowOverlay(model.definition, model.releases[0], w);
+  return placeAll(model.definition, width, e => loopLabel(e, overlay.loops.get(model.definition.edges.indexOf(e)) ?? [], w),
+    e => Math.max(1, overlay.loops.get(model.definition.edges.indexOf(e))?.length ?? 0), overlay.notes, stageCounts(model, w));
+}
+for (const t of BUILTIN_WORKFLOWS) for (const locale of ['ko', 'en']) for (const width of [1118, 760, 520]) {
+  test(`D53 zero overlap with history + count chips + notes: ${t.id} ${locale} ${width}`, () => {
+    const model = d53History({ definition: builtinDefinition(t, locale), key: t.id, totals: [] });
+    assert.deepEqual(clashes(placeModel53(model, locale, width)), []);
+  });
+}
+for (const id of ['gov-grant', 'sales-b2b']) for (const locale of ['ko', 'en']) for (const single of [false, true]) {
+  test(`D53 real reader, ${single ? 'one' : 'every'} loop three times: ${id} ${locale}`, async t => {
+    const dir = await fs.mkdtemp(join(await testTmpdir(), 'd53-'));
+    t.after(() => fs.rm(dir, { recursive: true, force: true }));
+    const model = await d53Reading(dir, id, locale, single);
+    assert.equal(model.defined, true);
+    assert.equal(model.releases.length, 1);
+    const overlay = flowOverlay(model.definition, model.releases[0], words53(locale));
+    for (const [i, e] of model.definition.edges.entries()) if (e.back && (!single || e === model.definition.edges.find(e => e.back)))
+      assert.equal(overlay.loops.get(i).length, 3);
+    assert.ok(Object.keys(stageCounts(model, words53(locale))).length > 0);
+    for (const width of [1118, 900, 760, 520]) assert.deepEqual(clashes(placeModel53(model, locale, width)), [], String(width));
+  });
+}
+
+test('D53 a crowded custom row gets extra canvas space, never a least-overlapping label', () => {
+  const template = builtinDefinition(BUILTIN_WORKFLOWS.find(t => t.id === 'sales-b2b'), 'en');
+  const e = template.edges.find(e => e.back);
+  const def = { ...template, edges: [...template.edges.filter(e => !e.back), ...Array.from({ length: 24 }, (_, i) => ({ ...e, label: `Review ${i}: 301→302 · 303→304 · 305→306` }))] };
+  const base = flowLayout(def.stages, 760), before = structuredClone(base);
+  const labels = new Map(def.edges.flatMap((e, i) => e.back ? [[i, { text: e.label, n: 3 }]] : []));
+  const result = flowLabelLayout(base, def.edges, labels);
+  assert.deepEqual(base, before, 'a relayout must not move the input nodes');
+  assert.equal(result.loops.size, 24);
+  assert.ok(result.layout.height > base.height);
+  assert.deepEqual(clashes(placeAll(def, 760, e => e.label, () => 3)), []);
+});
+
+for (const scale of [80, 150]) test(`D53 growing rows uses the UI scale (${scale}%)`, () => {
+  setUiScale(scale);
+  try {
+    for (const t of BUILTIN_WORKFLOWS) for (const locale of ['ko', 'en']) for (const width of [1118, 760, 520]) {
+      const model = d53History({ definition: builtinDefinition(t, locale), key: t.id, totals: [] });
+      assert.deepEqual(clashes(placeModel53(model, locale, width)), [], `${t.id} ${locale} ${width}`);
+    }
+  } finally { setUiScale(100); }
+});
+
+for (const locale of ['ko', 'en']) test(`D53 the 760px B2B loop with neither counts nor node notes: ${locale}`, () => {
+  const model = d53History({ definition: builtinDefinition(BUILTIN_WORKFLOWS.find(t => t.id === 'sales-b2b'), locale), key: 'bare', totals: [] }, false);
+  const w = words53(locale), overlay = flowOverlay(model.definition, model.releases[0], w);
+  assert.deepEqual(overlay.notes, {});
+  assert.deepEqual(stageCounts(model, w), {});
+  assert.ok([...overlay.loops.values()].every(loops => loops.length === 3));
+  assert.deepEqual(clashes(placeModel53(model, locale, 760)), []);
+});
+
+
+// D56: forward labels must obey the same zero-overlap contract as loop labels.
+for (const template of BUILTIN_WORKFLOWS) for (const locale of ['ko', 'en']) for (const width of [1118, 760, 520]) for (const history of [false, true]) {
+  test('D56 all label borders clear of boxes and each other: ' + [template.id, locale, width, history].join(' '), () => {
+    const definition = builtinDefinition(template, locale);
+    const placement = history ? placeModel53(d53History({ definition, key: template.id, totals: [] }), locale, width) : placeAll(definition, width);
+    assert.deepEqual(clashes({ ...placement, forward: [], placed: [...placement.forward, ...placement.placed] }), []);
+  });
+}
+
+test('D56 crowded forward captions allocate space and keep node text geometry unchanged', () => {
+  const template = builtinDefinition(BUILTIN_WORKFLOWS.find(t => t.id === 'sales-b2b'), 'en');
+  const edge = template.edges.find(e => !e.back && e.label);
+  const def = { ...template, edges: Array.from({ length: 24 }, (_, i) => ({ ...edge, label: `Forward ${i}: a longer answer` })) };
+  const base = flowLayout(def.stages, 760), saved = structuredClone(base), result = flowLabelLayout(base, def.edges, new Map());
+  assert.equal(result.forward.size, 24);
+  assert.deepEqual(base, saved);
+  assert.ok(result.layout.height > base.height);
+  for (const [id,n] of result.layout.at) {
+    const b = base.at.get(id);
+    assert.deepEqual([n.w,n.h,n.labelLines,n.note,n.chip], [b.w,b.h,b.labelLines,b.note,b.chip]);
+  }
+  const placement = placeAll(def, 760);
+  assert.deepEqual(clashes({ ...placement, forward: [], placed: [...placement.forward, ...placement.placed] }), []);
 });

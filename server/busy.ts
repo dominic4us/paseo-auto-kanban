@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { createKanbanError } from '../shared/core/domain.js';
+import { renameOver } from './core/durable.js';
 
 /**
  * REQ-84: work that is not an agent's turn — a lead's own test run, a person's build, a script — marked on a card while it
@@ -124,7 +125,7 @@ async function write(dataDir: string, state: BusyState, cleared: ClearedState): 
   const file = path.join(dataDir, BUSY_FILE), temporary = path.join(dataDir, `.${BUSY_FILE}.tmp-${randomUUID()}`);
   try {
     await fs.writeFile(temporary, bytes, { flag: 'wx', mode: 0o600 });
-    await fs.rename(temporary, file);
+    await renameOver(temporary, file);
   } catch (error) { await fs.rm(temporary, { force: true }).catch(() => {}); throw error; }
 }
 const latest = (cards: Record<string, BusyEntry>) => Object.values(cards).map(e => e.since).sort().at(-1) ?? '';

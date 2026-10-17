@@ -27,8 +27,8 @@ detail. Facts here follow the code; when they disagree, the code wins and this p
 - **Board.** One per workspace, stored as a JSON ledger in the data folder. The default template `basic@1` has
   four stages: Waiting (shown as *To Do* on English screens), In progress, Review and Done. Stage ids are
   `todo`, `doing`, `review`, `done`; Done is the completion stage (`countsAsDone`).
-  The names differ by place: the phone's tabs say *Doing* for In progress, and the CLI prints the stored name,
-  so `kanban ls` shows `todo (Waiting)` for To Do.
+  The CLI prints the stored name, so `kanban ls` shows `todo (Waiting)` for To Do; every screen, the phone's tabs
+  included, says In progress.
 - **Card.** A unit of work: title, acceptance criteria, notes, next action, priority, deliverables, block reason,
   `awaiting` (agent / user / none) and linked agents. Cards are archived, never deleted.
 - **Intent.** A person creates *drafts* by default; an agent identified by `PASEO_AGENT_ID` creates *requested*
@@ -69,7 +69,8 @@ showing its own board. Both share the card detail sheet.
 
 ### Phone layout (below 760 px)
 
-The same model is shown as stage tabs (starting at In progress) with cards grouped by workspace. The attention
+The same model is shown as stage tabs with cards grouped by workspace. It opens on In progress, or on the first tab
+with cards (To Do, then Review, then Done) when In progress is empty; a tab you choose stays chosen. The attention
 chip and tabs share one row; filters and search are in a sheet. Tap or long-press names to expand them. There
 is no drag; move a card from its menu or detail.
 

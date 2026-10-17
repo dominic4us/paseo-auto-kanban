@@ -1,0 +1,128 @@
+# Release to npm through trusted publishing (OIDC) and staged publishing.
+# Pushing a tag vX.Y.Z builds and tests the tagged commit, then stages that version on npm.
+# Nothing becomes public here: a maintainer approves the staged version on npmjs.com with two-factor authentication.
+# No token or secret is stored or used. The npm trusted publisher names this file (release.yml), so keep the name.
+name: Release to npm (staged)
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    # No publishing rights in this job: build and test only, on the same Node line as the candidate tests
+    runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Seoul # the tests read times as the maintainer's local clock (KST); the runner is UTC
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          package-manager-cache: false # never use caching in release builds
+      - run: npm ci --ignore-scripts
+      # npm test includes the Hermes checks, and with CI set a missing compiler or VM is a failure, so both come first
+      - name: Prepare the Paseo plugin compiler (Paseo 0.11.2; package checked by sha512)
+        env:
+          PASEO_SERVER_VERSION: '0.11.2'
+          PASEO_SERVER_INTEGRITY: 'sha512-HNeiGsLrkZOFGHoYXodZ4u3ewlvFHZjm/sqBUkxDjFx6QnxOyRyfQnRDk48mhtR+l+n6+2GPlTY2v0uaObHUDw=='
+          ESBUILD_VERSION: '0.25.12' # the esbuild that Paseo 0.11.2 resolves
+          TYPESCRIPT_VERSION: '5.9.3' # the TypeScript that Paseo 0.11.2 resolves; the compiler's import scan requires it
+        run: |
+          dir="$RUNNER_TEMP/paseo-compiler"
+          mkdir -p "$dir"
+          echo '{ "private": true }' > "$dir/package.json"
+          npm install --prefix "$dir" --no-save --no-package-lock --ignore-scripts --no-audit --no-fund "esbuild@$ESBUILD_VERSION" "typescript@$TYPESCRIPT_VERSION"
+          tgz="$(cd "$RUNNER_TEMP" && npm pack --silent "@getpaseo/server@$PASEO_SERVER_VERSION")"
+          node -e '
+            const got = "sha512-" + require("crypto").createHash("sha512").update(require("fs").readFileSync(process.argv[1])).digest("base64");
+            if (got !== process.env.PASEO_SERVER_INTEGRITY) { console.error("@getpaseo/server integrity mismatch: " + got); process.exit(1); }
+          ' "$RUNNER_TEMP/$tgz"
+          mkdir -p "$dir/node_modules/@getpaseo/server" # after npm install, which removes packages it did not install
+          tar -xzf "$RUNNER_TEMP/$tgz" -C "$dir/node_modules/@getpaseo/server" --strip-components=1
+          compiler="$dir/node_modules/@getpaseo/server/dist/server/server/plugins/compiler.js"
+          test -f "$compiler"
+          echo "PASEO_PLUGIN_COMPILER=$compiler" >> "$GITHUB_ENV"
+      - name: Fetch the Hermes VM (archive and binary pinned by sha256)
+        run: npm run hermes:fetch-vm
+      - run: npm test
+      - run: npm run test:hermes
+
+  stage:
+    needs: verify
+    runs-on: ubuntu-latest # trusted publishing works on GitHub-hosted runners only
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # proves this workflow's identity to npm without a token; the only write-like permission
+    env:
+      # Files the package should hold (npm pack --dry-run). Change it together with a release that adds or removes files.
+      EXPECTED_PACK_FILES: '225'
+      PACK_FILES_TOLERANCE: '5'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24' # ships npm 11.15 or later, which staged publishing needs
+          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
+
+      - name: Check that npm supports staged publishing (11.15.0 or later)
+        run: |
+          node -e '
+            const v = process.argv[1].split(".").map(Number);
+            if (v[0] < 11 || (v[0] === 11 && v[1] < 15)) { console.error("npm " + process.argv[1] + " < 11.15.0"); process.exit(1); }
+            console.log("npm " + process.argv[1] + " ok");
+          ' "$(npm --version)"
+
+      - name: Check that the tag matches package.json version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version v$version"
+            exit 1
+          fi
+          echo "Tag $GITHUB_REF_NAME = package.json v$version"
+
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+
+      - name: Check the files the package will hold (npm pack --dry-run)
+        run: |
+          npm pack --dry-run --json --ignore-scripts > "$RUNNER_TEMP/pack.json"
+          node -e '
+            const [pack] = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+            const paths = pack.files.map(f => f.path);
+            const want = Number(process.env.EXPECTED_PACK_FILES), tol = Number(process.env.PACK_FILES_TOLERANCE);
+            const bad = paths.filter(p => /^(tests|docs|\.github)\//.test(p) || p.endsWith(".gif") || p.includes("node_modules"));
+            const problems = [];
+            if (Math.abs(paths.length - want) > tol) problems.push(paths.length + " files (expected " + want + " +/-" + tol + ")");
+            if (bad.length) problems.push("files that must not be packed: " + bad.slice(0, 5).join(", "));
+            for (const need of ["package.json", "dist/src/cli/main.js", "paseo-plugin.json"])
+              if (!paths.includes(need)) problems.push(need + " missing");
+            if (problems.length) { console.error(problems.join("\n")); process.exit(1); }
+            console.log(paths.length + " files - ok");
+          ' "$RUNNER_TEMP/pack.json"
+
+      - name: Stage the version on npm (waits for approval; not public yet)
+        run: npm stage publish --provenance
+
+      - name: Next step
+        run: |
+          {
+            echo "### Staged on npm: $GITHUB_REF_NAME"
+            echo "Not public yet. On npmjs.com open paseo-auto-kanban > Staged Packages, check the version and file count, then Approve (two-factor authentication)."
+          } >> "$GITHUB_STEP_SUMMARY"

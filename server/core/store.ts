@@ -32,6 +32,7 @@ import { createKanbanError, isKanbanError, type KanbanError,
      type Revision,
      type Locale,
      } from '../../shared/core/domain.js';
+import { O_DIRECTORY, O_NOFOLLOW, flushAccess, isWindows, renameOver } from './durable.js';
 export interface CommitEffect {
     status: 'written' | 'unchanged' | 'skipped' | 'failed';
     warnings: Warning[];
@@ -66,6 +67,8 @@ export interface IOStats extends ReadStats {
     backupWrites: number;
     exportWrites: number;
     fsyncCalls: number;
+    /** D61: folder flushes skipped — never made on Windows, or refused by the file system (research/406). */
+    fsyncSkipped: number;
     bytesWritten: number;
     lockAcquisitions: number;
 }
@@ -152,6 +155,7 @@ function measure(): Measurement { return { start: performance.now(),
      backupWrites: 0,
      exportWrites: 0,
      fsyncCalls: 0,
+     fsyncSkipped: 0,
      bytesWritten: 0,
      lockAcquisitions: 0 },
      warnings: [] };
@@ -283,8 +287,13 @@ export class Store {
                 fail('E_PATH_FORBIDDEN', 'Expected a real directory.', current);
         }
     }
+    /** D61: no folder flush on Windows, counted in fsyncSkipped; on every other host a failed one fails the write. */
     private async syncDirectory(dir: string, m: Measurement): Promise<void> {
-        const fd = await fs.open(dir, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+        if (isWindows()) {
+            m.io.fsyncSkipped++;
+            return;
+        }
+        const fd = await fs.open(dir, constants.O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
         try {
             await fd.sync();
             m.io.fsyncCalls++;
@@ -321,7 +330,7 @@ export class Store {
     }
     private async fileBytes(file: string, max?: number): Promise<Buffer> {
         await this.safeParents(file);
-        const fd = await fs.open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+        const fd = await fs.open(file, constants.O_RDONLY | O_NOFOLLOW);
         try {
             const stat = await fd.stat();
             if (!stat.isFile())
@@ -405,7 +414,7 @@ export class Store {
                 if (codeOf(error) !== 'ENOENT')
                     throw error;
             }
-            await fs.rename(temporary, file);
+            await renameOver(temporary, file);
             own = false;
             if (kind === 'board')
                 m.io.boardWrites++;
@@ -462,7 +471,7 @@ export class Store {
     private async lockRecord(file: string): Promise<LockRecord | null> {
         try {
             await this.safeParents(file);
-            const fd = await fs.open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+            const fd = await fs.open(file, constants.O_RDONLY | O_NOFOLLOW);
             try {
                 const stat = await fd.stat();
                 if (!stat.isFile() || stat.size > 16384)
@@ -746,7 +755,7 @@ export class Store {
         const signature = [info.dev, info.ino, info.size, info.mtimeMs, info.ctimeMs].join(':');
         const cached = this.identities.get(id);
         if (cached?.signature === signature) return { ...cached.identity };
-        const fd = await fs.open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+        const fd = await fs.open(file, constants.O_RDONLY | O_NOFOLLOW);
         let prefix = ''; let identity: BoardIdentity | undefined; let readBytes = 0;
         try {
             const bytes = Buffer.alloc(1024);
@@ -974,7 +983,8 @@ export class Store {
     private async confirmReplay(id: string, m: Measurement): Promise<void> {
         const file = this.boardPath(id);
         await this.safeParents(file);
-        const fd = await fs.open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+        // D61: Windows flushes only a handle opened for writing.
+        const fd = await fs.open(file, flushAccess() | O_NOFOLLOW);
         try {
             await fd.sync();
             m.io.fsyncCalls++;
@@ -1428,7 +1438,7 @@ export class Store {
         workspaceId: string;
         workspaceStatus: Board['workspaceStatus'];
     }> {
-        const fd = await fs.open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+        const fd = await fs.open(file, constants.O_RDONLY | O_NOFOLLOW);
         let raw: unknown;
         try {
             const info = await fd.stat();

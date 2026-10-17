@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { isKanbanError, fail, parseJson, renderProcess, type Board, type Warning } from '../../shared/core/domain.js';
 import { autoMadeBoard, readAutoState } from './auto-state.js';
 import type { CommitEffect, Result, Store } from './store.js';
+import { O_NOFOLLOW } from './durable.js';
 
 export interface ExportOptions { readExisting?: (file: string) => Promise<Buffer> }
 export interface ExportData { boardId: string; revision: string; status: CommitEffect['status'] }
@@ -17,7 +18,7 @@ function blocked(board: Board, code: string, message: string, status: 'skipped' 
 }
 function codeOf(error: unknown): string | undefined { return (error as NodeJS.ErrnoException)?.code; }
 async function readExisting(file: string, store?: Store): Promise<Buffer> {
-  const handle = await fs.open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+  const handle = await fs.open(file, constants.O_RDONLY | O_NOFOLLOW);
   try {
     const info = await handle.stat();
     if (!info.isFile()) fail('E_EXPORT', 'Output is not a regular file.', file);
@@ -83,6 +84,7 @@ async function writeInspected(store: Store, inspection: Inspection): Promise<Com
     } else if (!(await readExisting(target, store)).equals(previous)) return blocked(board, 'W_EXPORT_COMPARE', 'Output changed during comparison; preserving it.', 'failed').effect;
     const handle = await fs.open(temporary, 'wx', 0o600); owned = true;
     try { await handle.writeFile(bytes); } finally { await handle.close(); }
+    // D61 (research/407 F1): one rename, never retried — a person's edit made while it is refused is kept, not replaced.
     await fs.rename(temporary, target); owned = false;
     return { ...effect, exportWrites: 1, bytesWritten: bytes.length };
   } catch (error) {
@@ -108,7 +110,7 @@ export async function exportCommittedBoard(board: Board, store: Store): Promise<
 }
 export async function exportBoard(store: Store, id: string, options: ExportOptions = {}): Promise<Result<ExportData>> {
   const started = performance.now(); const initial = await inspect(store, await store.readBoard(id), options);
-  const io = { ...store.readMetrics(), lockHeldMs: 0, lockWaitMs: 0, boardWrites: 0, backupLinks: 0, backupWrites: 0, exportWrites: 0, fsyncCalls: 0, bytesWritten: 0, lockAcquisitions: 0 };
+  const io = { ...store.readMetrics(), lockHeldMs: 0, lockWaitMs: 0, boardWrites: 0, backupLinks: 0, backupWrites: 0, exportWrites: 0, fsyncCalls: 0, fsyncSkipped: 0, bytesWritten: 0, lockAcquisitions: 0 };
   if (initial.effect.status !== 'written') return { data: { boardId: id,
        revision: initial.board.revision,
        status: initial.effect.status },
@@ -140,7 +142,7 @@ export async function readInputJson(file: string, stdin: AsyncIterable<Uint8Arra
     for await (const part of stdin) { const chunk = Buffer.from(part); size += chunk.length; if (size > 1048576) fail('E_LIMIT', 'Input exceeds 1 MiB.', file); chunks.push(chunk); }
     bytes = Buffer.concat(chunks);
   } else {
-    const handle = await fs.open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const handle = await fs.open(file, constants.O_RDONLY | O_NOFOLLOW);
     try { const info = await handle.stat(); if (!info.isFile() || info.size > 1048576) fail('E_LIMIT', 'Expected a regular input file of at most 1 MiB.', file); bytes = await handle.readFile(); }
     finally { await handle.close(); }
   }

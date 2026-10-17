@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { build } from 'esbuild';
 import { chromium } from 'playwright-core';
+import { d53FlowScenes } from './d53-flow.mjs';
 import { applyOperations, builtinTemplate, summarizeBoard } from '../../dist/server/core/index.js';
 import { dispatchMode, emptyGoneBoards, enteredOf, stageEntries, stageEntry, toBoardDTO, toOverview } from '../../dist/server/read-model.js';
 import { judgeLead, readLeadEntry } from '../../dist/server/dispatch.js';
@@ -27,6 +28,7 @@ import { readWorkflow, WORKFLOW_LIMITS } from '../../dist/server/workflow.js';
 import { exportDefinition } from '../../dist/server/workflow-export.js';
 import { BUILTIN_WORKFLOWS } from '../../dist/shared/workflow-templates.js';
 import { exportedDefinition } from '../../dist/server/handlers.js';
+import { d53History, d53Reading } from '../fixtures/d53.mjs';
 import { gateDefinition, gateFiles, otherDefinition, otherFiles, writeWorkspace } from '../fixtures/workflow-fixtures.mjs';
 import { COUNT_BADGE, countBadge, PASEO_THEMES, palette, readable, crownColor, crownColors, medalColors, leaderOutline, selectedLine, selectedTint, hoverFill, contrast, markLine, replyColor, replyChip, viewedTint, fieldLine } from '../../dist/client/palette.js';
 
@@ -535,6 +537,14 @@ const fixture = (mode, mobile, remembered = false) => {
     const korean = value => { if (!value || typeof value !== 'object') return; for (const [key, inner] of Object.entries(value)) if (key === 'locale') value[key] = 'ko'; else korean(inner); };
     korean(f.boards); korean(f.overview); korean(f.cards);
   }
+  if (variant.startsWith('req148-') && variant.endsWith('-panel')) f.panel = 'wks_example01';
+  if (variant.startsWith('d64-') && variant.endsWith('-panel')) f.panel = 'wks_example01';
+  // An empty workspace list (no boards at all), in English or Korean: the first-chat hint under "no boards".
+  if (variant.startsWith('noboards-')) {
+    const lang = variant.slice(9);
+    f.overview = { ...toOverview([], lang, T(6)), boardViews: [], removedIds: [], workspaceLabels: { available: false, source: 'none', definitions: [], byWorkspace: {} } };
+    f.boards = {}; f.cards = {};
+  }
   return f;
 };
 const fixtureBase = (mode, mobile, remembered = false) => ({ mobile, width: mobile ? 390 : 1400, theme: PASEO_THEMES[mode],
@@ -546,7 +556,7 @@ const fixtureBase = (mode, mobile, remembered = false) => ({ mobile, width: mobi
   projects: { projects: [{ projectId: 'prj_example01', projectDisplayName: 'Example Project' }] }, agents: AGENTS,
   workspaces: { entries: [{ id: 'wks_example01', name: 'Example Workspace', projectId: 'prj_example01', projectDisplayName: 'Example Project' },
     { id: 'wks_example02', name: 'Second Workspace', projectId: 'prj_example01', projectDisplayName: 'Example Project' }], pageInfo: { nextCursor: null } },
-  ...(String(remembered).startsWith('req145-') ? req145Reads(remembered.slice(7)) : String(remembered).startsWith('req52-') ? req52Reads(remembered.slice(6)) : String(remembered).startsWith('req139-') ? req139Reads(remembered.slice(7)) : String(remembered).startsWith('req138-') ? req138Reads(remembered.slice(7)) : String(remembered).startsWith('req137-') ? req137Reads(remembered.slice(7)) : String(remembered).startsWith('req136f2-') ? req136f2Reads(remembered.slice(9)) : String(remembered).startsWith('req136-') ? req136Reads(remembered.slice(7)) : String(remembered).startsWith('req135-') ? req135Reads(remembered.slice(7)) : String(remembered).startsWith('req133-') ? req133Reads(remembered.slice(7)) : String(remembered).startsWith('req130-') ? req130Reads(remembered.slice(7)) : remembered === 'models' ? modelReads() : String(remembered).startsWith('modelsperm-') ? permReads(remembered.slice(11)) : String(remembered).startsWith('modelstate-') ? stateReads(remembered.slice(11)) : remembered === 'mail128long' ? mail128Reads(true) : remembered === 'mail128en' ? mail128Reads(false, 'en') : remembered === 'mailnodir' ? mailReads(MAIL, 'ko', '') : String(remembered).startsWith('wf-') ? workflowReads(remembered.slice(3)) : String(remembered).startsWith('bplong-') ? longNameReads({ locale: remembered.slice(7) }) : String(remembered).startsWith('dispatchheld-') ? heldReads(remembered.slice(13)) : String(remembered).startsWith('dispatch-') ? dispatchReads(remembered.slice(9)) : remembered === 'newlead' ? newLeadReads() : remembered === 'topic' ? topicReads() : remembered === 'lead' || String(remembered).startsWith('lead-panel') ? leadReads() : remembered === 'status' ? statusReads() : remembered === 'refs' ? refReads() : remembered === 'dwell' ? dwellReads() : remembered === 'busy' ? busyReads() : remembered === 'mail' ? mailReads() : remembered === 'mail128' ? mail128Reads() : remembered === 'mailtall' ? mailReads(MAIL_TALL) : remembered ? { ...lateReads(undefined), later: lateReads(LATE_OF) } : {}) });
+  ...(String(remembered).startsWith('d64-') ? d64Reads(remembered.slice(4)) : String(remembered).startsWith('req148-') ? req148Reads(remembered.slice(7)) : String(remembered).startsWith('d60-') ? d60Reads(remembered.slice(4)) : String(remembered).startsWith('req145-') ? req145Reads(remembered.slice(7)) : String(remembered).startsWith('req52-') ? req52Reads(remembered.slice(6)) : String(remembered).startsWith('req139-') ? req139Reads(remembered.slice(7)) : String(remembered).startsWith('req138-') ? req138Reads(remembered.slice(7)) : String(remembered).startsWith('req137-') ? req137Reads(remembered.slice(7)) : String(remembered).startsWith('req136f2-') ? req136f2Reads(remembered.slice(9)) : String(remembered).startsWith('req136-') ? req136Reads(remembered.slice(7)) : String(remembered).startsWith('req135-') ? req135Reads(remembered.slice(7)) : String(remembered).startsWith('req133-') ? req133Reads(remembered.slice(7)) : String(remembered).startsWith('req130-') ? req130Reads(remembered.slice(7)) : remembered === 'models' ? modelReads() : String(remembered).startsWith('modelsperm-') ? permReads(remembered.slice(11)) : String(remembered).startsWith('modelstate-') ? stateReads(remembered.slice(11)) : remembered === 'mail128long' ? mail128Reads(true) : remembered === 'mail128en' ? mail128Reads(false, 'en') : remembered === 'mailnodir' ? mailReads(MAIL, 'ko', '') : String(remembered).startsWith('wf-') ? workflowReads(remembered.slice(3)) : String(remembered).startsWith('bplong-') ? longNameReads({ locale: remembered.slice(7) }) : String(remembered).startsWith('dispatchheld-') ? heldReads(remembered.slice(13)) : String(remembered).startsWith('dispatch-') ? dispatchReads(remembered.slice(9)) : remembered === 'newlead' ? newLeadReads() : remembered === 'topic' ? topicReads() : remembered === 'lead' || String(remembered).startsWith('lead-panel') ? leadReads() : remembered === 'status' ? statusReads() : remembered === 'refs' ? refReads() : remembered === 'dwell' ? dwellReads() : remembered === 'busy' ? busyReads() : remembered === 'mail' ? mailReads() : remembered === 'mail128' ? mail128Reads() : remembered === 'mailtall' ? mailReads(MAIL_TALL) : remembered ? { ...lateReads(undefined), later: lateReads(LATE_OF) } : {}) });
 
 // REQ-126: agents named "<label>-<version>-<thinking>" — the version from the host's model list (`models`). A lead "총괄-09_…" in
 // review, a topic lead and its worker (two agents: "· +1") in progress, a label from before 09-30 ("실행_Sol-6"), a long label on a
@@ -819,6 +829,16 @@ for (const [id, sameRow] of [['gov-grant', false], ['common', true]]) for (const
   model.key += '-rounds';
   WF['rounds' + id.replace('-', '') + locale] = model; ROUNDS143[id + '-' + locale] = loop.label;
 }
+// D53: retain the reader's counts and verdict notes as well as the longer loop labels.
+if (['', 'req143'].includes(process.env.KANBAN_WEB_ONLY ?? '')) {
+  for (const t of BUILTIN_WORKFLOWS) for (const lang of ['ko', 'en']) {
+    const key = t.id.replaceAll('-', '') + lang;
+    WF['d53' + key] = d53History(EXPORTED_READS[t.id + '-' + lang]);
+    WF['d53bare' + key] = d53History(EXPORTED_READS[t.id + '-' + lang], false);
+    if (['gov-grant', 'sales-b2b'].includes(t.id)) for (const single of [false, true])
+      WF['d53reader' + (single ? 'single' : '') + key] = await d53Reading(path.join(WF_ROOT, 'd53' + key + single), t.id, lang, single);
+  }
+}
 // REQ-125 U1 (research/301): a `/2` definition — rows of 건, one per made-up company folder right under the 건 folder, read by
 // the real reader. `inst`: A사 (data in three steps, dated), B사 (a README-only folder), C사 (its 선정·계약 folder cut at the
 // per-folder cap, so "일부만 읽음"), a link and a hidden folder left out. `instzero`: the 건 folder with no 건. `instlong`: a 40-character name.
@@ -926,6 +946,39 @@ WF.absent = { defined: false, reason: 'unknown-format', definitionPath: '.kanban
  */
 const req139Reads = spec => { const [percent, data = 'gate'] = spec.split('-');
   return { ...workflowReads(data + '-ko'), ui: { hiddenProjects: [], order: { projects: [], workspaces: [] }, ...(percent === '100' ? {} : { settings: { uiScale: Number(percent) } }) } }; };
+/** D60: a phone's top row at a size — 'd60-<percent>-<ko|en>-<mail|plain|nodir>', the message lab on (its glyph shown), off, or on with no folder. */
+const d60Reads = spec => { const [percent, locale, lab] = spec.split('-'), reads = mailReads(MAIL, locale, lab === 'nodir' ? '' : MAIL_DIR);
+  const settings = { ...(lab === 'mail' || lab === 'nodir' ? reads.ui.settings : {}), ...(percent === '100' ? {} : { uiScale: Number(percent) }) };
+  return { ...reads, ui: { ...reads.ui, settings } }; };
+/**
+ * REQ-148: a phone at a size — 'req148-<percent>-<ko|en>-<full|todo|review|empty>[-panel]': the usual two boards (cards in every
+ * stage), cards in To Do only (research/350's first board), in Review and Done only, or none; `-panel` is the first workspace's panel.
+ * After `window.__remember()` the To Do board's two cards are in progress (`moved`).
+ */
+const req148Boards = data => {
+  if (data === 'full') return [a, b];
+  let one = newBoard(5, 'wks_example01');
+  const two = newBoard(6, 'wks_example02');
+  const cards = data === 'todo' ? [['First waiting', 'todo'], ['Second waiting', 'todo']] : data === 'moved' ? [['First waiting', 'doing'], ['Second waiting', 'doing']] : data === 'review' ? [['Under review', 'review'], ['Finished', 'done']] : [];
+  for (const [i, [title, stageId]] of cards.entries()) one = applyOperations(one, [add(title, stageId)], actor, ctx(T(1 + i))).board;
+  return [one, two];
+};
+const req148Reads = (spec, later = true) => { const [percent, locale, data] = spec.split('-'), boards = req148Boards(data);
+  const view = x => toBoardDTO(x, locale, 'off', Date.now(), groupsOf(x));
+  return { ...(later && data === 'todo' ? { later: req148Reads(`${percent}-${locale}-moved`, false) } : {}), ui: { hiddenProjects: [], order: { projects: [], workspaces: [] }, ...(percent === '100' ? {} : { settings: { uiScale: Number(percent) } }) },
+    overview: { ...toOverview(boards, locale, T(6)), boardViews: boards.map(view), removedIds: [], workspaceLabels: { available: false, source: 'none', definitions: [], byWorkspace: {} } },
+    boards: Object.fromEntries(boards.map(x => [x.id, { board: view(x), revision: x.revision, locale, observedAt: T(6) }])) }; };
+/**
+ * D64: a phone with cards needing a person — 'd64-<percent>-<ko|en>-<n>[-panel]': the usual two boards, the first with `n` more
+ * drafts in To Do (a draft needs a person), so the "Needs attention" chip counts 0, a few or two digits.
+ */
+const d64Reads = spec => { const [percent, locale, n] = spec.split('-');
+  let one = a;
+  for (let i = 0; i < Number(n); i += 1) one = applyOperations(one, [{ ...add('Draft ' + (i + 1), 'todo'), intent: 'draft' }], actor, ctx(T(5))).board;
+  const boards = [one, b], view = x => toBoardDTO(x, locale, 'off', Date.now(), groupsOf(x === one ? a : x));
+  return { ui: { hiddenProjects: [], order: { projects: [], workspaces: [] }, ...(percent === '100' ? {} : { settings: { uiScale: Number(percent) } }) },
+    overview: { ...toOverview(boards, locale, T(6)), boardViews: boards.map(view), removedIds: [], workspaceLabels: { available: false, source: 'none', definitions: [], byWorkspace: {} } },
+    boards: Object.fromEntries(boards.map(x => [x.id, { board: view(x), revision: x.revision, locale, observedAt: T(6) }])) }; };
 const workflowReads = (spec = 'gate-ko') => {
   // REQ-125: a third part picks a built-in — for the second workspace (no file), or (`resting-<id>`) for the first, whose file wins.
   const [data, locale = 'ko', ...rest] = spec.split('-'), pickSpec = rest.join('-');
@@ -1049,7 +1102,14 @@ try {
   // REQ-135: =req135 the family line. REQ-136: =req136 only the English screen fixes (research/277) — early1, early2, req124, d47, req130,
   // req133, req134, req135 and req136 are all of it.
   // REQ-143: =req143 only the built-in banner line, the wide flow's loop labels and the phone's 건 table heading (research/347 X4·X9·X10).
-  const ONLY = process.env.KANBAN_WEB_ONLY ?? '', D47 = ONLY === 'd47', R130 = ONLY === 'req130', R133 = ONLY === 'req133', R134 = ONLY === 'req134', R135 = ONLY === 'req135', R136 = ONLY === 'req136', R137 = ONLY === 'req137', R125 = ONLY === 'req125', R52 = ONLY === 'req52', R125U1 = ONLY === 'req125u1', R125U2 = ONLY === 'req125u2', R125U3 = ONLY === 'req125u3', R125U4 = ONLY === 'req125u4', R138 = ONLY === 'req138', R139 = ONLY === 'req139', R142 = ONLY === 'req142', R143 = ONLY === 'req143', R145 = ONLY === 'req145';
+  const ONLY = process.env.KANBAN_WEB_ONLY ?? '', D47 = ONLY === 'd47', R130 = ONLY === 'req130', R133 = ONLY === 'req133', R134 = ONLY === 'req134', R135 = ONLY === 'req135', R136 = ONLY === 'req136', R137 = ONLY === 'req137', R125 = ONLY === 'req125', R52 = ONLY === 'req52', R125U1 = ONLY === 'req125u1', R125U2 = ONLY === 'req125u2', R125U3 = ONLY === 'req125u3', R125U4 = ONLY === 'req125u4', R138 = ONLY === 'req138', R139 = ONLY === 'req139', R142 = ONLY === 'req142', R143 = ONLY === 'req143', R145 = ONLY === 'req145', R148 = ONLY === 'req148', D64 = ONLY === 'd64';
+  // Optional small foreground slices of req143 on a busy machine; default still runs the complete bundle.
+  // 0:44, 44:88, ..., 220:264 cover D53; 'base' runs the earlier REQ-143 scenes. The first slice includes the component cases.
+  const d53SliceText = process.env.KANBAN_WEB_D53_SLICE;
+  const d53Total = 12 * BUILTIN_WORKFLOWS.reduce((n, t) => n + (['gov-grant', 'sales-b2b'].includes(t.id) ? 5 : 2), 0);
+  if (d53SliceText && (ONLY !== 'req143' || d53SliceText !== 'base' && !/^\d+:\d+$/.test(d53SliceText))) throw new Error('KANBAN_WEB_D53_SLICE requires req143 and start:end or base');
+  const d53Slice = d53SliceText === 'base' ? [0, 0] : d53SliceText ? d53SliceText.split(':').map(Number) : null;
+  if (d53Slice && d53SliceText !== 'base' && !(d53Slice[0] < d53Slice[1] && d53Slice[1] <= d53Total)) throw new Error('D53 slice outside scene range');
   const E1 = ONLY === 'early1', E2 = ONLY === 'early2', EARLY = ONLY === 'early' || E1 || E2;
   // Helpers the early scenes share across its two halves (=early1, =early2).
   const label = t => `[aria-label="${t}"]`;
@@ -1068,7 +1128,7 @@ try {
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] }); await p.waitForTimeout(900);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] }); await p.waitForTimeout(400);
   };
-  if (ONLY !== 'req124' && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !E2) {
+  if (ONLY !== 'req124' && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !E2) {
   for (const mode of ['light', 'dark']) {
     const c = palette(PASEO_THEMES[mode]), scene = `wide-${mode}`, line = selectedLine(c, c.surface0);
     const p = await (await browser.newContext({ viewport: { width: 1400, height: 900 } })).newPage();
@@ -1939,7 +1999,7 @@ try {
   }
   // REQ-133: =early grew past ten minutes (588 s at 0.1.48, over 595 s now), so it runs as =early1 (the scenes above) and =early2
   // (from here); =early is still both. Their shared helpers are declared before the first half.
-  if (ONLY !== 'req124' && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !E1) {
+  if (ONLY !== 'req124' && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !E1) {
   // ---- REQ-95·96 by real input: the lead card first whatever the order, its head title, crown and stage edge; the orange of
   // an awaited answer; "Go to agent ↗" on hover and atop ⋯; "Response needed" to the agent that waits; the phone's sheet ----
   const opened = p => p.evaluate(() => window.__opened.slice());
@@ -3088,7 +3148,7 @@ try {
       els.filter(e => e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1).map(e => e.innerText));
     check(scene, 'no label or note cut', cut.length === 0, JSON.stringify(cut));
   }
-  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145) {
+  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64) {
   // ---- REQ-124 2단위 (research/215·216·217): the wide lane heading's "보드 | 워크플로", only on the lane whose workspace holds
   // a workflow definition; the flow (steps, straight-angled lines, the diamond, the loops that went back, the chosen release's
   // way bold), the release × step table whose states are told apart ("기록 없음" is not "not done"), and a cell's evidence.
@@ -3233,7 +3293,7 @@ try {
     await p.context().close();
   }
   }
-  if (!EARLY && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145) {
+  if (!EARLY && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64) {
   // ---- REQ-126: every agent named "<label>-<version>-<thinking>" on the cards (a lead, a topic lead, a worker with "· +1", an old label, a
   // long label on a crowded card, no label, archived, unknown) and in the detail (assignees, author, the move's reason, the history) ----
   for (const [mode, mobile] of [['light', false], ['dark', false], ['light', true], ['dark', true]]) {
@@ -3293,7 +3353,7 @@ try {
     await p.context().close();
   }
   }
-  if (!EARLY && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145) {
+  if (!EARLY && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64) {
   // ---- D45: the wide detail's side panel (280px) keeps each assignee row on one line — a long label ("…_Astra-6-XHigh", also
   // the card's author), an old one ("실행_Sol-6-High"), new ones ("실행_Sol-6.1-High", with a second agent) — the name cut at its end,
   // the state and id whole; on 390px the rows read and wrap as before. ----
@@ -3521,7 +3581,7 @@ try {
   }
   fs.writeFileSync(path.join(out, 'd47.json'), JSON.stringify(d47Log, null, 2) + '\n');
   }
-  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145) {
+  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64) {
   // ---- research/210 (208-D1) kept, REQ-124 ③: on 390px no workflow button in this release (not even on the lane with a
   // definition); the gate's real names keep eight characters and more, the heading's parts side by side inside the screen. ----
   for (const [mode, lang] of [['light', 'en'], ['dark', 'en'], ['light', 'ko'], ['dark', 'ko']]) {
@@ -3559,7 +3619,7 @@ try {
     await p.context().close();
   }
   }
-  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145) {
+  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64) {
   // ---- REQ-127: the board screen a lane's name opens has the lane's "보드 | 워크플로" too, beside its title — only for a workspace
   // with a definition, only on a wide window. The workflow takes the board's whole width in place of its columns; the choice is the
   // lane's own (one session value), so the lane shows what its board showed when it is left. 1400 and 1920, light and dark. ----
@@ -4303,13 +4363,13 @@ try {
       await p.goto(page(mode, mobile, `req136-${locale}`));
       const names = Object.fromEntries(['todo', 'doing', 'review', 'done'].map((id, i) => [id, [m.waitingStage, m.doingStage, m.reviewStage, m.doneStage][i]]));
       if (mobile) {
-        // H6: the In progress tab's face says its short name whole; its spoken name stays whole; no tab's words are cut.
+        // H6 (REQ-148): the In progress tab's face says the stage's whole name, as it is spoken; no tab's words are cut.
         await p.waitForSelector(byId('mobile-tab-doing'), { timeout: 15000 }); await p.waitForTimeout(300);
         const tabs = await p.locator('[data-testid^="mobile-tab-"]').evaluateAll(els => els.filter(e => !/face/.test(e.dataset.testid)).map(e => {
           const words = e.querySelector('div[dir="auto"]'); return { id: e.dataset.testid, label: e.getAttribute('aria-label'), text: words?.textContent ?? '',
             cut: !!words && words.scrollWidth > words.clientWidth + 1 }; }));
         const doing = tabs.find(t => t.id === 'mobile-tab-doing');
-        check(scene, 'H6 the In progress tab says "' + m.doingStageTab + '"', doing?.text === m.doingStageTab, JSON.stringify(doing));
+        check(scene, 'H6 the In progress tab says "' + m.doingStage + '"', doing?.text === m.doingStage, JSON.stringify(doing));
         check(scene, 'H6 its spoken name is the whole stage name', !!doing && doing.label.startsWith(m.doingStage + ' '), JSON.stringify(doing));
         check(scene, 'H6 no stage tab cut', tabs.length === 4 && tabs.every(t => !t.cut), JSON.stringify(tabs));
         await p.screenshot({ path: path.join(out, `${scene}-tabs.png`) });
@@ -6315,6 +6375,44 @@ try {
     check(scene, 'no page errors', errors.length === 0, errors.join(' | '));
     await p.context().close();
   }
+  // The same ask on a 360px phone: the sheet stays inside the window, [Cancel] left of [Open], the longer words wrap without cutting.
+  for (const lang of ['en', 'ko']) {
+    const scene = `req142-360-${lang}`, W = 360, H = 740;
+    const p = await (await browser.newContext({ viewport: { width: W, height: H }, hasTouch: true, isMobile: true })).newPage();
+    const errors = []; p.on('pageerror', e => errors.push(String(e)));
+    await p.goto(page('light', true, 'lead-panel-foreign' + (lang === 'ko' ? '-ko' : '')));
+    await p.waitForSelector(byId('mobile-tab-review'), { timeout: 15000 }); await p.locator(byId('mobile-tab-review')).first().tap(); await p.waitForTimeout(400);
+    const leadSel = `[aria-label="${Q_TITLE}"]`;
+    await p.waitForSelector(leadSel, { timeout: 15000 }).catch(() => {});
+    await longPress(p, leadSel + ' ' + byId('card-title'));
+    await p.waitForSelector(byId('card-menu-jump'), { timeout: 5000 }).catch(() => {});
+    await p.locator(byId('card-menu-jump')).first().tap(); await p.waitForTimeout(400);
+    await p.waitForSelector(byId('agent-leave-sheet'), { timeout: 5000 }).catch(() => {});
+    const said = (await p.locator(byId('agent-leave-text')).first().innerText().catch(() => '')).trim();
+    check(scene, 'the words', said === copy(lang).agentLeaveText, said);
+    const sheet = await box(p, byId('agent-leave-sheet')), open = await box(p, byId('agent-leave-open')), cancel = await box(p, byId('agent-leave-cancel'));
+    check(scene, 'inside the window, [Cancel] left of [Open], finger-sized', !!sheet && sheet.x >= 0 && sheet.x + sheet.width <= W + .5 && sheet.y >= 0 && sheet.y + sheet.height <= H + .5
+      && !!open && !!cancel && cancel.x + cancel.width <= open.x && open.x + open.width <= W + .5 && open.height >= 44 && cancel.height >= 44, JSON.stringify({ sheet, open, cancel }));
+    const text = await box(p, byId('agent-leave-text'));
+    check(scene, 'the words stay inside the sheet', !!text && !!sheet && text.x >= sheet.x - .5 && text.x + text.width <= sheet.x + sheet.width + .5 && text.y + text.height <= open.y + .5, JSON.stringify({ text, sheet, open }));
+    await p.screenshot({ path: path.join(out, `${scene}-ask.png`) });
+    check(scene, 'no page errors', errors.length === 0, errors.join(' | '));
+    await p.context().close();
+  }
+  // An empty board list on a wide screen says how to start the first chat, under "no boards" (it did so on the phone already).
+  for (const lang of ['en', 'ko']) for (const mode of ['light', 'dark']) {
+    const scene = `noboards-1920-${mode}-${lang}`, m = copy(lang);
+    const p = await (await browser.newContext({ viewport: { width: 1920, height: 1080 } })).newPage();
+    const errors = []; p.on('pageerror', e => errors.push(String(e)));
+    await p.goto(page(mode, false, 'noboards-' + lang));
+    await p.waitForTimeout(1200);
+    const body = await p.locator('body').innerText();
+    check(scene, 'no boards line shown', body.includes(m.noBoards), body.slice(0, 200));
+    check(scene, 'initialize line shown under it', body.includes(m.initialize) && body.indexOf(m.noBoards) < body.indexOf(m.initialize), body.slice(0, 300));
+    await p.screenshot({ path: path.join(out, `${scene}.png`) });
+    check(scene, 'no page errors', errors.length === 0, errors.join(' | '));
+    await p.context().close();
+  }
   }
   if (ONLY === '' || R139) {
   const phone139 = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
@@ -6449,12 +6547,158 @@ try {
     check(scene, 'no page errors', errors.length === 0, errors.join(' | '));
     await p.context().close();
   }
+  // D60: a phone's top rows are two lines at most at any size — the Kanban screen's, the list's and a board's: the title,
+  // then the glyphs (the last of them beside the title when they cannot all share a line at a finger's size) — no glyph
+  // alone on a line, nothing past the screen's sides. Every combination in light, a sample in dark.
+  // d60-appbar.json keeps each row's markup, so a run before a change and one after can be compared byte for byte.
+  const d60 = [];
+  const d60Dark = ['360-150-ko-mail', '360-150-ko-plain', '360-150-en-mail', '360-150-en-plain', '390-140-en-mail', '390-100-ko-plain'];
+  const d60Rows = [
+    // The surface, its row, its title, what is part of the title line rather than a glyph, and the glyphs that may join the title.
+    { name: 'swimlane', row: 'mobile-appbar', title: 'div[dir="auto"]', skip: [], tail: ['view-toggle', 'open-settings'] },
+    { name: 'list', row: 'list-title-row', title: 'div[dir="auto"]', skip: [], tail: ['view-toggle', 'open-settings'] },
+    { name: 'board', row: 'board-appbar', title: '[data-testid="board-title"]', skip: ['board-back'], tail: ['open-workspace', 'open-settings'] },
+  ];
+  for (const W of [360, 390]) for (const percent of [100, 140, 150]) for (const lang of ['ko', 'en']) for (const lab of ['mail', 'plain'])
+  for (const mode of ['light', ...(d60Dark.includes(`${W}-${percent}-${lang}-${lab}`) ? ['dark'] : [])]) {
+    const k = percent / 100, suffix = `${W}-${percent}-${lang}-${lab}${mode === 'dark' ? '-dark' : ''}`;
+    const p = await (await browser.newContext({ viewport: { width: W, height: 780 }, hasTouch: true, isMobile: true })).newPage(); p.setDefaultTimeout(5000);
+    const errors = []; p.on('pageerror', e => errors.push(String(e)));
+    const open = async () => { await p.goto(page(mode, true, `d60-${percent}-${lang}-${lab}`)); await p.waitForSelector(byId('open-settings'), { timeout: 15000 }); await p.waitForTimeout(600); };
+    for (const surface of d60Rows) {
+      const scene = `d60${surface.name === 'swimlane' ? '' : surface.name}-${suffix}`;
+      await open();
+      if (surface.name === 'list') await p.locator(byId('view-toggle')).first().tap();
+      if (surface.name === 'board') await p.locator(byId('workspace-name-link')).first().tap();
+      const found = await p.waitForSelector(byId(surface.row), { timeout: 10000 }).then(() => true, () => false);
+      check(scene, 'the row shown', found);
+      if (!found) continue;
+      await p.waitForTimeout(500);
+      const row = await p.locator(byId(surface.row)).first().evaluate((bar, { title, skip }) => {
+        const rect = e => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; };
+        // A glyph's touch box is the view around its pressable face.
+        const glyphs = [...bar.querySelectorAll('[role="button"]')].filter(e => !skip.includes(e.dataset.testid))
+          .map(e => ({ id: e.dataset.testid ?? e.getAttribute('aria-label'), ...rect(e.parentElement) }));
+        return { glyphs, title: rect(bar.querySelector(title)), bar: rect(bar), sideways: bar.scrollWidth - bar.clientWidth, html: bar.outerHTML };
+      }, surface);
+      const lines = [];
+      for (const item of [{ id: 'title', ...row.title }, ...row.glyphs]) {
+        const mid = item.y + item.h / 2, line = lines.find(l => Math.abs(l.mid - mid) <= 8);
+        if (line) line.items.push(item.id); else lines.push({ mid, items: [item.id] });
+      }
+      const alone = lines.filter(l => l.items.length === 1 && l.items[0] !== 'title').map(l => l.items[0]);
+      const pageWide = await p.evaluate(() => document.documentElement.scrollWidth);
+      const overlap = row.glyphs.some((a, i) => row.glyphs.some((b, j) => j > i && a.x < b.x + b.w - .5 && b.x < a.x + a.w - .5 && a.y < b.y + b.h - .5 && b.y < a.y + a.h - .5));
+      d60.push({ scene, lines: lines.length, layout: lines.map(l => l.items), html: row.html });
+      check(scene, 'two lines at most', lines.length <= 2, JSON.stringify(lines.map(l => l.items)));
+      check(scene, 'no glyph alone on a line', alone.length === 0, JSON.stringify(alone));
+      // Beside a title of its own line, only the glyphs that end the row (⚙, or the one before it and ⚙).
+      const beside = lines.find(l => l.items.includes('title'))?.items.slice(1) ?? [], ids = row.glyphs.map(g => g.id), tail = surface.tail.filter(id => ids.includes(id));
+      check(scene, 'beside the title only the last glyphs, in order', lines.length === 1 || beside.length <= tail.length && JSON.stringify(beside) === JSON.stringify(tail.slice(tail.length - beside.length)), JSON.stringify(beside));
+      check(scene, 'every glyph inside the screen, none over another, the row and the page not wider than it',
+        row.glyphs.every(g => g.x >= -.5 && g.x + g.w <= W + .5) && !overlap && row.sideways <= 1 && pageWide <= W + 1, JSON.stringify({ glyphs: row.glyphs, pageWide, sideways: row.sideways }));
+      const count = surface.name === 'swimlane' ? (lab === 'mail' ? 6 : 5) : surface.name === 'list' ? 5 : row.glyphs.length;
+      // 403-F1: the mailbox glyph is on the Kanban screen's row only with the lab on (and its folder set); never on the list's or a board's.
+      check(scene, 'the mailbox glyph only with the lab on', ids.includes('mailbox-button') === (surface.name === 'swimlane' && lab === 'mail'), JSON.stringify(ids));
+      check(scene, 'each glyph a finger\'s size', row.glyphs.length === count && count >= 3 && row.glyphs.every(g => g.w >= 44 * k - .5 && g.h >= 44 * k - .5), JSON.stringify(row.glyphs));
+      check(scene, 'the title whole, clear of the glyphs', row.title.w >= 20 && row.title.x >= -.5 && row.glyphs.every(g => row.title.x + row.title.w <= g.x + .5
+        || row.title.y + row.title.h <= g.y + .5 || g.x + g.w <= row.title.x + .5), JSON.stringify(row.title));
+      await p.screenshot({ path: path.join(out, `${scene}.png`), clip: { x: 0, y: 0, width: W, height: Math.ceil(row.bar.y + row.bar.h + 4) } });
+    }
+    check('d60-' + suffix, 'no page errors', errors.length === 0, errors.join(' | '));
+    await p.context().close();
+  }
+  fs.writeFileSync(path.join(out, 'd60-appbar.json'), JSON.stringify(d60, null, 1));
+  // 403-F1: the lab on with no folder shows no mailbox glyph either — five glyphs, two lines at most.
+  for (const [W, percent] of [[360, 150], [390, 100]]) {
+    const scene = `d60-${W}-${percent}-ko-nodir`;
+    const p = await (await browser.newContext({ viewport: { width: W, height: 780 }, hasTouch: true, isMobile: true })).newPage(); p.setDefaultTimeout(5000);
+    const errors = []; p.on('pageerror', e => errors.push(String(e)));
+    await p.goto(page('light', true, `d60-${percent}-ko-nodir`)); await p.waitForSelector(byId('open-settings'), { timeout: 15000 }); await p.waitForTimeout(600);
+    const ids = await p.locator(byId('mobile-appbar') + ' [role="button"]').evaluateAll(els => els.map(e => e.dataset.testid ?? e.getAttribute('aria-label')));
+    check(scene, 'no mailbox glyph with no folder, the other five there', !ids.includes('mailbox-button') && ids.length === 5, JSON.stringify(ids));
+    check(scene, 'no page errors', errors.length === 0, errors.join(' | '));
+    await p.context().close();
+  }
+  }
+  if ((ONLY === '' || R143) && (!d53Slice || d53Slice[0] === 0 && d53Slice[1] > 0)) await d53FlowScenes(browser, out, check);
+  // D53: zero positive intersection, including the border (no 0.5px overlap allowance).
+  if (ONLY === '' || R143) {
+    const geometry = [];
+    let d53Index = 0;
+    for (const width of [1920, 760, 390]) for (const lang of ['ko', 'en']) for (const mode of ['light', 'dark'])
+      for (const t of BUILTIN_WORKFLOWS) for (const profile of ['builtin', 'history', ...(['gov-grant', 'sales-b2b'].includes(t.id) ? ['bare', 'reader', 'readersingle'] : [])]) {
+        const index = d53Index++;
+        if (d53Slice && (index < d53Slice[0] || index >= d53Slice[1])) continue;
+        const scene = `d53-${width}-${lang}-${mode}-${t.id}-${profile}`;
+        const p = await (await browser.newContext({ viewport: { width, height: width === 390 ? 844 : 1080 }, ...(width === 390 ? { isMobile: true, hasTouch: true } : {}) })).newPage();
+        const errors = []; p.on('pageerror', e => errors.push(String(e))); p.setDefaultTimeout(10000);
+        const key = t.id.replaceAll('-', '') + lang;
+        const data = profile === 'builtin' ? 'gate' : 'd53' + (profile === 'history' ? '' : profile) + key;
+        await p.goto(page(mode, width === 390, 'wf-' + data + '-' + lang + (profile === 'builtin' ? '-' + t.id : '')));
+        const board = profile === 'builtin' ? b : a, name = profile === 'builtin' ? 'Second Workspace' : 'Example Workspace';
+        let scope;
+        if (width === 390) {
+          await p.getByTestId('mobile-workspace-' + board.id).getByTestId('lane-order-menu').tap();
+          await p.getByTestId('order-workflow').tap();
+          scope = p.getByTestId('workflow-sheet');
+          await scope.getByTestId('mobile-workflow-ladder').waitFor();
+        } else {
+          scope = p.getByTestId('swimlane-lane-section').filter({ has: p.getByTestId('workspace-name-primary').filter({ hasText: name }) });
+          if (width === 760) {
+            await scope.getByTestId('workspace-name-link').click();
+            await p.getByTestId('board-appbar').getByTestId('lane-view-workflow').click();
+            scope = p.getByTestId('workspace-board');
+          } else await scope.getByTestId('lane-view-workflow').click();
+          await scope.getByTestId('flow-canvas').waitFor();
+        }
+        await p.evaluate(() => document.fonts.ready);
+        const geo = await scope.evaluate(el => {
+          const rect = e => { const r = e.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom }; };
+          const cv = el.querySelector('[data-testid="flow-canvas"]');
+          const clipped = root => [...root.querySelectorAll('*')].filter(n => n.innerText?.trim() && n.scrollWidth > n.clientWidth + 1
+            && getComputedStyle(n).overflowX !== 'visible' && getComputedStyle(n).textOverflow !== 'ellipsis').map(n => n.innerText);
+          if (!cv) { const ladder = el.querySelector('[data-testid="mobile-workflow-ladder"]'); return { mobile: true, ladder: rect(ladder), clipped: clipped(ladder) }; }
+          const obstacles = [...cv.querySelectorAll('[data-testid^="flow-node-"], [data-testid^="flow-count-"], [data-testid="flow-edge-label"]')]
+            .map(n => ({ id: n.dataset.testid, text: n.innerText, rect: rect(n) }));
+          const loops = [...cv.querySelectorAll('[data-testid="flow-loop-label"]')].map(n => ({ text: n.innerText, rect: rect(n), clipped: clipped(n) }));
+          const canvas = rect(cv), hits = [];
+          for (const [i, l] of loops.entries()) for (const o of [...obstacles, ...loops.slice(i + 1)]) {
+            const w = Math.min(l.rect.r, o.rect.r) - Math.max(l.rect.l, o.rect.l), h = Math.min(l.rect.b, o.rect.b) - Math.max(l.rect.t, o.rect.t);
+            if (w > 0 && h > 0) hits.push({ loop: l.text, other: o.text, w, h });
+          }
+          const forwardHits = [];
+          for (const [i,a] of obstacles.entries()) for (const b of obstacles.slice(i+1)) {
+            if (a.id !== 'flow-edge-label' && b.id !== 'flow-edge-label') continue;
+            const w = Math.min(a.rect.r,b.rect.r)-Math.max(a.rect.l,b.rect.l), h = Math.min(a.rect.b,b.rect.b)-Math.max(a.rect.t,b.rect.t);
+            if (w > 0 && h > 0) forwardHits.push({ a:a.text, b:b.text, w, h });
+          }
+          const outside = [...loops, ...obstacles.filter(o => o.id === 'flow-edge-label')].filter(l => l.rect.l < canvas.l || l.rect.r > canvas.r || l.rect.t < canvas.t || l.rect.b > canvas.b);
+          return { mobile: false, canvas, obstacles, loops, hits, forwardHits, outside, clipped: loops.flatMap(l => l.clipped) };
+        });
+        geometry.push({ scene, ...geo });
+        if (geo.mobile) {
+          check(scene, 'D53 phone ladder stays inside 390 with no sideways clipping', geo.ladder.l >= 0 && geo.ladder.r <= width && geo.clipped.length === 0, JSON.stringify(geo));
+        } else {
+          check(scene, 'D56 forward label border overlap is exactly zero', geo.forwardHits.length === 0, JSON.stringify(geo.forwardHits));
+          check(scene, 'D53 every loop label drawn', geo.loops.length === t.edges.filter(e => e.back && e[lang]).length, JSON.stringify(geo.loops));
+          check(scene, 'D53 loop border overlap is exactly zero', geo.hits.length === 0, JSON.stringify(geo.hits));
+          check(scene, 'D53 no label outside canvas or clipped', geo.outside.length === 0 && geo.clipped.length === 0, JSON.stringify({ outside: geo.outside, clipped: geo.clipped }));
+        }
+        check(scene, 'no page errors', errors.length === 0, errors.join(' | '));
+        if (geo.hits?.length || width === 1920 && mode === 'light' && profile === 'history' || width === 760 && t.id === 'sales-b2b' && profile === 'bare') {
+          await scope.scrollIntoViewIfNeeded().catch(() => {});
+          await scope.screenshot({ path: path.join(out, scene + '.png') });
+        }
+        await p.context().close();
+        fs.writeFileSync(path.join(out, 'd53-geometry.json'), JSON.stringify(geometry, null, 2));
+      }
   }
   // ---- REQ-143 (research/347 X4·X9·X10): a built-in's banner says at the top that it reads no documents and what fills the
   // table; a loop's label on the wide flow touches no step and nothing covers it (a loop straight up a column had it under
   // the step it leaves — "재확인" read as "재하인"); the phone's 건 table heading says it also reads the record section when
   // the definition has one, and "folder and file names only" when not. 1920 and 390, ko/en, light/dark. ----
-  if (ONLY === '' || R143) {
+  if ((ONLY === '' || R143) && (!d53Slice || d53SliceText === 'base')) {
   const t143 = async (p, sel) => (await p.locator(sel).first().innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
   const hangul143 = /[ᄀ-ᇿ㄰-㆏가-힣]/;
   const tryLane143 = `[data-testid="swimlane-lane-section"]:has(${byId('workspace-name-primary')}:text-is("Second Workspace"))`;
@@ -6661,6 +6905,170 @@ try {
   }
   fs.writeFileSync(path.join(out, 'req145-limits.json'), JSON.stringify(limits145, null, 2) + '\n');
   console.log('REQ-145 given way (priority, draft, the checklist word, a request\'s target):', limits145.length);
+  }
+  // REQ-148: a phone's stage tabs say the wide board's names ("In progress", no "Doing") and all four fit whole — inside the
+  // screen, their words not cut — at 360 and 390px, at 100, 140 and 150%; the screen opens on its usual tab unless that one is
+  // empty, then on the first with cards (To Do, In progress, Review, Done), and a tab a person chose stays chosen.
+  // req148-tabs.json keeps every tab's box, so a run before a change and one after can be compared.
+  if (ONLY === '' || R148) {
+  const tabs148 = [];
+  const names148 = m => ({ todo: m.waitingStage, doing: m.doingStage, review: m.reviewStage, done: m.doneStage });
+  // RN-web draws no aria-selected on a Pressable: the chosen tab is the one whose face is the selected fill (surface2).
+  const readTabs = (p, W, mode) => p.locator(byId('mobile-control-row')).first().evaluate((row, W) => {
+    const rect = e => { const r = e.getBoundingClientRect(); return { x: Math.round(r.x * 10) / 10, y: Math.round(r.y * 10) / 10, w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10 }; };
+    const tabs = [...row.querySelectorAll('[data-testid^="mobile-tab-"]')].filter(e => !/face/.test(e.dataset.testid)).map(e => {
+      // The face's first words are the stage's name, then its count badge.
+      const face = e.querySelector('[data-testid="mobile-tab-face"]'), words = face.querySelector('div[dir="auto"]');
+      return { id: e.dataset.testid.slice(11), label: e.getAttribute('aria-label'), fill: getComputedStyle(face).backgroundColor,
+        text: words?.textContent.trim() ?? '', words: words ? { ...rect(words), need: words.scrollWidth } : null,
+        cut: !words || words.scrollWidth > words.clientWidth + 1 || words.scrollHeight > words.clientHeight + 1, tab: rect(e), face: rect(face) };
+    });
+    const chip = row.querySelector('[data-testid="mobile-attention-chip"]');
+    const scroller = [...row.querySelectorAll('*')].find(n => n.scrollWidth > n.clientWidth + 1 && getComputedStyle(n).overflowX !== 'visible');
+    return { tabs, chip: chip ? rect(chip) : null, row: rect(row), sideways: scroller ? scroller.scrollWidth - scroller.clientWidth : 0, pageWide: document.documentElement.scrollWidth };
+  }, W).then(row => ({ ...row, tabs: row.tabs.map(({ fill, ...t }) => ({ ...t, selected: rgb(fill) === palette(PASEO_THEMES[mode]).surface2.toLowerCase() })) }));
+  const shots148 = ['360-100-en-full-light', '360-100-en-full-dark', '360-150-en-full-light', '360-150-en-full-dark', '360-100-en-todo-light', '360-100-en-todo-dark', '390-100-ko-full-light', '390-150-ko-full-light'];
+  for (const W of [360, 390]) for (const percent of [100, 140, 150]) for (const lang of ['en', 'ko']) for (const data of ['full', 'todo', 'review', 'empty'])
+  for (const mode of ['light', ...(W === 360 && lang === 'en' && (data === 'full' || data === 'todo') && percent !== 140 ? ['dark'] : [])]) {
+    const m = copy(lang), k = percent / 100, names = names148(m), suffix = `${W}-${percent}-${lang}-${data}-${mode}`, scene = 'req148-' + suffix;
+    const p = await (await browser.newContext({ viewport: { width: W, height: 780 }, hasTouch: true, isMobile: true })).newPage(); p.setDefaultTimeout(5000);
+    const errors = []; p.on('pageerror', e => errors.push(String(e)));
+    await p.goto(page(mode, true, `req148-${percent}-${lang}-${data}`));
+    const found = await p.waitForSelector(byId('mobile-tab-doing'), { timeout: 15000 }).then(() => true, () => false);
+    check(scene, 'the stage tabs shown', found);
+    if (!found) { await p.context().close(); continue; }
+    await p.waitForTimeout(500);
+    const row = await readTabs(p, W, mode);
+    tabs148.push({ scene, ...row });
+    const right = Math.min(W, row.row.x + row.row.w);
+    // The names: the wide board's, word for word, on the face and in the spoken name.
+    check(scene, 'each tab says its stage\'s whole name (no "Doing")', row.tabs.length === 4 && row.tabs.every(t => t.text === names[t.id] && t.label.startsWith(names[t.id] + ' ')),
+      JSON.stringify(row.tabs.map(t => [t.id, t.text, t.label])));
+    check(scene, 'no tab\'s words cut', row.tabs.every(t => !t.cut), JSON.stringify(row.tabs.filter(t => t.cut)));
+    check(scene, 'all four tabs inside the screen', row.tabs.every(t => t.tab.x >= -.5 && t.tab.x + t.tab.w <= right + .5), JSON.stringify({ right, tabs: row.tabs.map(t => [t.id, t.tab]) }));
+    check(scene, 'each tab a finger\'s size', row.tabs.every(t => t.tab.w >= 44 * k - .5 && t.tab.h >= 44 * k - .5), JSON.stringify(row.tabs.map(t => [t.id, t.tab])));
+    check(scene, 'the page no wider than the screen', row.pageWide <= W + 1, String(row.pageWide));
+    // The first tab: the usual one (In progress) unless it is empty, then the first with cards; In progress when all are.
+    const want = { full: 'doing', todo: 'todo', review: 'review', empty: 'doing' }[data];
+    const on = row.tabs.filter(t => t.selected).map(t => t.id);
+    check(scene, 'opens on ' + names[want], on.length === 1 && on[0] === want, JSON.stringify(on));
+    if (data === 'todo') check(scene, 'no "' + m.noCards + '" on opening', !(await visible(p, `text="${m.noCards}"`)));
+    if (shots148.includes(suffix)) await p.screenshot({ path: path.join(out, `${scene}.png`), clip: { x: 0, y: 0, width: W, height: 360 } });
+    // The tab it opened on holds when the cards then move (To Do's two now in progress): the screen does not jump under a person.
+    // A tab a person chose stays chosen, even an empty one, when the host draws the screen anew (D48's remount).
+    if (data === 'todo' && percent === 100 && mode === 'light') {
+      await p.evaluate(() => window.__remember());
+      await p.locator(`[aria-label="${m.refresh}"]`).first().tap(); await p.waitForTimeout(800);
+      const moved = (await readTabs(p, W, mode)).tabs, held = moved.filter(t => t.selected).map(t => t.id);
+      check(scene, 'the cards moved on', moved.find(t => t.id === 'todo')?.label === names.todo + ' 0' && moved.find(t => t.id === 'doing')?.label === names.doing + ' 2',
+        JSON.stringify(moved.map(t => t.label)));
+      check(scene, 'the opening tab holds when its cards move away', held.length === 1 && held[0] === 'todo', JSON.stringify(held));
+      await p.locator(byId('mobile-tab-review')).first().tap(); await p.waitForTimeout(400);
+      await p.evaluate(theme => window.__hostTheme(theme, true), PASEO_THEMES.dark); await p.waitForTimeout(800);
+      const again = (await readTabs(p, W, 'dark')).tabs.filter(t => t.selected).map(t => t.id);
+      check(scene, 'a chosen tab (Review, empty) stays chosen after a remount', again.length === 1 && again[0] === 'review', JSON.stringify(again));
+    }
+    check(scene, 'no page errors', errors.length === 0, errors.join(' | '));
+    await p.context().close();
+  }
+  // A workspace's panel (a board with tabs): its usual first tab is To Do; empty, the first with cards.
+  for (const lang of ['en', 'ko']) for (const data of ['full', 'review']) {
+    const m = copy(lang), names = names148(m), scene = `req148-panel-390-${lang}-${data}`;
+    const p = await (await browser.newContext({ viewport: { width: 390, height: 780 }, hasTouch: true, isMobile: true })).newPage(); p.setDefaultTimeout(5000);
+    const errors = []; p.on('pageerror', e => errors.push(String(e)));
+    await p.goto(page('light', true, `req148-100-${lang}-${data}-panel`));
+    const found = await p.waitForSelector(byId('mobile-tab-doing'), { timeout: 15000 }).then(() => true, () => false);
+    check(scene, 'the stage tabs shown', found);
+    if (!found) { await p.context().close(); continue; }
+    await p.waitForTimeout(500);
+    const row = await readTabs(p, 390, 'light'), want = data === 'full' ? 'todo' : 'review', on = row.tabs.filter(t => t.selected).map(t => t.id);
+    tabs148.push({ scene, ...row });
+    check(scene, 'each tab says its stage\'s whole name (no "Doing")', row.tabs.length === 4 && row.tabs.every(t => t.text === names[t.id]), JSON.stringify(row.tabs.map(t => [t.id, t.text])));
+    check(scene, 'no tab\'s words cut, all inside the screen', row.tabs.every(t => !t.cut && t.tab.x >= -.5 && t.tab.x + t.tab.w <= 390.5), JSON.stringify(row.tabs));
+    check(scene, 'opens on ' + names[want], on.length === 1 && on[0] === want, JSON.stringify(on));
+    check(scene, 'no page errors', errors.length === 0, errors.join(' | '));
+    await p.context().close();
+  }
+  fs.writeFileSync(path.join(out, 'req148-tabs.json'), JSON.stringify(tabs148, null, 1) + '\n');
+  }
+  // D64: the phone's "Needs attention" chip beside the stage tabs shows its whole words and count, inside the screen from the
+  // start — no sideways push needed — at 360 and 390px, at 100, 140 and 150%, in English and Korean, with 0, a few and two-digit
+  // counts, on the overview, a board and a workspace's panel; the tabs stay whole and a finger's size, the chip still filters,
+  // and at 100% the row is the one line it was. d64-geometry.json keeps every row's boxes for a before/after comparison.
+  if (ONLY === '' || D64) {
+  const geo64 = [];
+  const readRow64 = p => p.locator(byId('mobile-control-row')).first().evaluate(row => {
+    const rect = e => { const r = e.getBoundingClientRect(); return { x: Math.round(r.x * 10) / 10, y: Math.round(r.y * 10) / 10, w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10 }; };
+    const cut = w => w.scrollWidth > w.clientWidth + 1 || w.scrollHeight > w.clientHeight + 1;
+    const tabs = [...row.querySelectorAll('[data-testid^="mobile-tab-"]')].filter(e => !/face/.test(e.dataset.testid)).map(e => {
+      const words = e.querySelector('[data-testid="mobile-tab-face"] div[dir="auto"]');
+      return { id: e.dataset.testid.slice(11), tab: rect(e), cut: !words || cut(words) };
+    });
+    const chip = row.querySelector('[data-testid="mobile-attention-chip"]'), face = chip?.querySelector('[data-testid="mobile-chip-face"]');
+    const actions = row.querySelector('[data-testid="panel-actions"]');
+    return { row: rect(row), tabs, actions: actions ? rect(actions) : null, pageWide: document.documentElement.scrollWidth,
+      chip: chip ? { ...rect(chip), label: chip.getAttribute('aria-label'), fill: getComputedStyle(face).backgroundColor,
+        words: [...face.querySelectorAll('div[dir="auto"]')].map(w => ({ text: w.textContent, ...rect(w), cut: cut(w) })) } : null };
+  });
+  const overlap = (u, v) => u.x < v.x + v.w - .5 && v.x < u.x + u.w - .5 && u.y < v.y + v.h - .5 && v.y < u.y + u.h - .5;
+  const shots64 = ['overview-360-150-en-13-light', 'overview-360-150-en-13-dark', 'overview-390-150-en-13-light', 'overview-390-150-en-13-dark',
+    'overview-360-100-en-13-light', 'overview-360-140-ko-13-light', 'panel-360-150-en-13-light', 'board-390-150-ko-3-light'];
+  for (const surface of ['overview', 'board', 'panel']) for (const W of [360, 390]) for (const percent of [100, 140, 150]) for (const lang of ['en', 'ko'])
+  for (const n of [0, 3, 13]) for (const mode of ['light', ...(surface === 'overview' && lang === 'en' && percent === 150 && n === 13 ? ['dark'] : [])]) {
+    const m = copy(lang), k = percent / 100, suffix = `${surface}-${W}-${percent}-${lang}-${n}-${mode}`, scene = 'd64-' + suffix;
+    const pal = palette(PASEO_THEMES[mode]);
+    const p = await (await browser.newContext({ viewport: { width: W, height: 780 }, hasTouch: true, isMobile: true })).newPage(); p.setDefaultTimeout(5000);
+    const errors = []; p.on('pageerror', e => errors.push(String(e)));
+    await p.goto(page(mode, true, `d64-${percent}-${lang}-${n}${surface === 'panel' ? '-panel' : ''}`));
+    let found = await p.waitForSelector(byId('mobile-attention-chip'), { timeout: 15000 }).then(() => true, () => false);
+    if (found && surface === 'board') {
+      await p.locator(byId('mobile-workspace-' + a.id) + ' ' + byId('workspace-name-link')).first().tap();
+      found = await p.waitForSelector(byId('board-appbar'), { timeout: 10000 }).then(() => true, () => false)
+        && await p.waitForSelector(byId('mobile-attention-chip'), { timeout: 5000 }).then(() => true, () => false);
+    }
+    check(scene, 'the chip shown', found);
+    if (!found) { await p.context().close(); continue; }
+    await p.waitForTimeout(500);
+    const row = await readRow64(p);
+    geo64.push({ scene, ...row });
+    const left = row.row.x, right = Math.min(W, row.row.x + row.row.w), inside = r => r.x >= left - .5 && r.x + r.w <= right + .5;
+    const chip = row.chip;
+    check(scene, 'the chip\'s words and count are whole', chip.words.length === 2 && chip.words[0].text === m.needsHuman && chip.words[1].text === String(n) && chip.words.every(w => !w.cut),
+      JSON.stringify(chip.words));
+    check(scene, 'the chip still says its whole name to a screen reader', chip.label === m.needsHuman + ' ' + n, chip.label);
+    check(scene, 'the chip, its words and count inside the screen from the start', inside(chip) && chip.words.every(inside), JSON.stringify({ left, right, chip }));
+    check(scene, 'the chip a finger\'s size', chip.w >= 44 * k - .5 && chip.h >= 44 * k - .5, JSON.stringify(chip));
+    check(scene, 'all four tabs whole, inside the screen and a finger\'s size', row.tabs.length === 4 && row.tabs.every(t => !t.cut && inside(t.tab) && t.tab.w >= 44 * k - .5 && t.tab.h >= 44 * k - .5),
+      JSON.stringify(row.tabs));
+    check(scene, 'the chip over no tab', row.tabs.every(t => !overlap(t.tab, chip)), JSON.stringify({ chip, tabs: row.tabs.map(t => t.tab) }));
+    if (surface === 'panel') check(scene, 'the panel\'s ⋯ inside the screen', !!row.actions && inside(row.actions) && !overlap(row.actions, chip), JSON.stringify(row.actions));
+    check(scene, 'the page no wider than the screen', row.pageWide <= W + 1, String(row.pageWide));
+    // At 100% nothing moves: one line, the chip level with the tabs at the right end — except a 360px panel in English, whose
+    // ⋯ was 11px past the screen beside the tabs (161px of divider, chip and ⋯ after 194px of tabs, on 344px): there the
+    // group takes its own line under the tabs, at the right end.
+    if (percent === 100 && surface === 'panel' && W === 360 && lang === 'en') check(scene, 'at 100% the 360px panel\'s chip and ⋯ on a line under the tabs',
+      Math.abs(row.row.h - 88) < .6 && chip.y >= row.tabs[0].tab.y + row.tabs[0].tab.h - .5 && Math.abs(row.actions.x + row.actions.w - right) < 1, JSON.stringify({ row: row.row, chip, actions: row.actions }));
+    else if (percent === 100) check(scene, 'one line at 100%, the chip beside the tabs', Math.abs(row.row.h - 44) < .6 && Math.abs((chip.y + chip.h / 2) - (row.tabs[0].tab.y + row.tabs[0].tab.h / 2)) < 1
+      && Math.abs(chip.x + chip.w - right) < 1 + (row.actions ? row.actions.w + 4 : 0), JSON.stringify({ row: row.row, chip, right }));
+    if (shots64.includes(suffix)) await p.screenshot({ path: path.join(out, `${scene}.png`), clip: { x: 0, y: 0, width: W, height: 330 } });
+    // The chip still filters: a tap turns it on (the selected fill), a second off.
+    if (n === 3) {
+      await p.locator(byId('mobile-attention-chip')).first().tap(); await p.waitForTimeout(300);
+      const on = (await readRow64(p)).chip;
+      await p.locator(byId('mobile-attention-chip')).first().tap(); await p.waitForTimeout(300);
+      const off = (await readRow64(p)).chip;
+      check(scene, 'a tap filters, a second tap clears', rgb(on.fill) === pal.surface2.toLowerCase() && rgb(off.fill) === pal.surface1.toLowerCase() && inside(on) && on.words.every(w => !w.cut),
+        JSON.stringify({ on: on.fill, off: off.fill, want: [pal.surface2, pal.surface1] }));
+    }
+    // The list has no stage tabs or chip (its own "Needs attention" lines are not this row).
+    if (surface === 'overview' && n === 13 && percent === 150 && mode === 'light') {
+      await p.locator(byId('view-toggle')).first().tap(); await p.waitForTimeout(500);
+      check(scene, 'the list screen has no chip row', await p.locator(byId('mobile-control-row')).count() === 0);
+    }
+    check(scene, 'no page errors', errors.length === 0, errors.join(' | '));
+    await p.context().close();
+  }
+  fs.writeFileSync(path.join(out, 'd64-geometry.json'), JSON.stringify(geo64, null, 1) + '\n');
   }
 } catch (error) {
   // J3′: a scene that throws (a wait that timed out) is reported with the checks so far, not lost with them.

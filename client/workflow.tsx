@@ -14,8 +14,8 @@ import { localStamp } from './move-reason.js';
 import type { Locale } from '../shared/core/domain.js';
 import { usePopover } from './popover-menu.js';
 import { BuiltinBanner, BuiltinEmpty, RestingPick, WorkflowPickList, WorkflowPickPopover, exportedLine, usePickSaver, type ExportDone } from './workflow-pick.js';
-import { EXPORTED_PICK, PROGRAM_ROW, byInstance, endTagText, readFailure, programConflicts, programRow, sharedEvidence, withProgram, shownExcluded, evidencePlace, edgeLabelSpot, flowLayout, flowOverlay, FLOW, loopLabelSpot, spotRect, instanceChip, loopLabel, releaseChip, route, rowBottom, sourceNotes, stageCounts, tableCell, tableStages, tableWidths,
-  type CellTone, type FlowNode, type FlowOverlay, type LabelSpot, type Rect, type Segment, type WorkflowStage, type WorkflowWords } from './workflow-model.js';
+import { EXPORTED_PICK, PROGRAM_ROW, byInstance, endTagText, readFailure, programConflicts, programRow, sharedEvidence, withProgram, shownExcluded, evidencePlace, flowLabelLayout, flowLayout, flowOverlay, FLOW, instanceChip, loopLabel, releaseChip, route, rowBottom, sourceNotes, stageCounts, tableCell, tableStages, tableWidths,
+  type CellTone, type FlowNode, type FlowOverlay, type Segment, type WorkflowStage, type WorkflowWords } from './workflow-model.js';
 import { px } from './ui-scale.js';
 
 /** The copy's words for the pure model (client/workflow-model.ts). */
@@ -347,10 +347,16 @@ function FlowView({ model, width, colors: c, overlay, counts, noSource, words: w
   model: WorkflowModelDTO; width: number; colors: Palette; overlay: FlowOverlay; counts: Record<string, string>; noSource: ReadonlySet<string>; words: WorkflowWords;
   maxColumn: number | undefined;
 }) {
-  const bg = c.surface0, def = model.definition, L = flowLayout(def.stages, width, overlay.notes, counts, maxColumn, byInstance(model));
+  const bg = c.surface0, def = model.definition;
+  const loopLabels = new Map(def.edges.flatMap((e, i) => {
+    if (!e.back) return [];
+    const loops = overlay.loops.get(i) ?? [];
+    return [[i, { text: loopLabel(e, loops, w), n: Math.max(1, loops.length) }] as const];
+  }));
+  const { layout: L, forward, loops: spots } = flowLabelLayout(flowLayout(def.stages, width, overlay.notes, counts, maxColumn, byInstance(model)), def.edges, loopLabels);
   const muted = readable(c.foregroundMuted, bg, 3), hot = selectedLine(c, bg), faint = readable(c.foregroundMuted, bg);
   const node = (id: string) => L.at.get(id)!;
-  const parts: ReactNode[] = [], taken: Rect[] = [], loopLabels: { i: number; segs: Segment[]; n: number; text: string; drawn: boolean }[] = [];
+  const parts: ReactNode[] = [];
   for (const [i, e] of def.edges.entries()) {
     if (e.back) continue;
     const segs = route(node(e.from), node(e.to), false, 0, rowBottom(L, node(e.from).stage.row)), on = overlay.hot.has(i);
@@ -361,8 +367,7 @@ function FlowView({ model, width, colors: c, overlay, counts, noSource, words: w
       <Arrow seg={segs.at(-1)!} color={color} size={on ? FLOW.arrow + px(1) : FLOW.arrow} />
     </View>);
     if (e.label) {
-      const spot = edgeLabelSpot(segs[0]!);
-      taken.push(spotRect(spot, e.label));
+      const spot = forward.get(i)!;
       parts.push(<Chip key={'el' + i} testID="flow-edge-label" x={spot.x} align={spot.align} y={spot.y} text={e.label} fg={e.when === 'no' ? readable(c.statusDanger, bg) : faint} bg={bg} />);
     }
   }
@@ -379,19 +384,10 @@ function FlowView({ model, width, colors: c, overlay, counts, noSource, words: w
           <Arrow seg={segs.at(-1)!} color={color} size={FLOW.arrow} /></Fragment>;
       })}
     </View>);
-    const segs = route(a, b, true, 0, under), text = loopLabel(e, loops, w);
-    if (text) loopLabels.push({ i, segs, n, text, drawn: loops.length > 0 });
   }
-  // 347 X10: placed clear of the steps and of each other — those under a row first, as their place is fixed — and drawn after
-  // the steps: a loop straight up a column had its label under the box it leaves.
-  const spots = new Map<number, LabelSpot>();
-  for (const job of [...loopLabels.filter(x => x.segs.length === 3), ...loopLabels.filter(x => x.segs.length !== 3)]) {
-    const spot = loopLabelSpot(L, job.segs, job.n, job.text, taken);
-    spots.set(job.i, spot); taken.push(spotRect(spot, job.text));
-  }
-  const labels = loopLabels.map(({ i, text, drawn }) => { const spot = spots.get(i)!;
+  const labels = [...loopLabels].filter(([, label]) => label.text).map(([i, { text }]) => { const spot = spots.get(i)!;
     return <Chip key={'bl' + i} testID="flow-loop-label" align={spot.align} x={spot.x} y={spot.y} text={text}
-      fg={drawn ? c.foreground : faint} bg={c.surface1} line={c.border} />; });
+      fg={(overlay.loops.get(i)?.length ?? 0) > 0 ? c.foreground : faint} bg={c.surface1} line={c.border} />; });
   for (const n of L.at.values()) parts.push(<FlowStep key={'n' + n.stage.id} n={n} colors={c} bg={bg} hot={hot} on={overlay.passed.has(n.stage.id)}
     outlined={noSource.has(n.stage.id)} state={overlay.states[n.stage.id]} />);
   parts.push(...labels);

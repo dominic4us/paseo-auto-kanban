@@ -251,9 +251,13 @@ test('REQ-125 U4a 309 8.5 R3-1~R3-8 (312 R3): a number-stripped name is never an
     { '01_A사': { selected: 'yes' } });
   assert.deepEqual([m7.logShared, m7.logNotes], [[], [{ kind: 'other-item', path: 'STATE.md', name: 'B사', lines: [8] }]]);
   // R3-8: the 건 folder listed only in part (its entry cap) — every record cell 일부만 읽음, before any name is matched.
-  const m8 = await expectCells(t, { def: asIs(), text: r31, files: { ...one, [ROOT + '/02_B사/x.md']: 'x', [ROOT + '/03_C사/x.md']: 'x' }, limits: { ...WORKFLOW_LIMITS, folderEntries: 2 } },
-    { '01_A사': { selected: 'incomplete', submit: 'incomplete' } });
-  assert.equal(tableCell(m8.releases[0], stageOf(m8, 'selected'), W).text, '▨ 일부만 읽음');
+  // The cap is 3 and the 건 folder has 4 — the folders above ROOT (the workspace's 3 entries, 사업's 1) fit whole, so ROOT is cut whatever the disk order; which 3 of the 4 are read is that order (opendir, no sort), so no name is relied on: every row shown says it.
+  const m8 = await expectCells(t, { def: asIs(), text: r31, files: { ...one, [ROOT + '/02_B사/x.md']: 'x', [ROOT + '/03_C사/x.md']: 'x', [ROOT + '/04_D사/x.md']: 'x' }, limits: { ...WORKFLOW_LIMITS, folderEntries: 3 } }, {});
+  assert.ok(m8.limits.includes('folder-entries:' + ROOT) && m8.releases.length >= 1, JSON.stringify([m8.releases.map(v => v.label), m8.limits, m8.incomplete]));
+  for (const r of m8.releases) {
+    for (const stage of ['selected', 'submit']) assert.equal(said(cell(r, stage)), 'incomplete', `${r.label} × ${stage}`);
+    assert.equal(tableCell(r, stageOf(m8, 'selected'), W).text, '▨ 일부만 읽음', r.label);
+  }
 });
 
 // ---- 309 6절: the definition ------------------------------------------------------------------------------------------------

@@ -659,7 +659,7 @@ test('Android tab and editor layouts reserve system clearance; the detail has no
   const viewport = root.root.findAllByType('View').find(v => v.props.onLayout);
   assert.equal(viewport.props.style.paddingBottom, 56);
   const tab = root.root.findAllByType('View').find(v => v.props.testID === 'mobile-control-row');
-  assert.equal(tab.props.style.height, 44); assert.equal(tab.props.style.flexGrow, 0);
+  assert.equal(tab.props.style.minHeight, 44); assert.equal(tab.props.style.flexGrow, 0);
   assert.ok(root.root.findAllByType('ScrollView').some(v => v.props.contentContainerStyle?.paddingBottom === 56));
   await act(async () => labelled(root, 'Example card').props.onPress());
   // REQ-88 ⑤: every field saves itself — no "Save changes" footer; REQ-87 ⑦: the sheet's content stops above the bar.
@@ -861,7 +861,7 @@ test('mobile first screen combines chip and counted tabs in one 44px row with a 
   const appbar = root.root.findByProps({ testID: 'mobile-appbar' });
   const controls = root.root.findByProps({ testID: 'mobile-control-row' });
   const heading = root.root.findByProps({ testID: 'mobile-workspace-heading' });
-  assert.equal(64 + appbar.props.style.height + controls.props.style.height + heading.props.style.minHeight, 168);
+  assert.equal(64 + appbar.props.style.height + controls.props.style.minHeight + heading.props.style.minHeight, 168);
   const body = root.root.findByProps({ testID: 'mobile-swimlane-screen' });
   assert.equal(body.props.style.paddingTop ?? 0, 0); assert.equal(body.props.style.gap ?? 0, 0);
   const native = nativeNode(root, 'mobile-swimlane-screen');
@@ -882,7 +882,7 @@ test('mobile first screen combines chip and counted tabs in one 44px row with a 
   assert.ok([...appbar.findAllByType('Pressable'), ...controls.findAllByType('Pressable')]
     .every(p => !p.props.style.borderWidth && !p.props.style.borderBottomWidth));
   assert.ok(root.root.findAllByProps({ testID: 'mobile-tab-face' }).every(v => v.props.style.height === 36));
-  assert.ok(root.root.findAllByType('Pressable').filter(p => p.props.accessibilityRole === 'tab').every(p => p.props.style.height === 44 && p.props.style.width >= 44));
+  assert.ok(root.root.findAllByType('Pressable').filter(p => p.props.accessibilityRole === 'tab').every(p => p.props.style.height === 44 && p.props.style.minWidth === 44 && p.props.style.flexGrow === 1));
   assert.equal(body.props.style.paddingBottom, 56);
   assert.equal(root.root.findByProps({ testID: 'mobile-workspace-sections' }).props.contentContainerStyle.paddingBottom, 56);
   assert.doesNotMatch(text(root), /Cards needing your attention/);
@@ -917,8 +917,29 @@ test('REQ-18 mobile attention excludes done requests, chooses a populated stage 
   await act(async () => root.root.findByProps({ testID: 'mobile-tab-done' }).props.onPress());
   assert.equal(labelled(root, 'Done request'), undefined);
   await act(async () => root.root.findByProps({ testID: 'mobile-attention-chip' }).props.onPress());
-  assert.equal(root.root.findByProps({ testID: 'mobile-tab-doing' }).props.accessibilityState.selected, true);
+  // REQ-148: In progress is empty, so the screen opened on To Do (its one card) — the tab clearing the filter goes back to.
+  assert.equal(root.root.findByProps({ testID: 'mobile-tab-todo' }).props.accessibilityState.selected, true);
   assert.equal(h.calls.length, count);
+});
+test('REQ-148 a phone opens on a tab with cards and keeps a tab a person chose (the web run moves the cards: req148)', async t => {
+  const selectedTab = tree => tree.root.findAllByType('Pressable').filter(p => p.props.accessibilityRole === 'tab' && p.props.accessibilityState.selected)
+    .map(p => p.props.testID);
+  // The Kanban screen: "Example card" waits in To Do, In progress is empty — To Do, not "No cards yet".
+  const h = harness({ mobile: true }), { OverviewScreen } = h.load('client/overview.tsx'), root = await render(t, OverviewScreen, h.props);
+  assert.deepEqual(selectedTab(root), ['mobile-tab-todo']);
+  assert.ok(labelled(root, 'Example card')); assert.doesNotMatch(text(root), /No cards yet/);
+  // In progress with a card: the usual tab, as before.
+  const busy = harness({ mobile: true }); busy.addCard({ ...add('In flight'), stageId: 'doing' });
+  assert.deepEqual(selectedTab(await render(t, busy.load('client/overview.tsx').OverviewScreen, busy.props)), ['mobile-tab-doing']);
+  // A tab a person chose stays chosen on a fresh screen (the session), even an empty one.
+  await act(async () => root.root.findByProps({ testID: 'mobile-tab-review' }).props.onPress());
+  await act(async () => root.unmount());
+  assert.deepEqual(selectedTab(await render(t, OverviewScreen, h.props)), ['mobile-tab-review']);
+  // A phone board: its first stage, or the first with cards while that is empty.
+  const b = harness({ mobile: true });
+  b.externalMove('review');
+  const phone = await render(t, b.load('client/board.tsx').BoardScreen, { ...b.props, selector: { boardId: b.base.id } });
+  assert.deepEqual(selectedTab(phone), ['mobile-tab-review']);
 });
 // REQ-68: the phone's top bar carries list/filters(projects)/refresh as glyphs, once in ⋯.
 test('mobile top bar keeps list/project/refresh and a saved card updates its selected-stage section', async t => {
@@ -947,7 +968,7 @@ test('D4 narrow workspace panels meet the 149px panel budget while wide board co
   assert.equal(root.root.findAllByProps({ testID: 'board-appbar' }).length, 0);
   const controls = root.root.findByProps({ testID: 'mobile-control-row' });
   const list = root.root.findAllByType('ScrollView').find(v => v.props.nestedScrollEnabled);
-  assert.equal(101 + controls.props.style.height + list.props.contentContainerStyle.paddingTop, 149);
+  assert.equal(101 + controls.props.style.minHeight + list.props.contentContainerStyle.paddingTop, 149);
   const chip = root.root.findByProps({ testID: 'mobile-attention-chip' });
   assert.equal(chip.props.accessibilityState.selected, false);
   await act(async () => chip.props.onPress());
@@ -1275,7 +1296,8 @@ test('D8 compact web menus use the same public Modal Escape path and keep existi
   // REQ-68: no ⋯ on the phone; its top bar opens the filter sheet and the settings sheet, both on the same path.
   assert.equal(labelled(root, 'More'), undefined);
   await act(async () => sheetButton(root, 'open-filters').props.onPress());
-  assert.ok(root.root.findByProps({ testID: 'menu-sheet' })); assert.ok(input(root, 'Search cards'));
+  // REQ-148: the screen opens on To Do (In progress is empty), whose lane draws its order sheet too, closed.
+  assert.ok(root.root.findByProps({ testID: 'menu-sheet', title: 'Filters and search' })); assert.ok(input(root, 'Search cards'));
   await act(async () => root.root.findByType('NativeModal').props.onRequestClose());
   assert.equal(root.root.findAllByType('NativeModal').length, 0);
   await act(async () => sheetButton(root, 'open-settings').props.onPress());
@@ -2436,6 +2458,8 @@ test('REQ-59 ②④ the remembered order comes back on a fresh screen, on 390px 
   // 390px: same order, the ⋯ closes each workspace's button row, and a move works there too.
   const mobile = harness({ mobile: true, ...options }), MobileOverview = mobile.load('client/overview.tsx').OverviewScreen;
   const phone = await render(t, MobileOverview, mobile.props);
+  // REQ-148: the card waits in To Do, so the screen opens there; In progress (chosen) lists the card-less workspaces alone.
+  await act(async () => phone.root.findByProps({ testID: 'mobile-tab-doing' }).props.onPress());
   const headings = () => hosts(phone, 'mobile-workspace-heading').map(n =>
     laneLabel(n.findAll(v => v.props?.testID === 'workspace-name-link' && typeof v.type === 'string')[0]));
   assert.deepEqual(headings(), ['Empty Workspace 1 · wks_empty02', 'Empty Workspace 0 · wks_empty01']);
@@ -3812,23 +3836,34 @@ test('REQ-71 ① the phone row puts the four stage tabs left and a 76px, tab-hig
     onStage: () => {}, onAttention: () => {}, colors: c, m: copy('ko') });
   assert.deepEqual(controlOrder(row), ['mobile-stage-tabs', 'mobile-control-divider', 'mobile-attention-chip']);
   const chip = row.root.findByProps({ testID: 'mobile-attention-chip' }), face = row.root.findByProps({ testID: 'mobile-chip-face' });
-  assert.equal(chip.props.style.width, 76); assert.equal(chip.props.style.height, 44);
+  assert.equal(chip.props.style.minWidth, 76); assert.equal(chip.props.style.height, 44);
   const tabs = row.root.findAllByType('Pressable').filter(p => p.props.accessibilityRole === 'tab');
   assert.deepEqual(tabs.map(p => p.props.testID), ['mobile-tab-todo', 'mobile-tab-doing', 'mobile-tab-review', 'mobile-tab-done']);
   assert.ok(row.root.findAllByProps({ testID: 'mobile-tab-face' }).every(v => v.props.style.height === face.props.style.height));
   assert.equal(face.props.style.height, 36);
-  // The tabs share what is left evenly and stay touchable: 390 − 16 padding = 4 tabs + 4 + 1 divider + 4 + 76.
-  assert.ok(tabs.every(p => p.props.style.width === tabs[0].props.style.width && p.props.style.height === 44));
-  assert.equal(tabs[0].props.style.width, (374 - 85) / 4); assert.ok(tabs[0].props.style.width > 67, 'wider than with the 104px chip');
+  // The tabs share what is left and stay touchable: 390 − 16 padding = 4 tabs + 4 + 1 divider + 4 + 76. REQ-148: each as wide as
+  // its whole name (its count under it), a finger's width at least, growing evenly into the row. D64: the tabs' scroller grows
+  // into the row's line and the chip's group (divider, chip, ⋯) wraps under it, at the right end, when they do not fit together.
+  assert.ok(tabs.every(p => p.props.style.minWidth === 44 && p.props.style.flexGrow === 1 && p.props.style.height === 44 && p.props.style.width === undefined));
+  assert.equal(row.root.findByProps({ testID: 'mobile-stage-tabs' }).props.style.flexGrow, 1);
+  const scroller = row.root.findAll(n => n.props.horizontal === true && n.props.contentContainerStyle)[0];
+  assert.equal(scroller.props.contentContainerStyle.flexGrow, 1); assert.equal(scroller.props.style.flexGrow, 1);
+  const line = row.root.findByProps({ testID: 'mobile-control-row' }).props.style, group = row.root.findByProps({ testID: 'mobile-chip-group' }).props.style;
+  assert.deepEqual([line.flexDirection, line.flexWrap, line.minHeight, line.height], ['row', 'wrap', 44, undefined]);
+  assert.deepEqual([group.marginLeft, group.height, group.paddingLeft, group.gap], ['auto', 44, 4, 4]);
+  assert.ok(row.root.findAllByProps({ testID: 'mobile-tab-face' }).every(v => v.props.style.flexDirection === undefined), 'the count under the name');
   const divider = row.root.findByProps({ testID: 'mobile-control-divider' });
   assert.equal(divider.props.style.width, 1); assert.equal(divider.props.style.backgroundColor, c.divider);
   assert.equal(chip.props.accessibilityLabel, '확인 필요 9');
 
-  // English words need more room: the chip keeps them whole and the tabs still get at least 44px.
+  // English words need more room: the chip keeps them whole and the tabs still get at least 44px. D64: 104px at least, and wider
+  // when its words and count need it (no cut words — the name's text no longer shrinks).
   const en = await render(t, MobileControls, { width: 390, stages, selected: 'doing', attention: true, count: 12,
     onStage: () => {}, onAttention: () => {}, colors: c, m: copy('en') });
-  assert.equal(en.root.findByProps({ testID: 'mobile-attention-chip' }).props.style.width, 104);
-  assert.ok(en.root.findAllByType('Pressable').filter(p => p.props.accessibilityRole === 'tab').every(p => p.props.style.width >= 44));
+  const enChip = en.root.findByProps({ testID: 'mobile-attention-chip' }).props.style;
+  assert.equal(enChip.minWidth, 104); assert.equal(enChip.width, undefined);
+  assert.ok(en.root.findByProps({ testID: 'mobile-chip-face' }).findAllByType('Text').every(v => v.props.style.flexShrink === undefined));
+  assert.ok(en.root.findAllByType('Pressable').filter(p => p.props.accessibilityRole === 'tab').every(p => p.props.style.minWidth >= 44));
   assert.equal(en.root.findByProps({ testID: 'mobile-chip-face' }).props.style.backgroundColor, c.surface2, 'on reads as selected');
 });
 test('REQ-71 ① the same order on the 390 Kanban screen, the phone board and the narrow workspace panel', async t => {
@@ -3844,7 +3879,7 @@ test('REQ-71 ① the same order on the 390 Kanban screen, the phone board and th
     { ...p.props, context: 'workspace', workspaceId: p.base.workspaceId });
   await act(async () => panel.root.findByProps({ testID: 'workspace-board' }).props.onLayout({ nativeEvent: { layout: { width: 600 } } }));
   assert.deepEqual(controlOrder(panel), ['mobile-stage-tabs', 'mobile-control-divider', 'mobile-attention-chip', 'panel-actions']);
-  assert.ok(panel.root.findAllByType('Pressable').filter(v => v.props.accessibilityRole === 'tab').every(v => v.props.style.width >= 44));
+  assert.ok(panel.root.findAllByType('Pressable').filter(v => v.props.accessibilityRole === 'tab').every(v => v.props.style.minWidth >= 44));
 });
 test('REQ-71 ② the list attention section is one line a card: glyph, one-line title, small workspace; opens the card', async t => {
   for (const [name, options, rows, height] of [['wide', { width: 1400 }, 3, 32], ['phone', { mobile: true, platform: 'web' }, 2, 44]]) {
@@ -6453,7 +6488,7 @@ test('REQ-142 the overview is in no workspace: "Go to agent ↗" asks first, [Ca
   assert.deepEqual(opened, [], 'nothing opened before the answer');
   assert.equal(hosts(root, 'agent-leave-sheet').length, 1);
   assert.equal(allText(hosts(root, 'agent-leave-text')[0]),
-    'This agent is in another workspace. Closing the tab that opens may archive the agent (and its sub-agents).');
+    'This agent may belong to another workspace. Closing the tab that opens can archive the agent and its sub-agents, so switch to another tab instead of closing it.');
   assert.deepEqual([allText(hosts(root, 'agent-leave-cancel')[0]), allText(hosts(root, 'agent-leave-open')[0])], ['Cancel', 'Open']);
   await act(async () => press(hosts(root, 'agent-leave-cancel')[0]));
   assert.deepEqual(opened, [], '[Cancel] opens nothing');
@@ -6468,7 +6503,7 @@ test('REQ-142 the overview is in no workspace: "Go to agent ↗" asks first, [Ca
   await leaveOpen(root);
   assert.deepEqual(opened.at(-1), ['agent', AGENT_A], '[Open] opens the agent');
   const { copy } = h.load('client/i18n.ts'), ko = copy('ko');
-  assert.equal(ko.agentLeaveText, '다른 워크스페이스의 에이전트입니다. 열린 탭을 닫으면 그 에이전트(와 하위)가 보관될 수 있습니다.');
+  assert.equal(ko.agentLeaveText, '다른 워크스페이스의 에이전트일 수 있습니다. 열리는 탭을 닫으면 그 에이전트(와 하위)가 보관될 수 있으니, 닫지 말고 다른 탭으로 옮겨 가세요.');
   assert.deepEqual([ko.agentLeaveOpen, ko.cancel, ko.goToAgent], ['열기', '취소', '에이전트로 이동']);
 });
 test('REQ-142 the workspace panel opens its own workspace\'s agents at once — the card\'s ↗, the menu, the detail\'s rows — wide and phone', async t => {

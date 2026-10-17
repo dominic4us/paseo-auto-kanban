@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { MAIL_DIR_LIMIT, type LabsDTO, type UiOrderDTO, type UiSettingsDTO, type UiStateDTO } from '../shared/rpc.js';
+import { renameOver } from './core/durable.js';
 
 /**
  * REQ-57 ④: the project filter has to survive an app restart, and the plugin's own ledger directory is
@@ -141,7 +142,7 @@ async function writeUiStateNow(dataDir: string, hostId: string,
   const file = path.join(dataDir, FILE);
   const temporary = path.join(dataDir, `.${FILE}.tmp-${randomUUID()}`);
   const write = io.write ?? ((target, bytes) => fs.writeFile(target, bytes, { flag: 'wx', mode: 0o600 }));
-  const rename = io.rename ?? fs.rename;
+  const rename = io.rename ?? renameOver;
   const remove = io.remove ?? ((target: string) => fs.rm(target, { force: true }));
   try {
     await write(temporary, JSON.stringify({ schemaVersion: 1, hosts: merged }, null, 2) + '\n');

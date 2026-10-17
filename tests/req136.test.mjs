@@ -1,7 +1,7 @@
 // REQ-136 (research/272 → 277): the English screens' words. No Korean left in an English sentence (H2: the lead's prefix
 // is named, not quoted), one English word per idea (research/272 §3: lead, not orchestrator; Collapse, not Fold; memo, not
-// busy mark; draft, not instruction draft; needs/waiting, not awaiting; American spelling), the phone tab's short name (H6).
-// The Korean words are unchanged but for the new tab key. Labs' message strings (H7) are out of this check.
+// busy mark; draft, not instruction draft; needs/waiting, not awaiting; American spelling); the phone tab's short name (H6) is gone again (REQ-148).
+// The Korean words are unchanged. Labs' message strings (H7) are out of this check.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { copy } from '../dist/client/i18n.js';
@@ -40,9 +40,9 @@ test('REQ-136 one English word per idea (research/272 §3)', () => {
   assert.equal(en.busyTitle, en.memoTitle, 'the busy mark and the memo are one thing by one name');
 });
 
-test('REQ-136 H6 the phone tab says "Doing"; Korean keeps its own stage name', () => {
-  assert.equal(en.doingStageTab, 'Doing'); assert.equal(en.doingStage, 'In progress');
-  assert.equal(ko.doingStageTab, ko.doingStage);
+test('REQ-148 (once REQ-136 H6 "Doing") the phone tab says the wide board\'s name; no shorter one is left', () => {
+  assert.equal(en.doingStage, 'In progress'); assert.equal(ko.doingStage, '진행');
+  assert.equal(en.doingStageTab, undefined); assert.equal(ko.doingStageTab, undefined);
 });
 test('REQ-136 F1/F2 the draft rule names the stage that sends a draft, as the board shows it — not a fixed "In progress"', () => {
   assert.equal(en.draftRule('In progress'), 'Drafts stay in the first stage. Move one to In progress to send it to the workspace\'s lead (you confirm first).');

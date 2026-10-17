@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import { ScrollView } from '@getpaseo/plugin/client/react-native';
 import type { PluginSurfaceProps } from '@getpaseo/plugin/client';
@@ -16,7 +16,7 @@ import { mobileSwimlaneModel, attentionStage } from './mobile-model.js';
 import { concealFamily, expandLane, filledLanes, overdueKey, filledProjects, flatTier, foldCell, focusTab, revealFamily, stepCell, SWIMLANE, type ProjectGroup } from './swimlane-model.js';
 import { useCardOrder, useGroupByProject } from './settings.js';
 import { stageColor } from './stage-color.js';
-import { crowdedTitleRow, MOBILE } from './mobile-layout.js';
+import { crowdedTitleRow, glyphLine, MOBILE } from './mobile-layout.js';
 import { bottomClearance, projectHeaderHeight, STICKY, stickyHeaderStyle } from './layout.js';
 import { palette } from './palette.js';
 import { copy } from './i18n.js';
@@ -70,7 +70,8 @@ export function MobileSwimlaneScreen({ width, onList, onBoard, preview = false, 
   const autoArchive = useAutoArchive(scope, source.autoArchive, !preview);
   const [tidy, setTidy] = useState<{ boardId: string; ask: boolean; text?: string } | null>(null);
   const [archivedOf, setArchivedOf] = useState<{ boardId: string; name: string; stages: { stageId: string; name: string }[] } | null>(null);
-  const [selected, setSelected] = useSessionValue(scope, 'mobileStage', 'doing');
+  // REQ-148: '' until a tab is chosen (or the screen opened on one, below); the tab shown is the model's `stageId`.
+  const [chosen, setSelected] = useSessionValue(scope, 'mobileStage', '');
   const [beforeAttention, setBeforeAttention] = useSessionValue(scope, 'mobileBeforeAttention', 'doing');
   // The stage tabs already sit outside the scroll view; the vertical offset stays out of React state (REQ-26 ⑨).
   const store = sessionFor(scope), startY = useRef(Number(store.get('mobileScrollY') ?? 0)).current, sections = useRef(null);
@@ -126,12 +127,16 @@ export function MobileSwimlaneScreen({ width, onList, onBoard, preview = false, 
   const options = { query: filters.query, labels: filters.labels, ...(source.labels ? { workspaceLabels: source.labels } : {}), projects, orphaned, order, grouped, cardOrder, archived, agents: agentLinks };
   // Research/174 D2: a busy mark past two hours by the clock alone needs a person too — rebuilt when one crosses.
   const overdue = useMinuteKey(now => overdueKey(source.boards, now), source.boards.some(b => !!b.summary.busy));
-  const model = useMemo(() => mobileSwimlaneModel(source.boards, source.directory, filters.hiddenProjects, filters.attention, lanes, selected, options),
-    [source.boards, overdue, source.directory, source.labels, hiddenKey, filters.attention, filters.query, filters.labels, lanes, selected, projects, orphaned, order, grouped, cardOrder, archived, agentLinks]);
+  const model = useMemo(() => mobileSwimlaneModel(source.boards, source.directory, filters.hiddenProjects, filters.attention, lanes, chosen, options),
+    [source.boards, overdue, source.directory, source.labels, hiddenKey, filters.attention, filters.query, filters.labels, lanes, chosen, projects, orphaned, order, grouped, cardOrder, archived, agentLinks]);
+  const selected = model.stageId;
+  // REQ-148: once there are cards, the tab the screen opened on is kept as if chosen, so it does not jump under a person when
+  // its cards move on; a tab a person picks (or a board opened at one) is kept as before, for the session.
+  const opened = !chosen && model.stages.some(s => s.count > 0);
+  useEffect(() => { if (opened) setSelected(selected); }, [opened, selected]);
+  // REQ-148: the tabs say the wide board's names ("In progress", once "Doing" on a phone); mobile-controls.tsx makes room for them.
   const stageNames = [m.waitingStage, m.doingStage, m.reviewStage, m.doneStage];
-  // REQ-136 H6: the tab's face may say a shorter name ("Doing"; "In pro…" was cut); the whole one is still what it reads aloud.
-  const tabNames = [m.waitingStage, m.doingStageTab, m.reviewStage, m.doneStage];
-  const stages = model.stages.map((s, i) => ({ ...s, name: stageNames[i]!, tab: tabNames[i]!,
+  const stages = model.stages.map((s, i) => ({ ...s, name: stageNames[i]!,
     color: stageColor(s.stageId, model.stages.map(v => ({ stageId: v.stageId, countsAsDone: v.stageId === 'done' })), c) }));
   const updateFilters = (patch: Partial<BoardFilters>) => {
     const next = { ...filters, ...patch }; state.update(patch);
@@ -287,42 +292,49 @@ export function MobileSwimlaneScreen({ width, onList, onBoard, preview = false, 
   // REQ-85 ⑨: the card whose detail was just closed stays tinted until another is opened or the screen is left.
   const viewed = useViewedCard(detail?.cardId ?? null);
   if (source.localePending) return <LocalePending colors={c} />;
+  // REQ-68: no ⋯. What it held is a glyph here — filters, refresh, the view — or in the settings sheet (⚙).
+  // The view is one glyph that goes to the other view: two joined 44px glyphs would leave the title no room.
   // REQ-139: filters, refresh, +, the mailbox when on, the view and ⚙.
-  const crowded = crowdedTitleRow(width, mailboxOn ? 6 : 5, px(4));
+  const glyphs = [
+    // REQ-91: always the same filter glyph; with filters applied it is on (REQ-85 tint, glyph in the main colour) and carries how many.
+    <IconButton key="filters" testID="open-filters" name="ListFilter" label={state.count > 0 ? m.filtersApplied(state.count) : m.filters} colors={c} mobile
+      on={state.count > 0} badge={state.count} buttonRef={filterButton} onPress={openFilters} />,
+    <IconButton key="refresh" name="RefreshCw" label={m.refresh} colors={c} mobile disabled={preview} onPress={source.refresh} />,
+    <IconButton key="create" name="Plus" label={m.create} colors={c} mobile disabled={preview || !source.boards.length || !!source.error}
+      onPress={() => { if (!preview) { setCreateBoard(null); setCreateLane(null); setCreate(true); } }} />,
+    // REQ-134 MA: after +, as research/267 drew it; a sixth glyph cuts the status words ("자동…") before the title.
+    ...(mailboxOn ? [<IconButton key="mailbox" testID="mailbox-button" name="Mail" label={m.mailboxOpen(mailboxBadge)} colors={c} mobile on={mailboxOpen}
+      badge={mailboxBadge} onPress={() => openMailbox()} />] : []),
+    <IconButton key="view" testID="view-toggle" name="List" label={m.listView} colors={c} mobile disabled={preview}
+      onPress={() => { if (!preview) onList(); }} />,
+    <IconButton key="settings" testID="open-settings" name="Settings" label={m.settings} colors={c} mobile
+      buttonRef={settingsWindow.opener} onPress={settingsWindow.open} />,
+  ];
+  const crowded = crowdedTitleRow(width, glyphs.length, px(4));
+  // D60: crowded, the glyphs keep one line under the title — closer together, or the last beside the title.
+  const line = crowded ? glyphLine(width, glyphs.length, px(4)) : { lifted: 0, gap: px(4) };
+  const lifted = line.lifted ? glyphs.splice(glyphs.length - line.lifted) : null;
+  // REQ-139: a size that leaves the title no room puts it on a line of its own, over the glyphs.
+  const title = <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'baseline', gap: px(8),
+    ...(crowded && !lifted ? { flexBasis: '100%' as const, height: MOBILE.appbarHeight, alignItems: 'center' as const } : {}) }}>
+    {/* REQ-68: five glyphs leave the title about 130px; the title keeps its width and the status line gives way. */}
+    <Text numberOfLines={1} style={{ flexShrink: 0, color: c.foreground, fontSize: px(18), fontWeight: '600' }}>{m.kanban}</Text>
+    {/* REQ-78: inside the title, so the 390px screen keeps its three rows (the 168px budget counts them). */}
+    {!preview && source.directorySettled && <DirectoryReadyMark />}
+    {!preview && <RefreshStatus status={source.refreshStatus} colors={c} m={m} compact />}
+  </View>;
   return <QuickMoveContext.Provider value={moves.context}><ViewedCardContext.Provider value={viewed}>
   <FamilyFocusContext.Provider value={family.value}><FreshCardContext.Provider value={fresh.value}>
   <View testID="mobile-swimlane-screen" {...family.responder} style={{ flex: 1, minHeight: 0, paddingHorizontal: MOBILE.horizontalPadding,
     paddingBottom: bottom, backgroundColor: c.surface0 }}>
     <View testID="mobile-appbar" style={{ ...(crowded ? { minHeight: MOBILE.appbarHeight, flexWrap: 'wrap' as const, justifyContent: 'flex-end' as const }
-      : { height: MOBILE.appbarHeight }), flexDirection: 'row', alignItems: 'center', gap: px(4) }}>
-      {/* REQ-139: a size that leaves the title no room puts it on a line of its own, over the glyphs. */}
-      <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'baseline', gap: px(8),
-        ...(crowded ? { flexBasis: '100%' as const, height: MOBILE.appbarHeight, alignItems: 'center' as const } : {}) }}>
-        {/* REQ-68: five glyphs leave the title about 130px; the title keeps its width and the status line gives way. */}
-        <Text numberOfLines={1} style={{ flexShrink: 0, color: c.foreground, fontSize: px(18), fontWeight: '600' }}>{m.kanban}</Text>
-        {/* REQ-78: inside the title, so the 390px screen keeps its three rows (the 168px budget counts them). */}
-        {!preview && source.directorySettled && <DirectoryReadyMark />}
-        {!preview && <RefreshStatus status={source.refreshStatus} colors={c} m={m} compact />}
-      </View>
-      {/* REQ-68: no ⋯. What it held is a glyph here — filters, refresh, the view — or in the settings sheet (⚙).
-          The view is one glyph that goes to the other view: two joined 44px glyphs would leave the title no room. */}
-      {/* REQ-91: always the same filter glyph; with filters applied it is on (REQ-85 tint, glyph in the main colour) and
-          carries how many. */}
-      <IconButton testID="open-filters" name="ListFilter" label={state.count > 0 ? m.filtersApplied(state.count) : m.filters} colors={c} mobile
-        on={state.count > 0} badge={state.count} buttonRef={filterButton} onPress={openFilters} />
-      <IconButton name="RefreshCw" label={m.refresh} colors={c} mobile disabled={preview} onPress={source.refresh} />
-      <IconButton name="Plus" label={m.create} colors={c} mobile disabled={preview || !source.boards.length || !!source.error}
-        onPress={() => { if (!preview) { setCreateBoard(null); setCreateLane(null); setCreate(true); } }} />
-      {/* REQ-134 MA: after +, as research/267 drew it; a sixth glyph cuts the status words ("자동…") before the title. */}
-      {mailboxOn && <IconButton testID="mailbox-button" name="Mail" label={m.mailboxOpen(mailboxBadge)} colors={c} mobile on={mailboxOpen}
-        badge={mailboxBadge} onPress={() => openMailbox()} />}
-      <IconButton testID="view-toggle" name="List" label={m.listView} colors={c} mobile disabled={preview}
-        onPress={() => { if (!preview) onList(); }} />
-      <IconButton testID="open-settings" name="Settings" label={m.settings} colors={c} mobile
-        buttonRef={settingsWindow.opener} onPress={settingsWindow.open} />
+      : { height: MOBILE.appbarHeight }), flexDirection: 'row', alignItems: 'center', ...(line.gap < px(4) ? { rowGap: px(4), columnGap: line.gap } : { gap: px(4) }) }}>
+      {lifted ? <View testID="mobile-title-line" style={{ flex: 1, flexBasis: '100%', height: MOBILE.appbarHeight, flexDirection: 'row', alignItems: 'center', gap: px(4) }}>
+        {title}{lifted}</View> : title}
+      {glyphs}
     </View>
     {preview && <DemoBanner mobile onExit={toggleDemo} colors={c} m={m} />}
-    <MobileControls width={width} stages={stages} selected={selected} attention={filters.attention} count={model.attention}
+    <MobileControls stages={stages} selected={selected} attention={filters.attention} count={model.attention}
       onStage={setSelected} onAttention={() => updateFilters({ attention: !filters.attention })} colors={c} m={m} />
     <ScrollView testID="mobile-workspace-sections" ref={sections} style={{ flex: 1, minHeight: 0 }} contentOffset={{ x: 0, y: startY }}
       onScroll={event => { store.set('mobileScrollY', event.nativeEvent.contentOffset.y); }} scrollEventThrottle={16}

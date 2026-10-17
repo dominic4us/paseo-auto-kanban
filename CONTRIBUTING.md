@@ -84,6 +84,36 @@ paseo plugin install /absolute/path/to/checkout --id paseo-auto-kanban-dev --hom
 followed by a number, or a numbered document. These are the maintainer's internal work-tracking numbers. They are kept for history; you do
 not need to understand them, and new code does not need them.
 
+## Releases
+
+For the maintainer. A release is one commit on `main` with a tag `vX.Y.Z`; nothing is published from a laptop.
+
+1. **Candidate branch.** Push the release commit to a branch `rc/vX.Y.Z` before `main`. The *Candidate tests*
+   workflow ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs `npm ci`, `npm test`, `npm run test:web`,
+   `npm run test:hermes` and `npm run test:hermes-run` on a clean GitHub runner with Node.js 22.
+2. **Green.** Go on only when that run is green. If it fails, fix it, delete the `rc/vX.Y.Z` branch and push a new
+   candidate. A tag is never moved.
+3. **`main` and the tag.** Push the same commit to `main` together with the tag. The *Release to npm (staged)*
+   workflow ([.github/workflows/release.yml](.github/workflows/release.yml)) tests again, checks that the tag matches
+   the `package.json` version and that the packed file list looks right, and stages the version on npm through
+   trusted publishing (OIDC): no npm token is stored anywhere, and the package gets a provenance statement.
+4. **Approve on npm.** On npmjs.com, open the package's *Staged Packages* tab, check the version and the file count,
+   and approve with two-factor authentication. Only then is the version public; `npm view paseo-auto-kanban version`
+   shows it.
+
+The npm trusted publisher for this package allows only `npm stage publish`, only from `release.yml` in this
+repository, so a workflow run alone can never make a version public.
+
+**When to register the trusted publisher.** npm drops a trusted publisher that has no successful publish within
+48 hours of being created; it cannot be edited, only deleted and registered again. So register it (package
+*Settings* on npmjs.com → *Trusted Publisher* → GitHub Actions, workflow `release.yml`, allowed action
+`npm stage publish` only) after the candidate run is green and right before pushing `main` and the tag — not
+ahead of time. If it expires, delete it and register it again just before the next push.
+
+**Manual fallback**, when Actions cannot be used: in a clean clone of the tagged commit run `npm ci --ignore-scripts`,
+`npm test` and `npm pack --dry-run` (check the file list), then `npm publish` and confirm with two-factor
+authentication.
+
 ## Pull requests
 
 - One topic per pull request, with tests. Run `npm test` (and `npm run test:web` for screen changes) before

@@ -299,11 +299,11 @@ export function flowObstacles(layout: FlowLayout): Rect[] {
  * any other: before the corner of the sideways run (where it always was), beside the line going up — left first, as a
  * forward line down the same column has its label on the right — middle first, then along the sideways run; last, under or over the two steps it joins. The first that
  * keeps `px(2)` clear of every step, count chip and label in `taken` (the forward lines' labels and the loop labels placed
- * before) and stays on the canvas wins; none free: the one that covers least, a step counting most. A loop straight up a
+ * before) and stays on the canvas wins; none free: return undefined so flowLabelLayout can allocate space. A loop straight up a
  * column used to put its label on the top edge of the step it leaves, a loop under a row on a forward line's label.
  * workflow.tsx draws loop labels after the steps, so nothing hides them.
  */
-export function loopLabelSpot(layout: FlowLayout, segs: readonly Segment[], n: number, text: string, taken: readonly Rect[] = []): LabelSpot {
+export function loopLabelSpot(layout: FlowLayout, segs: readonly Segment[], n: number, text: string, taken: readonly Rect[] = []): LabelSpot | undefined {
   const h = FLOW.chipH, along = [.5, .35, .65, .2, .8, .08, .92], spots: LabelSpot[] = [];
   const level = (s: Segment) => s.y1 === s.y2, lo = (s: Segment) => Math.min(s.x1, s.x2), hi = (s: Segment) => Math.max(s.x1, s.x2);
   const beside = (s: Segment) => { const top = Math.min(s.y1, s.y2), bottom = Math.max(s.y1, s.y2);
@@ -323,17 +323,97 @@ export function loopLabelSpot(layout: FlowLayout, segs: readonly Segment[], n: n
   const from = nodeAt(segs[0]!.x1, segs[0]!.y1), to = nodeAt(segs.at(-1)!.x2, segs.at(-1)!.y2);
   for (const [v, y] of [[from, from ? from.bottom + px(4) : 0], [to, to ? to.top - h - px(4) : 0], [to, to ? to.bottom + px(4) : 0], [from, from ? from.top - h - px(4) : 0]] as const)
     if (v) spots.push({ x: v.cx, y, align: 'center' }, { x: v.left, y, align: 'left' }, { x: v.right, y, align: 'right' });
-  const steps = flowObstacles(layout), labels = [...taken], gap = px(2);
-  const grow = (r: Rect): Rect => ({ l: r.l - gap, r: r.r + gap, t: r.t - gap, b: r.b + gap });
-  const cost = (spot: LabelSpot) => {
+  const obstacles = [...flowObstacles(layout), ...taken], gap = px(2);
+  return spots.find(spot => {
     const r = spotRect(spot, text);
-    if (r.l < 0 || r.r > layout.width || r.t < 0 || r.b > layout.height) return Infinity;
-    const g = grow(r);
-    return steps.reduce((sum, b) => sum + 4 * overlapArea(g, b), 0) + labels.reduce((sum, b) => sum + overlapArea(g, b), 0);
-  };
-  let best = spots[0]!, least = Infinity;
-  for (const spot of spots) { const c = cost(spot); if (c === 0) return spot; if (c < least) { least = c; best = spot; } }
-  return best;
+    if (r.l < 0 || r.r > layout.width || r.t < 0 || r.b > layout.height) return false;
+    const padded = { l: r.l - gap, r: r.r + gap, t: r.t - gap, b: r.b + gap };
+    return obstacles.every(other => overlapArea(padded, other) === 0);
+  });
+}
+/** D56: keep a forward caption near its segment, but outside every box, count and earlier caption.
+ * A long horizontal caption may be wider than the gap between its nodes. Move the caption above/below the blockers,
+ * not the node text: node widths, note wrapping and the existing stage-name line limits remain unchanged.
+ */
+export function forwardLabelSpot(layout: FlowLayout, segs: readonly Segment[], text: string, taken: readonly Rect[] = []): LabelSpot | undefined {
+  const preferred = edgeLabelSpot(segs[0]!), original = spotRect(preferred, text), gap = px(2);
+  const obstacles = [...flowObstacles(layout), ...taken], candidates: LabelSpot[] = [];
+  for (const segment of segs) {
+    const anchors = [edgeLabelSpot(segment)];
+    if (segment.x1 === segment.x2) anchors.push({ x: segment.x1 - px(6), y: anchors[0]!.y, align: 'right' });
+    for (const anchor of anchors) {
+      const r = spotRect(anchor, text), w = r.r - r.l;
+      if (w > layout.width) continue;
+      const x = anchor.x + Math.max(0, Math.min(layout.width - w, r.l)) - r.l;
+      const spot = { ...anchor, x }, rect = spotRect(spot, text);
+      candidates.push(spot);
+      // At a fixed x, free vertical intervals start/end at obstacle boundaries. Test those exact boundaries, not samples.
+      for (const o of obstacles) if (rect.l - gap < o.r && rect.r + gap > o.l)
+        candidates.push({ ...spot, y: o.t - FLOW.chipH - gap }, { ...spot, y: o.b + gap });
+    }
+  }
+  const ranked = candidates.map((spot, index) => {
+    const r = spotRect(spot, text);
+    return { spot, index, distance: Math.abs((r.l + r.r - original.l - original.r) / 2) + Math.abs(spot.y - preferred.y) };
+  }).sort((a, b) => a.distance - b.distance || a.index - b.index);
+  return ranked.find(({ spot }) => {
+    const r = spotRect(spot, text);
+    if (r.l < 0 || r.r > layout.width || r.t < 0 || r.b > layout.height) return false;
+    const padded = { l: r.l - gap, r: r.r + gap, t: r.t - gap, b: r.b + gap };
+    return obstacles.every(o => overlapArea(padded, o) === 0);
+  })?.spot;
+}
+/** Last resort shared by forward and loop captions: allocate space rather than accept an intersection. */
+function reserveLabelSpot(layout: FlowLayout, text: string, nearX: number, taken: readonly Rect[]): LabelSpot {
+  const size = spotRect({ x: 0, y: 0, align: 'left' }, text), pad = px(4);
+  layout.width = Math.max(layout.width, size.r + 2 * pad);
+  const x = Math.max(pad, Math.min(nearX - size.r / 2, layout.width - pad - size.r));
+  const y = Math.max(layout.height, ...taken.map(r => r.b), ...flowObstacles(layout).map(r => r.b)) + pad;
+  layout.height = y + FLOW.chipH + pad;
+  return { x, y, align: 'left' };
+}
+/** D53/D56: solve labels before drawing any edge. If the original rows have no room, open the gaps and route again.
+ * Four small growth steps keep normal loops beside their lines without making an unbounded search. A crowded custom
+ * definition can still run out of nearby places: reserve a separate band below the drawing instead of accepting overlap.
+ * The input layout stays unchanged; the returned canvas includes every reserved band.
+ */
+export function flowLabelLayout(base: FlowLayout, edges: readonly WorkflowEdge[], labels: ReadonlyMap<number, { text: string; n: number }>): {
+  layout: FlowLayout; forward: Map<number, LabelSpot>; loops: Map<number, LabelSpot>;
+} {
+  for (let attempt = 0; ; attempt++) {
+    const extra = attempt * (FLOW.chipH + px(8));
+    const layout: FlowLayout = { ...base, height: base.height + base.rows * extra, at: new Map([...base.at].map(([id, node]) => {
+      const dy = node.stage.row * extra;
+      return [id, { ...node, cy: node.cy + dy, top: node.top + dy, bottom: node.bottom + dy, chipTop: node.chipTop + dy }];
+    })) };
+    const forward = new Map<number, LabelSpot>(), loops = new Map<number, LabelSpot>(), taken: Rect[] = [];
+    const jobs: { i: number; segs: Segment[]; text: string; n: number }[] = [];
+    let retry = false;
+    for (const [i, edge] of edges.entries()) {
+      const a = layout.at.get(edge.from)!, b = layout.at.get(edge.to)!;
+      const segs = route(a, b, !!edge.back, 0, rowBottom(layout, a.stage.row));
+      if (!edge.back && edge.label) {
+        let spot = forwardLabelSpot(layout, segs, edge.label, taken);
+        if (!spot) {
+          if (attempt < 4) { retry = true; break; }
+          spot = reserveLabelSpot(layout, edge.label, segs[0]!.x1, taken);
+        }
+        forward.set(i, spot); taken.push(spotRect(spot, edge.label));
+      }
+      const label = labels.get(i);
+      if (edge.back && label?.text) jobs.push({ i, segs, ...label });
+    }
+    if (retry) continue;
+    for (const job of [...jobs.filter(j => j.segs.length === 3), ...jobs.filter(j => j.segs.length !== 3)]) {
+      let spot = loopLabelSpot(layout, job.segs, job.n, job.text, taken);
+      if (!spot) {
+        if (attempt < 4) { retry = true; break; }
+        spot = reserveLabelSpot(layout, job.text, job.segs[0]!.x1, taken);
+      }
+      loops.set(job.i, spot); taken.push(spotRect(spot, job.text));
+    }
+    if (!retry) return { layout, forward, loops };
+  }
 }
 /** The lowest edge of the nodes in `row` — where a line going back along that row runs under. */
 export function rowBottom(layout: FlowLayout, row: number): number {

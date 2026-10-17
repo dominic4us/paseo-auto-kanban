@@ -76,7 +76,7 @@ Node.js **22 이상**이 필요합니다.
    또는 Git에서 릴리스 태그로:
 
    ```sh
-   paseo plugin install https://github.com/panto-dominic/paseo-auto-kanban --ref v0.2.2
+   paseo plugin install https://github.com/panto-dominic/paseo-auto-kanban --ref v0.2.3
    ```
 
    어느 쪽이든 같은 플러그인입니다. npm 패키지는 0.2.1부터 올라가며, Paseo는 패키지 스크립트를 실행하지 않고 설치합니다.
@@ -184,8 +184,8 @@ kanban --version
 - 데이터 폴더: `~/paseo-kanban-data`(옛 이름을 그대로 써서 기존 보드가 이어집니다).
 - 새로 설치하면 화면이 영어로 시작합니다. 한국어로 쓰려면 `config.json`에 `"locale": "ko"`를 넣으세요.
   이전 버전에서 쓰던 설정은 한국어가 유지됩니다.
-- 단계 이름은 곳에 따라 다릅니다. 영어 화면에서 둘째 단계는 넓은 화면이 *In progress*, 휴대폰 탭이 *Doing*이고, 첫 단계는
-  저장된 이름이 *Waiting*이라 `kanban ls`에 `todo (Waiting)`으로 나옵니다(화면은 *To Do*).
+- 첫 단계는 곳에 따라 이름이 다릅니다. 저장된 이름이 *Waiting*이라 `kanban ls`에 `todo (Waiting)`으로 나오고, 영어 화면에는
+  *To Do*로 보입니다. 둘째 단계는 휴대폰 탭까지 어디서나 *In progress*(한국어 화면은 *진행*)입니다.
 - 제거: `paseo plugin remove paseo-auto-kanban`. 지운 항목이 `disabled` 표시로 한 번 나오고, 그 뒤 `paseo plugin ls`에는
   보이지 않습니다. 데이터 폴더와 워크스페이스의 `PROCESS.md`는 남으니 필요 없으면 직접 지우세요. `kanban` 명령은
   `--prefix ~/.local`로 설치했다면 `npm rm -g --prefix ~/.local paseo-auto-kanban`, 그냥 `npm install -g`였다면

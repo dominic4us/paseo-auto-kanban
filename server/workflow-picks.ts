@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createKanbanError, normalizeCwd } from '../shared/core/domain.js';
 import { BUILTIN_ID, builtinWorkflow } from '../shared/workflow-templates.js';
+import { renameOver } from './core/durable.js';
 
 /**
  * REQ-125 C안 1단계: `workflow-picks.json`, the plugin's own file beside `auto-cards.json` and `ui-state.json` (never in a
@@ -77,7 +78,7 @@ async function writePicks(dataDir: string, state: PicksState): Promise<void> {
     const temporary = path.join(dataDir, `.${name}.tmp-${randomUUID()}`);
     try {
       await fs.writeFile(temporary, bytes, { flag: 'wx', mode: 0o600 });
-      await fs.rename(temporary, path.join(dataDir, name));
+      await renameOver(temporary, path.join(dataDir, name));
     } catch (error) { await fs.rm(temporary, { force: true }).catch(() => {}); throw error; }
   }
 }

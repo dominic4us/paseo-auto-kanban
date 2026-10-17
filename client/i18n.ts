@@ -102,8 +102,6 @@ const en = {
   sortCards: 'Sort cards', sortDefault: 'Default (priority, then oldest)', sortUpdated: 'Latest change first', sortCreated: 'Newest first',
   sortDefaultShort: 'Default', sortUpdatedShort: 'Changed', sortCreatedShort: 'Newest',
   waitingStage: 'To Do', doingStage: 'In progress', reviewStage: 'Review', doneStage: 'Done',
-  // REQ-136 H6: a phone's stage tab has room for about six letters beside its count — the tab's face only; its spoken name stays whole.
-  doingStageTab: 'Doing',
   previousColumns: 'Previous columns', nextColumns: 'Next columns',
 
   save: 'Save changes', saveDraft: 'Save draft', saving: 'Saving…', saved: 'Saved.',
@@ -211,7 +209,7 @@ const en = {
   goToAgentOf: (title: string) => 'Go to agent: ' + title, goToWorkspaceOf: (title: string) => 'Go to workspace: ' + title,
   // REQ-142: asked before "Go to agent" opens an agent of another workspace — closing its tab there may archive it.
   agentLeaveOpen: 'Open',
-  agentLeaveText: 'This agent is in another workspace. Closing the tab that opens may archive the agent (and its sub-agents).',
+  agentLeaveText: 'This agent may belong to another workspace. Closing the tab that opens can archive the agent and its sub-agents, so switch to another tab instead of closing it.',
   replyAt: (title: string) => 'Response needed — go to the agent that waits: ' + title, replyGo: 'Go answer',
   leadCard: 'Lead card', topicLeadCard: 'Topic lead card (under the lead)',
   // REQ-137 (research/273 B): the card ⋯ "Mark as lead" and the settings' read-only list of leads.
@@ -572,7 +570,7 @@ const ko: Copy = {
   groupByProject: '프로젝트로 묶어 보기',
   sortCards: '카드 정렬', sortDefault: '기본 (우선순위 → 만든 시각)', sortUpdated: '최근 변경순', sortCreated: '만든 순 (최신 위)',
   sortDefaultShort: '기본', sortUpdatedShort: '최근 변경', sortCreatedShort: '만든 순',
-  waitingStage: '대기', doingStage: '진행', reviewStage: '검토', doneStage: '완료', doingStageTab: '진행',
+  waitingStage: '대기', doingStage: '진행', reviewStage: '검토', doneStage: '완료',
   previousColumns: '이전 열', nextColumns: '다음 열',
 
   save: '변경 저장', saveDraft: '초안 저장', saving: '저장 중…', saved: '저장되었습니다.',
@@ -655,7 +653,7 @@ const ko: Copy = {
   goToAgent: '에이전트로 이동', goToWorkspace: '워크스페이스로 이동',
   goToAgentOf: (title: string) => '에이전트로 이동: ' + title, goToWorkspaceOf: (title: string) => '워크스페이스로 이동: ' + title,
   agentLeaveOpen: '열기',
-  agentLeaveText: '다른 워크스페이스의 에이전트입니다. 열린 탭을 닫으면 그 에이전트(와 하위)가 보관될 수 있습니다.',
+  agentLeaveText: '다른 워크스페이스의 에이전트일 수 있습니다. 열리는 탭을 닫으면 그 에이전트(와 하위)가 보관될 수 있으니, 닫지 말고 다른 탭으로 옮겨 가세요.',
   replyAt: (title: string) => '응답 필요 — 기다리는 에이전트로 이동: ' + title, replyGo: '응답하러 가기',
   leadCard: '총괄 카드', topicLeadCard: '주제 총괄 카드 (총괄 아래)',
   leadSetByYou: '직접 지정', markLead: '총괄로 표시', unmarkLead: '총괄 표시 해제',

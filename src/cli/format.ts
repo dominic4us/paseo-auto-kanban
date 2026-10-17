@@ -30,6 +30,7 @@ export function success(data: unknown, started: number, warnings: Result<unknown
        backupWrites: 0,
        exportWrites: 0,
        fsyncCalls: 0,
+       fsyncSkipped: 0,
        bytesWritten: 0,
        lockAcquisitions: 0 },
        durationMs: performance.now() - started } };

@@ -95,7 +95,7 @@ not fill a board.
 **From Git** at a release tag instead of npm (the same plugin):
 
 ```sh
-paseo plugin install https://github.com/panto-dominic/paseo-auto-kanban --ref v0.2.2
+paseo plugin install https://github.com/panto-dominic/paseo-auto-kanban --ref v0.2.3
 ```
 
 The npm package is published from 0.2.1 on. 0.8.x installs plugins only from a folder or Git, not from npm.
@@ -187,7 +187,7 @@ rm -f ~/.local/bin/kanban
 The package has no runtime dependencies and runs no install scripts. To build it from source instead:
 
 ```sh
-git clone https://github.com/panto-dominic/paseo-auto-kanban --branch v0.2.2
+git clone https://github.com/panto-dominic/paseo-auto-kanban --branch v0.2.3
 cd paseo-auto-kanban && npm ci --ignore-scripts && npm run build
 npm link            # or link dist/src/cli/main.js into a folder on your PATH yourself
 kanban --version
@@ -288,8 +288,8 @@ This stops and removes the plugin. Paseo prints the removed entry once, marked `
   is Linux-only.
 - **Language:** new installations start in English. Korean is selected with `"locale": "ko"` in
   `config.json`; there is no language switch in the settings window yet.
-- **Stage names differ by place.** The second stage is *In progress* on wide screens but *Doing* on the phone's
-  tabs, and the first is stored as *Waiting* — `kanban ls` prints `todo (Waiting)` — while English screens show *To Do*.
+- **The first stage's name differs by place.** It is stored as *Waiting* — `kanban ls` prints `todo (Waiting)` — while
+  English screens show *To Do*. The second stage is *In progress* everywhere, the phone's tabs included.
 - **Labs:** an experimental message-folder feature exists in the code but is hidden and off; it is not
   supported.
 - Paseo publishes no stability promise for its 0.x plugin API; a new Paseo release may need a plugin update.

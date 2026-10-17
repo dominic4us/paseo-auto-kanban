@@ -6,6 +6,7 @@ import { archiveClock, archiveDue, cleanArchiveDays, DEFAULT_ARCHIVE_DAYS, MAX_A
 import type { Store } from './core/store.js';
 import { stageEntries, stageEntry } from './read-model.js';
 import { pruneAfterWrite } from './busy.js';
+import { renameOver } from './core/durable.js';
 
 /**
  * REQ-52: the automatic archive of finished cards and the board screen's "Tidy", archived list and restore.
@@ -49,7 +50,7 @@ export async function writeArchiveSettings(dataDir: string, days: number, now = 
   const file = path.join(dataDir, ARCHIVE_SETTINGS_FILE), temporary = path.join(dataDir, `.${ARCHIVE_SETTINGS_FILE}.tmp-${randomUUID()}`);
   try {
     await fs.writeFile(temporary, JSON.stringify({ schemaVersion: 1, days, changedAt: now() }, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
-    await fs.rename(temporary, file);
+    await renameOver(temporary, file);
   } catch (error) { await fs.rm(temporary, { force: true }).catch(() => {}); throw error; }
   return { days, changed: true };
 }

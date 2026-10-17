@@ -74,7 +74,9 @@ test('REQ-134 the phone\'s wiring: the ⋯ entry with a definition, the glyph wi
   const src = await fs.readFile(new URL('../client/mobile-swimlane.tsx', import.meta.url), 'utf8');
   assert.match(src, /onWorkflow=\{!preview && offersWorkflow\(lane\.board\) \?/, 'only a lane whose workspace holds a definition');
   assert.match(src, /const mailboxOn = !preview && !!source\.settings\.labs\.mail && !!source\.settings\.labs\.mailDir;/, 'the wide rule');
-  assert.match(src, /\{mailboxOn && <IconButton testID="mailbox-button"/);
+  // D60: the top row's glyphs are a list; the mailbox is in it only when the lab is on with a folder (tests/web D60 sees it in the page).
+  assert.match(src, /\.\.\.\(mailboxOn \? \[<IconButton key="mailbox" testID="mailbox-button"[^\]]*\] : \[\]\)/, 'the mailbox glyph only with mailboxOn');
+  assert.equal(src.match(/testID="mailbox-button"/g)?.length, 1, 'one mailbox glyph, the one above');
   assert.match(src, /onOpen=\{mailboxOn \? \(\) => openMailbox\(mailAlias\(lane\.board\.summary\.cwd, source\.mailAlias\)/);
   assert.doesNotMatch(src, /lane-view-switch|LaneViewSwitch/, 'no glyph added to the 390 heading');
   const menu = await fs.readFile(new URL('../client/order-menu.tsx', import.meta.url), 'utf8');

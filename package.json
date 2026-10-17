@@ -1,6 +1,6 @@
 {
   "name": "paseo-auto-kanban",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "A Kanban board for Paseo that follows your coding agents: cards for each agent, stages per workspace, and a local ledger you can read and edit from the CLI.",
   "license": "Apache-2.0",
   "author": "panto-dominic",
@@ -18,7 +18,12 @@
     "kanban",
     "ai-agents",
     "coding-agents",
-    "workflow"
+    "agent-orchestration",
+    "multi-agent",
+    "claude-code",
+    "codex",
+    "developer-tools",
+    "typescript"
   ],
   "type": "module",
   "engines": {
@@ -53,6 +58,8 @@
     "build": "node scripts/sync-server-version.mjs && tsc && node scripts/cli-compat.mjs",
     "test": "npm run build && node --test --test-concurrency=4 tests/*.test.mjs",
     "test:hermes": "node scripts/check-hermes.mjs . --required",
+    "test:hermes-run": "node scripts/hermes-runtime.mjs . --required",
+    "hermes:fetch-vm": "node scripts/fetch-hermes-vm.mjs",
     "test:web": "node tests/web/run.mjs"
   },
   "devDependencies": {

@@ -3,6 +3,46 @@
 All notable changes, newest first. Versions before 0.2.0 were private test builds published under the plugin
 ID `paseo-kanban`; this summary groups them by theme.
 
+## 0.2.3
+
+- **Boards and cards are created again on a Windows Paseo server (update recommended on Windows).** There, saving failed
+  with "operation not permitted", so no board was made and new chats got no card. Windows refuses to flush a folder, or a
+  file opened read-only, to disk; the folder flush is now skipped on Windows only, and files are flushed through a writable
+  handle there. Replacing the plugin's own data files also retries briefly when another program, such as antivirus, holds
+  them, while files people may edit, like PROCESS.md, still stop on the first refusal so their edits are kept. Linux
+  saves exactly as before and still reports a failed flush as an error.
+- **Releases are tested on GitHub first.** Each release is pushed to a candidate branch, and every test suite — unit,
+  browser, and the phone engine's compile and run checks — runs on a clean GitHub runner before the release reaches `main`.
+- **npm releases through trusted publishing.** A version tag stages the package on npm from GitHub Actions without a
+  stored token and with a provenance statement; it becomes public only after a maintainer approves it on npmjs.com
+  with two-factor authentication. CONTRIBUTING describes the steps and the manual fallback.
+- **npm keywords** now match the repository's GitHub topics.
+- **File modes in the repository are fixed.** Since 0.2.0 every file in the public repository was marked executable,
+  README and images included. Only the four command-line scripts under `scripts/` that start with `#!` stay executable;
+  this release changes every other file back to a normal file once.
+- **One name for the second stage, and the phone opens where the cards are.** The phone's tabs said *Doing* where every
+  other screen says *In progress*; they now say *In progress* too, with each tab's count under its name so all four fit
+  whole at 360 and 390 px up to 150% size. The phone no longer opens on an empty *In progress* tab showing "No cards
+  yet" while the cards wait elsewhere: it opens on the first tab with cards (To Do, then Review, then Done) and stays
+  there; a tab you choose is kept as before. The CLI and the stage ids are unchanged.
+- **The phone's "Needs attention" chip is shown whole.** Beside the stage tabs, the chip was cut off or pushed partly off
+  screen in English at 140% and 150% size. When the tabs and the chip do not fit on one line, the chip now moves to the
+  right end of a second line and grows with its label and count. This also fixes a two-digit count cutting the label at
+  100% in English, and the panel's "more" button sitting slightly off screen at 360 px.
+- **The phone header no longer spills onto a third line at 140% and 150%.** On the Kanban and list screens the settings button no longer
+  wraps alone onto a third line: the buttons share one line with tighter spacing, and when even that is too wide (six
+  buttons with the mail folder on) the settings button moves up beside the title. Screens at 100% are unchanged.
+- **Workflow diagram labels stay clear of each other and of the boxes.** A label on a step that loops back (such as a
+  history of three, or a step-count chip) no longer overlaps the label beside it or the next step's box, and a label on a
+  forward arrow (for example *Approved*, *Pass*, *Won*) no longer runs into the step box next to it. A label takes the
+  nearest free spot, and when there is none the diagram makes room instead of settling for an overlap.
+- **Two wording fixes.** The warning before going to an agent (↗) no longer claims the agent is in another workspace when
+  the overall view cannot know that; it now says the agent may be, and that closing the tab that opens can archive the
+  agent and its sub-agents, so switch tabs instead. On a wide screen with no boards yet, the empty board now also says to
+  start a new chat in a Paseo workspace, as the phone and overview screens already did.
+- **README animations no longer flicker.** Blank frames, captured before the picture had finished drawing, are gone from
+  the four dark animations and the light lead-agent animation; size, length and timing are unchanged.
+
 ## 0.2.2
 
 - **Phone apps fixed.** Since 0.1.64, the Kanban screen in the Paseo phone apps had its header, buttons and stage tabs

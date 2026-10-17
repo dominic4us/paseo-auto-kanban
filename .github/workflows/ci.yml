@@ -1,0 +1,91 @@
+# Candidate tests: a release candidate is pushed to a branch rc/vX.Y.Z before main and the version tag.
+# This runs every test suite on a clean GitHub runner; main and the tag are pushed only after it is green.
+# It holds no secrets and needs no write permission.
+name: Candidate tests
+
+on:
+  push:
+    branches:
+      - 'rc/v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: candidate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Candidate tests # publish.sh reads this check name for the candidate commit
+    runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Seoul # the tests read times as the maintainer's local clock (KST); the runner is UTC
+    timeout-minutes: 240 # the browser tests alone take over an hour on a two-core runner
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22' # the lowest Node the package supports (engines)
+          package-manager-cache: false
+
+      # Install scripts are skipped: the lockfile's only install script is a macOS-only optional package
+      - run: npm ci --ignore-scripts
+      # npm test includes the Hermes checks, and with CI set a missing compiler or VM is a failure, so both come first
+      - name: Prepare the Paseo plugin compiler (Paseo 0.11.2; package checked by sha512)
+        env:
+          PASEO_SERVER_VERSION: '0.11.2'
+          PASEO_SERVER_INTEGRITY: 'sha512-HNeiGsLrkZOFGHoYXodZ4u3ewlvFHZjm/sqBUkxDjFx6QnxOyRyfQnRDk48mhtR+l+n6+2GPlTY2v0uaObHUDw=='
+          ESBUILD_VERSION: '0.25.12' # the esbuild that Paseo 0.11.2 resolves
+          TYPESCRIPT_VERSION: '5.9.3' # the TypeScript that Paseo 0.11.2 resolves; the compiler's import scan requires it
+        run: |
+          dir="$RUNNER_TEMP/paseo-compiler"
+          mkdir -p "$dir"
+          echo '{ "private": true }' > "$dir/package.json"
+          npm install --prefix "$dir" --no-save --no-package-lock --ignore-scripts --no-audit --no-fund "esbuild@$ESBUILD_VERSION" "typescript@$TYPESCRIPT_VERSION"
+          tgz="$(cd "$RUNNER_TEMP" && npm pack --silent "@getpaseo/server@$PASEO_SERVER_VERSION")"
+          node -e '
+            const got = "sha512-" + require("crypto").createHash("sha512").update(require("fs").readFileSync(process.argv[1])).digest("base64");
+            if (got !== process.env.PASEO_SERVER_INTEGRITY) { console.error("@getpaseo/server integrity mismatch: " + got); process.exit(1); }
+          ' "$RUNNER_TEMP/$tgz"
+          mkdir -p "$dir/node_modules/@getpaseo/server" # after npm install, which removes packages it did not install
+          tar -xzf "$RUNNER_TEMP/$tgz" -C "$dir/node_modules/@getpaseo/server" --strip-components=1
+          compiler="$dir/node_modules/@getpaseo/server/dist/server/server/plugins/compiler.js"
+          test -f "$compiler"
+          echo "PASEO_PLUGIN_COMPILER=$compiler" >> "$GITHUB_ENV"
+      - name: Fetch the Hermes VM (archive and binary pinned by sha256)
+        run: npm run hermes:fetch-vm
+      - name: Unit tests (npm test builds first)
+        run: npm test
+
+      - name: Install the browser test harness and Chromium
+        run: |
+          npm install --prefix tests/web --no-package-lock --ignore-scripts --no-audit --no-fund
+          node tests/web/node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Render with Noto CJK only, as the local browser tests do (text width checks depend on the font)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends fonts-noto-cjk
+          printf '<?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd"><fontconfig><dir>/usr/share/fonts/opentype/noto</dir><cachedir>%s/font-cache</cachedir></fontconfig>\n' \
+            "$RUNNER_TEMP" > "$RUNNER_TEMP/fonts.conf"
+          printf 'export FONTCONFIG_FILE=%s/fonts.conf\n' "$RUNNER_TEMP" > "$RUNNER_TEMP/chromium-env.sh"
+          echo "KANBAN_CHROMIUM_ENV=$RUNNER_TEMP/chromium-env.sh" >> "$GITHUB_ENV"
+      - name: Browser tests (the Kanban screen under react-native-web in headless Chromium)
+        run: npm run test:web -- "$RUNNER_TEMP/test-web"
+
+      - name: Hermes compile check (the phone apps' script engine)
+        run: npm run test:hermes
+      - name: Hermes run check (same results on Hermes and Node)
+        run: npm run test:hermes-run
+
+      - name: Keep the browser test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-web-${{ github.run_id }}
+          path: ${{ runner.temp }}/test-web
+          if-no-files-found: ignore
+          retention-days: 14

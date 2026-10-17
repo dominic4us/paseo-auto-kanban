@@ -404,6 +404,7 @@ export function SwimlaneScreen({ width, onList, onBoard, preview = false, onPrev
         </Animated.View>}
         {source.ready && !source.placing && !model.groups.length && !model.other.length && <Animated.View style={anchored}>
           <Notice text={state.count ? m.noMatches : source.errors.length ? m.partial : m.noBoards} colors={c} />
+          {!state.count && !source.errors.length && <Notice text={m.initialize} colors={c} />}
         </Animated.View>}
         </TipArea.Provider>
       </ScrollView>

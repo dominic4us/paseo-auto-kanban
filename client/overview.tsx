@@ -20,7 +20,7 @@ import { bottomClearance } from './layout.js';
 import { CreateDraft } from './create.js';
 import { Detail } from './detail.js';
 import { MobileSwimlaneScreen } from './mobile-swimlane.js';
-import { crowdedTitleRow, surfaceLayout } from './mobile-layout.js';
+import { crowdedTitleRow, glyphLine, surfaceLayout } from './mobile-layout.js';
 import { SwimlaneScreen } from './swimlane.js';
 import { useSessionValue } from './session.js';
 import { useHiddenProjects, type HiddenProjects } from './hidden-projects.js';
@@ -108,8 +108,7 @@ export function ListOverview({ onBoard, onKanban, onDemo, ...props }: PluginSurf
   const c = palette(props.theme), m = copy(locale ?? 'en');
   const mobile = props.layout.platform !== 'web' || props.layout.compact;
   const bottom = bottomClearance(props.layout.platform);
-  // REQ-139: on a phone, the projects, refresh, +, the view and ⚙.
-  const screenWidth = useWindowDimensions().width, crowded = mobile && crowdedTitleRow(screenWidth, onKanban ? 5 : 4, px(6));
+  const screenWidth = useWindowDimensions().width;
   // REQ-78 ①②: as on the board, only what the workspace listing can already place is listed — nothing at all before
   // any listing is known, so no workspace is "not found in Paseo" or shown from a hidden project in the meantime.
   // REQ-138: the empty boards of archived or gone workspaces are left out here as on the Kanban screen, from the same switch.
@@ -129,28 +128,38 @@ export function ListOverview({ onBoard, onKanban, onDemo, ...props }: PluginSurf
   const shown: HiddenProjects = [presentHidden(hidden[0], present), next => hidden[1](keepGoneHidden(next, hidden[0], present))];
   const projectCount = names.ready ? m.projectCount(projectOptions.size - shown[0].length, projectOptions.size) : m.projectsLoading;
   const refresh = () => { void state.refresh(); void names.refresh(); };
+  // REQ-68: no ⋯ — the projects, refresh, the view and ⚙ are all on this row (a phone gets glyphs).
+  // REQ-139: on a phone, the projects, refresh, +, the view and ⚙.
+  const glyphs = [
+    mobile ? <IconButton key="projects" testID="projects-button" name="ListFilter" label={projectCount}
+      onPress={() => setProjectsOpen(true)} colors={c} mobile />
+      : <Button key="projects" testID="projects-button" label={projectCount} onPress={() => setProjectsOpen(true)} colors={c} />,
+    <IconButton key="refresh" name="RefreshCw" label={m.refresh} onPress={refresh} colors={c} mobile={mobile} tooltip={!mobile} />,
+    <IconButton key="create" name="Plus" label={m.create} onPress={() => setCreate(true)} colors={c} mobile={mobile} disabled={!kept?.boards.length || !!state.error}
+      tooltip={!mobile} />,
+    // REQ-79: no card order here — the list shows what waits for a person and each board's progress, not columns of cards.
+    ...(onKanban ? [mobile ? <IconButton key="view" testID="view-toggle" name="SquareKanban" label={m.swimlaneView} onPress={onKanban} colors={c} mobile />
+      : <ViewSwitch key="view" value="list" onChange={onKanban} colors={c} m={m} />] : []),
+    <IconButton key="settings" testID="open-settings" name="Settings" label={m.settings} onPress={settingsWindow.open} colors={c} mobile={mobile}
+      tooltip={!mobile} buttonRef={settingsWindow.opener} />,
+  ];
+  const crowded = mobile && crowdedTitleRow(screenWidth, glyphs.length, px(6));
+  // D60: crowded, the glyphs keep one line under the title — closer together, or the last beside the title.
+  const line = crowded ? glyphLine(screenWidth, glyphs.length, px(6)) : { lifted: 0, gap: px(6) };
+  const lifted = line.lifted ? glyphs.splice(glyphs.length - line.lifted) : null;
+  // REQ-139: a size that leaves the title no room puts it on a line of its own, over the glyphs.
+  const title = <Text numberOfLines={1} style={{ flex: 1, fontSize: px(19), fontWeight: '600', color: c.foreground, ...(crowded && !lifted ? { flexBasis: '100%' as const } : {}) }}>
+    {shown[0].length ? projectCount : m.overview}
+  </Text>;
   if (!locale) return <LocalePending colors={c} />;
   return <View ref={settingsWindow.root} style={{ flex: 1, minHeight: 0, backgroundColor: c.surface0 }}>
     <View style={{ flex: 1, minHeight: 0, padding: mobile ? px(8) : px(16), paddingBottom: bottom, gap: px(8) }}>
       {/* REQ-80: above what follows, so the glyphs' tips, which hang below the row, are drawn over it. */}
-      <View testID="list-title-row" style={{ flexDirection: 'row', alignItems: 'center', gap: px(6), zIndex: 1,
+      <View testID="list-title-row" style={{ flexDirection: 'row', alignItems: 'center', ...(line.gap < px(6) ? { rowGap: px(6), columnGap: line.gap } : { gap: px(6) }), zIndex: 1,
         ...(crowded ? { flexWrap: 'wrap' as const, justifyContent: 'flex-end' as const } : {}) }}>
-        {/* REQ-139: a size that leaves the title no room puts it on a line of its own, over the glyphs. */}
-        <Text numberOfLines={1} style={{ flex: 1, fontSize: px(19), fontWeight: '600', color: c.foreground, ...(crowded ? { flexBasis: '100%' as const } : {}) }}>
-          {shown[0].length ? projectCount : m.overview}
-        </Text>
-        {/* REQ-68: no ⋯ — the projects, refresh, the view and ⚙ are all on this row (a phone gets glyphs). */}
-        {mobile ? <IconButton testID="projects-button" name="ListFilter" label={projectCount}
-          onPress={() => setProjectsOpen(true)} colors={c} mobile />
-          : <Button testID="projects-button" label={projectCount} onPress={() => setProjectsOpen(true)} colors={c} />}
-        <IconButton name="RefreshCw" label={m.refresh} onPress={refresh} colors={c} mobile={mobile} tooltip={!mobile} />
-        <IconButton name="Plus" label={m.create} onPress={() => setCreate(true)} colors={c} mobile={mobile} disabled={!kept?.boards.length || !!state.error}
-          tooltip={!mobile} />
-        {/* REQ-79: no card order here — the list shows what waits for a person and each board's progress, not columns of cards. */}
-        {onKanban && (mobile ? <IconButton testID="view-toggle" name="SquareKanban" label={m.swimlaneView} onPress={onKanban} colors={c} mobile />
-          : <ViewSwitch value="list" onChange={onKanban} colors={c} m={m} />)}
-        <IconButton testID="open-settings" name="Settings" label={m.settings} onPress={settingsWindow.open} colors={c} mobile={mobile}
-          tooltip={!mobile} buttonRef={settingsWindow.opener} />
+        {lifted ? <View testID="list-title-line" style={{ flex: 1, flexBasis: '100%', flexDirection: 'row', alignItems: 'center', gap: px(6) }}>
+          {title}{lifted}</View> : title}
+        {glyphs}
       </View>
       {state.loading && !state.data && <Notice text={m.loading} colors={c} />}
       {!!state.error && <><Notice text={`${state.data ? m.previous + ' · ' : ''}${state.error}`} colors={c} error />
