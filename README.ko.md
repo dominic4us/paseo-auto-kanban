@@ -1,5 +1,7 @@
 # paseo-auto-kanban (한국어 요약)
 
+[English](README.md) · **한국어**
+
 **Paseo 에이전트가 스스로 갱신하는 업무 보드입니다.**
 
 <picture>

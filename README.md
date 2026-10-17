@@ -1,5 +1,7 @@
 # paseo-auto-kanban
 
+**English** · [한국어](README.ko.md)
+
 **A Paseo kanban your agents update themselves.**
 
 <picture>
