@@ -1,6 +1,6 @@
 # paseo-auto-kanban
 
-**English** · [한국어](README.ko.md)
+**English** · [한국어](README.ko.md) · [日本語](README.ja.md) · [简体中文](README.zh-CN.md) · [Español](README.es.md)
 
 **A Paseo kanban your agents update themselves.**
 
@@ -9,14 +9,10 @@
   <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/lead.gif" width="802" alt="Animated demo: a lead agent's card, marked with a gold crown, splits the work between two sub-agents; each sub-agent gets its own card tagged with the lead's name, the lead card counts its sub-cards and how many are running, and when one sub-agent finishes its card moves to Review.">
 </picture>
 
-<sub>A lead agent hands work to sub-agents — recorded in Paseo with real agents and a demo project. <a href="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/lead-dark-still.png">Still image</a></sub>
-
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/hero-dark.gif">
   <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/hero.gif" width="802" alt="An agent starts in Paseo and a card appears on its own in To Do, moves to In progress while the agent works, asks for you when the agent requests a permission, and waits in Review when the agent stops.">
 </picture>
-
-<sub>Recorded in Paseo with a real agent and a demo project. <a href="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/hero-dark-still.png">Still image</a></sub>
 
 ```sh
 paseo plugin install npm:paseo-auto-kanban
@@ -28,7 +24,7 @@ Start an agent in Paseo and a card appears on that workspace's board. The card m
 asks for you when the agent needs a permission, and waits in Review when the agent stops — because an agent
 that stopped is not the same as work that is done. You decide when a card is done.
 
-Orchestrator agents can also manage cards themselves with the `kanban` command line tool: create cards with
+Lead agents can also manage cards themselves with the `kanban` command line tool: create cards with
 acceptance criteria, link the agents they delegate to, and record deliverables. Boards are stored in local
 files on the machine that runs Paseo. The plugin collects no telemetry and contacts no outside service of its
 own; board contents travel only the way Paseo already works — shown in the Paseo apps you connect, and sent to
@@ -46,15 +42,13 @@ a person has to act on.
   <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/overview.gif" width="800" alt="One board shows several projects with agents at work, highlights the card whose agent is waiting for a response, then shows the same board on a phone.">
 </picture>
 
-<sub>Demo data. <a href="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/overview-poster.png">View without motion</a></sub>
-
 - **Automatic cards.** Every top-level agent gets a card. Turn started → In progress, permission request →
   needs you, turn ended → Review, agent archived → still Review. If you move a card yourself, it stays where
   you put it.
 - **Busy, not idle.** An agent that stopped is not always finished with the work: tests or a build may still be
   running. Mark the card busy (`kanban card busy CARD "Testing"`) and its border turns dashed; after two
   hours it turns orange and asks for you. The card detail shows the mark and turns it off.
-- **A CLI for orchestrators.** `kanban card add`, `card link`, `card move`, atomic JSON batches, safe retries.
+- **A CLI for lead agents.** `kanban card add`, `card link`, `card move`, atomic JSON batches, safe retries.
   An optional generated `PROCESS.md` lets people and other agents read the board as plain text.
 - **All projects at a glance.** Swimlanes per project and workspace, filters and search, live agent state on
   each card, automatic refresh, a phone layout, English and Korean, light and dark.
@@ -63,8 +57,6 @@ a person has to act on.
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/busy-dark.gif">
   <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/busy.gif" width="800" alt="A card in Review gets a dashed border when it is marked busy, then turns orange after two hours and the board's &quot;Needs attention&quot; count goes up.">
 </picture>
-
-<sub>Demo data. <a href="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/busy-poster.png">View without motion</a></sub>
 
 <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/card-detail.png" width="800" alt="Card details (demo data, dark theme): title, stage, next action, priority and the linked agent with its state">
 
@@ -163,7 +155,7 @@ to show names, labels and colours.
 
 ## Command line
 
-The `kanban` CLI is optional. It lets orchestrator agents (and you) create and move cards from a terminal.
+The `kanban` CLI is optional. It lets lead agents (and you) create and move cards from a terminal.
 It needs Node.js 22+, no network, and no running Paseo.
 
 ```sh
@@ -205,7 +197,7 @@ kanban card move card_a1b2c3d4 --to review
 kanban ls
 ```
 
-Give your orchestrator [docs/agent-guide.md](docs/agent-guide.md). The full command reference, JSON output
+Give your lead agent [docs/agent-guide.md](docs/agent-guide.md). The full command reference, JSON output
 and retry rules are in [docs/reference.md](docs/reference.md#command-line-reference).
 
 ## Compatibility
@@ -299,9 +291,12 @@ This stops and removes the plugin. Paseo prints the removed entry once, marked `
 ## Documentation
 
 - [docs/reference.md](docs/reference.md) — screens, automatic cards, settings, data files, CLI reference
-- [docs/agent-guide.md](docs/agent-guide.md) — instructions to give an orchestrator agent
+- [docs/agent-guide.md](docs/agent-guide.md) — instructions to give a lead agent
 - [CHANGELOG.md](CHANGELOG.md) · [CONTRIBUTING.md](CONTRIBUTING.md) · [SECURITY.md](SECURITY.md)
 - [README.ko.md](README.ko.md) — 한국어 요약
+- [README.ja.md](README.ja.md) — 日本語の概要
+- [README.zh-CN.md](README.zh-CN.md) — 简体中文概要
+- [README.es.md](README.es.md) — resumen en español
 
 ## License
 

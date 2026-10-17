@@ -1,34 +1,30 @@
 # paseo-auto-kanban (한국어 요약)
 
-[English](README.md) · **한국어**
+[English](README.md) · **한국어** · [日本語](README.ja.md) · [简体中文](README.zh-CN.md) · [Español](README.es.md)
 
 **Paseo 에이전트가 스스로 갱신하는 업무 보드입니다.**
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/lead-dark.gif">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/lead.gif" width="802" alt="총괄(lead) 에이전트 카드에 금색 왕관이 붙고, 총괄이 하위 에이전트 둘에게 일을 나누면 하위마다 총괄 이름이 달린 카드가 생깁니다. 총괄 카드는 하위 카드 수와 실행 중인 수를 세고, 하위 하나가 끝나면 그 카드가 Review로 옮겨 갑니다.">
+  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/lead.gif" width="802" alt="총괄 에이전트(Lead) 카드에 금색 왕관이 붙고, 총괄이 하위 에이전트 둘에게 일을 나누면 하위마다 총괄 이름이 달린 카드가 생깁니다. 총괄 카드는 하위 카드 수와 실행 중인 수를 세고, 하위 하나가 끝나면 그 카드가 Review로 옮겨 갑니다.">
 </picture>
-
-<sub>총괄 에이전트가 하위 에이전트에게 일을 나눠 주는 모습 — 실제 에이전트와 예시 프로젝트로 Paseo에서 녹화했습니다(화면은 영어). <a href="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/lead-dark-still.png">정지 이미지</a></sub>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/hero-dark.gif">
   <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/hero.gif" width="802" alt="Paseo에서 에이전트를 시작하면 To Do에 카드가 저절로 생기고, 에이전트가 일하는 동안 In progress로 옮겨 가고, 권한을 요청하면 사람을 부르고, 에이전트가 멈추면 Review에서 기다립니다.">
 </picture>
 
-<sub>실제 에이전트와 예시 프로젝트로 Paseo에서 녹화했습니다(화면은 영어). <a href="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/hero-dark-still.png">정지 이미지</a></sub>
-
 ```sh
 paseo plugin install npm:paseo-auto-kanban
 ```
 
-Paseo 0.9.0 이상이 필요하고, 설치한 뒤 **설정 → Plugins → Enable plugins**를 켭니다. 자세한 순서는 아래 [설치](#설치)에 있습니다.
+Paseo 0.9.0 이상이 필요하고, 설치한 뒤 **설정(Settings) → Plugins → Enable plugins**를 켭니다. 자세한 순서는 아래 [설치](#설치)에 있습니다.
 
 자세한 내용은 [영어 README](README.md)와 [docs/reference.md](docs/reference.md)를 보세요. 이 문서는 짧은 요약입니다.
 
 Paseo에서 에이전트를 만들면 그 워크스페이스 보드에 카드가 생깁니다. 에이전트가 일하는 동안 카드가 움직이고,
 권한을 요청하면 "응답 필요"로 표시되고, 멈추면 검토 칸에서 기다립니다. 에이전트가 멈춘 것과 일이 끝난 것은
-다르기 때문에, 완료는 사람이 정합니다. 총괄(오케스트레이터) 에이전트는 `kanban` 명령으로 카드를 만들고 담당
+다르기 때문에, 완료는 사람이 정합니다. 총괄 에이전트는 `kanban` 명령으로 카드를 만들고 담당
 에이전트를 연결할 수 있습니다. 보드는 Paseo 서버 기기의 로컬 파일에 저장됩니다. 플러그인 스스로는 사용 기록을
 수집하지 않고 외부 서비스에 접속하지 않습니다. 다만 Paseo가 원래 하는 방식대로, 연결한 Paseo 앱(휴대폰 등)에는 보드가
 표시되고, 카드를 에이전트에게 보내기로 확인하면 그 내용이 에이전트(그리고 그 에이전트의 모델 제공사)에게 전달됩니다.
@@ -44,8 +40,6 @@ Paseo에서 에이전트를 만들면 그 워크스페이스 보드에 카드가
   <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/overview.gif" width="800" alt="보드 하나에 여러 프로젝트와 일하는 에이전트가 보이고, 응답을 기다리는 에이전트의 카드를 강조한 뒤, 같은 보드를 휴대폰 화면으로 보여 줍니다.">
 </picture>
 
-<sub>예시 데이터. <a href="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/overview-poster.png">움직임 없이 보기</a></sub>
-
 에이전트가 멈췄어도 시험이나 빌드가 아직 돌고 있을 수 있습니다. 그 카드에 진행 표시를 켜면
 (`kanban card busy 카드 "Testing"`) 테두리가 점선이 되고, 2시간이 지나면 주황으로 바뀌어 사람을 부릅니다.
 카드 상세에서 표시를 보고 끌 수 있습니다.
@@ -54,8 +48,6 @@ Paseo에서 에이전트를 만들면 그 워크스페이스 보드에 카드가
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/busy-dark.gif">
   <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/busy.gif" width="800" alt="검토 칸의 카드에 진행 표시를 켜면 테두리가 점선이 되고, 2시간이 지나면 주황으로 바뀌며 보드의 &quot;Needs attention&quot; 수가 올라갑니다.">
 </picture>
-
-<sub>예시 데이터. <a href="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/busy-poster.png">움직임 없이 보기</a></sub>
 
 ## 설치
 
@@ -99,6 +91,9 @@ Node.js **22 이상**이 필요합니다.
 그러면 Paseo 사이드바에 **Kanban** 항목이 생깁니다. 처음에는 보드가 없어 비어 있습니다(넓은 화면은
 "No boards registered yet"). **Paseo 워크스페이스에서 새 채팅을 시작하면** 그 워크스페이스의 보드가 생기고 채팅 카드가
 올라옵니다(`kanban init`으로 직접 만들 수도 있습니다). 플러그인을 설치하기 전부터 열려 있던 채팅은 보드를 채우지 않습니다.
+
+> **플러그인은 샌드박스(격리 환경) 안에서 실행되지 않습니다.** 이 플러그인은 Paseo 서버의 파일 접근 권한으로 실행되며 Paseo의 에이전트 API를 사용할 수 있습니다.
+> 설치 전에 [자동으로 일어나는 일과 끄는 법](#자동으로-일어나는-일과-끄는-법)을 읽어 보세요.
 
 **업데이트**: 플러그인과 `kanban` 명령은 따로 설치되므로 둘 다 올립니다.
 
@@ -182,6 +177,8 @@ kanban --version
 초안 카드를 에이전트에게 보내는 일은 확인 창에서 **보내기**를 눌렀을 때만 일어납니다.
 
 ## 데이터와 제거
+
+데이터 폴더와 `PROCESS.md`는 비공개로 다루세요. 카드 제목과 메모가 들어 있습니다.
 
 - 데이터 폴더: `~/paseo-kanban-data`(옛 이름을 그대로 써서 기존 보드가 이어집니다).
 - 새로 설치하면 화면이 영어로 시작합니다. 한국어로 쓰려면 `config.json`에 `"locale": "ko"`를 넣으세요.

@@ -37,7 +37,7 @@ test('REQ-143 npm would pack only the allowed files (no tests, work notes or dot
   // --ignore-scripts: the list alone, nothing built or cleaned here (dist may be a link to a build cache in a work checkout).
   const { stdout } = await run('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: root, maxBuffer: 16 * 1024 * 1024 });
   const files = JSON.parse(stdout)[0].files.map(f => f.path);
-  const allowed = /^(index\.server\.ts|index\.client\.tsx|paseo-plugin\.json|package\.json|README\.md|README\.ko\.md|LICENSE|NOTICE|CHANGELOG\.md|(client|server|shared|assets|licenses|dist\/(src|server|shared|cli))\/.+)$/;
+  const allowed = /^(index\.server\.ts|index\.client\.tsx|paseo-plugin\.json|package\.json|README\.md|README\.ko\.md|README\.ja\.md|README\.zh-CN\.md|README\.es\.md|LICENSE|NOTICE|CHANGELOG\.md|(client|server|shared|assets|licenses|dist\/(src|server|shared|cli))\/.+)$/;
   assert.deepEqual(files.filter(f => !allowed.test(f)), []);
   for (const must of ['index.server.ts', 'index.client.tsx', 'paseo-plugin.json', 'server/version.ts', 'NOTICE', 'licenses/lucide-LICENSE.txt']) assert.ok(files.includes(must), must);
 });
