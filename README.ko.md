@@ -5,13 +5,13 @@
 **Paseo 에이전트가 스스로 갱신하는 업무 보드입니다.**
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/lead-dark.gif">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/lead.gif" width="802" alt="총괄 에이전트(Lead) 카드에 금색 왕관이 붙고, 총괄이 하위 에이전트 둘에게 일을 나누면 하위마다 총괄 이름이 달린 카드가 생깁니다. 총괄 카드는 하위 카드 수와 실행 중인 수를 세고, 하위 하나가 끝나면 그 카드가 Review로 옮겨 갑니다.">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/lead-dark.gif">
+  <img src="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/lead.gif" width="802" alt="총괄 에이전트(Lead) 카드에 금색 왕관이 붙고, 총괄이 하위 에이전트 둘에게 일을 나누면 하위마다 총괄 이름이 달린 카드가 생깁니다. 총괄 카드는 하위 카드 수와 실행 중인 수를 세고, 하위 하나가 끝나면 그 카드가 Review로 옮겨 갑니다.">
 </picture>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/hero-dark.gif">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/hero.gif" width="802" alt="Paseo에서 에이전트를 시작하면 To Do에 카드가 저절로 생기고, 에이전트가 일하는 동안 In progress로 옮겨 가고, 권한을 요청하면 사람을 부르고, 에이전트가 멈추면 Review에서 기다립니다.">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/hero-dark.gif">
+  <img src="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/hero.gif" width="802" alt="Paseo에서 에이전트를 시작하면 To Do에 카드가 저절로 생기고, 에이전트가 일하는 동안 In progress로 옮겨 가고, 권한을 요청하면 사람을 부르고, 에이전트가 멈추면 Review에서 기다립니다.">
 </picture>
 
 ```sh
@@ -36,8 +36,8 @@ Paseo에서 에이전트를 만들면 그 워크스페이스 보드에 카드가
 사람이 손대야 하는 것만 "확인 필요"로 셉니다.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/overview-dark.gif">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/overview.gif" width="800" alt="보드 하나에 여러 프로젝트와 일하는 에이전트가 보이고, 응답을 기다리는 에이전트의 카드를 강조한 뒤, 같은 보드를 휴대폰 화면으로 보여 줍니다.">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/overview-dark.gif">
+  <img src="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/overview.gif" width="800" alt="보드 하나에 여러 프로젝트와 일하는 에이전트가 보이고, 응답을 기다리는 에이전트의 카드를 강조한 뒤, 같은 보드를 휴대폰 화면으로 보여 줍니다.">
 </picture>
 
 에이전트가 멈췄어도 시험이나 빌드가 아직 돌고 있을 수 있습니다. 그 카드에 진행 표시를 켜면
@@ -45,8 +45,8 @@ Paseo에서 에이전트를 만들면 그 워크스페이스 보드에 카드가
 카드 상세에서 표시를 보고 끌 수 있습니다.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/busy-dark.gif">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/busy.gif" width="800" alt="검토 칸의 카드에 진행 표시를 켜면 테두리가 점선이 되고, 2시간이 지나면 주황으로 바뀌며 보드의 &quot;Needs attention&quot; 수가 올라갑니다.">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/busy-dark.gif">
+  <img src="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/busy.gif" width="800" alt="검토 칸의 카드에 진행 표시를 켜면 테두리가 점선이 되고, 2시간이 지나면 주황으로 바뀌며 보드의 &quot;Needs attention&quot; 수가 올라갑니다.">
 </picture>
 
 ## 설치
@@ -70,7 +70,7 @@ Node.js **22 이상**이 필요합니다.
    또는 Git에서 릴리스 태그로:
 
    ```sh
-   paseo plugin install https://github.com/panto-dominic/paseo-auto-kanban --ref v0.2.3
+   paseo plugin install https://github.com/dominic4us/paseo-auto-kanban --ref v0.2.4
    ```
 
    어느 쪽이든 같은 플러그인입니다. npm 패키지는 0.2.1부터 올라가며, Paseo는 패키지 스크립트를 실행하지 않고 설치합니다.
@@ -176,11 +176,24 @@ kanban --version
 
 초안 카드를 에이전트에게 보내는 일은 확인 창에서 **보내기**를 눌렀을 때만 일어납니다.
 
+**점검**도 카드를 저절로 옮기지 않습니다. 새로고침 옆 버튼(휴대폰은 톱니 설정 시트의 첫 줄)을 누르면 끝났거나 잊힌 듯한
+카드를 모아 보여 줍니다: 담당 에이전트가 모두 보관된 진행·검토 카드, 7일 넘게 멈춘 카드, 대기 칸에 14일 넘게 머문 요청,
+14일 넘은 초안. 처음엔 아무것도 체크돼 있지 않고, 사람이 고른 카드만 **완료로 옮기기**(되돌리기 가능)나 **보관**(보관 카드
+보기에서 복원)을 하거나 이번엔 건너뜁니다. 완료 칸 정리는 지금처럼 완료 칸의 **정리**가 맡습니다.
+
 ## 데이터와 제거
 
 데이터 폴더와 `PROCESS.md`는 비공개로 다루세요. 카드 제목과 메모가 들어 있습니다.
 
 - 데이터 폴더: `~/paseo-kanban-data`(옛 이름을 그대로 써서 기존 보드가 이어집니다).
+- 데이터 폴더 하나는 기계 하나에서만 쓰세요. 여러 기계나 컨테이너가 나눠 쓰면 안 됩니다. Paseo가 쓰는 도중 멈추면
+  남은 잠금은 60초가 넘은 뒤 이 기계에서 주인이 없어졌음을 확인할 수 있으면 다음 쓰기에서 풀릴 수 있습니다
+  (Linux·Windows·macOS). 확인할 수 없으면 잠금이 남습니다. 기계를 다시 켰거나, 옛 프로세스 번호를 다른 프로세스가
+  이어받았거나, 다른 기계나 이전 버전이 남긴 잠금이면 그럴 수 있습니다. 그때는 `kanban doctor`로 확인하고 Paseo를 멈춘 뒤
+  `kanban unlock --force`를 쓰세요([docs/reference.md](docs/reference.md#locks-and-recovery)). Windows·macOS에서는
+  `%LOCALAPPDATA%\paseo-auto-kanban` 또는 `~/Library/Application Support/paseo-auto-kanban`에 있는 ID로 이 기계를
+  알아봅니다. 이 폴더를 다른 기계로 복사하거나 동기화하지 마세요. 그러면 자동 복구가 아직 쓰는 중인 다른 기계의 잠금을
+  풀 수 있습니다.
 - 새로 설치하면 화면이 영어로 시작합니다. 한국어로 쓰려면 `config.json`에 `"locale": "ko"`를 넣으세요.
   이전 버전에서 쓰던 설정은 한국어가 유지됩니다.
 - 첫 단계는 곳에 따라 이름이 다릅니다. 저장된 이름이 *Waiting*이라 `kanban ls`에 `todo (Waiting)`으로 나오고, 영어 화면에는

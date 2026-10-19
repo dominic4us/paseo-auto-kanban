@@ -131,13 +131,20 @@ export function createAutoArchiver(store: Store, clock: () => number = Date.now,
         cards: all.slice(0, ARCHIVED_LIST_LIMIT).map(c => ({ id: c.id, title: c.title, stageId: c.stageId, archivedAt: c.archivedAt!,
           ...(c.archiveReason === 'auto' ? { auto: true as const } : {}), done: archivedDone(c, stages) })) };
     },
-    /** A person brings an archived card back; no revision is held — restoring is the same whatever changed meanwhile. */
-    async restore(boardId: string, cardId: string): Promise<{ changed: boolean }> {
+    /**
+     * A person brings an archived card back; no revision is held — restoring is the same whatever changed meanwhile.
+     * REQ-149 (gates 431·433 F3): with `ifRevision`, the card is restored only while the board is still at that revision — the
+     * one the check up's own archive (or its previous restore) produced, so nobody has written to the board since — through
+     * the ledger's own compare-and-swap; any other revision writes nothing and says `kept`. No time is compared: the ledger's
+     * clock may stand still, a revision never repeats.
+     */
+    async restore(boardId: string, cardId: string, ifRevision?: string): Promise<{ changed: boolean; kept?: true; revision?: string }> {
       try {
         const result = await store.mutateBoard(boardId, { actor: { kind: 'user' }, requestId: randomUUID(),
-          operations: [{ op: 'restore', id: cardId }] }, 'board');
-        return { changed: result.data.changed };
+          ...(ifRevision === undefined ? {} : { ifRevision }), operations: [{ op: 'restore', id: cardId }] }, 'board');
+        return ifRevision === undefined ? { changed: result.data.changed } : { changed: result.data.changed, revision: result.data.revision };
       } catch (error) {
+        if (ifRevision !== undefined && isKanbanError(error) && error.code === 'E_REVISION_CONFLICT') return { changed: false, kept: true };
         if (isKanbanError(error) && error.code === 'E_NOT_FOUND') throw createKanbanError('E_NOT_FOUND', 'Card not found.', cardId, 'Read the archived list again.');
         throw error;
       }

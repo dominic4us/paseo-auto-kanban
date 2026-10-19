@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import * as path from 'node:path';
-import { fail, folderKey, normalizeOperations, type Board, type Card, type Locale, type Operation, type Stage } from '../shared/core/domain.js';
+import { fail, folderKey, isKanbanError, normalizeOperations, type Board, type Card, type Locale, type Operation, type Stage } from '../shared/core/domain.js';
 import { AUTO_STATE_BACKUP, AUTO_STATE_FILE, AUTO_BOARD_LIMIT, WORKSPACE_LIMIT, autoMadeBoard, isText, readAutoState, workspaceSetting, writeAutoState,
   type AppliedState, type AutoMove, type AutoState, type Bucket, type HostSetting, type MoveCause, type ParentMemory, type Signal } from './core/auto-state.js';
 import { normalizeCwd } from '../shared/rpc.js';
@@ -334,7 +334,7 @@ export function cardTracking(board: Pick<Board, 'id' | 'history'>, card: Pick<Ca
 // ---- The engine ----
 
 export type Outcome = 'child' | 'disabled' | 'no-board' | 'no-card' | 'archived-card' | 'unlinked' | 'created' | 'updated' | 'unchanged' | 'paused'
-  /** REQ-83: the hook's agent could not be read; nothing was written. */
+  /** REQ-83 / D65: unreadable input or a board changed since the read; nothing was written. */
   | 'held';
 /** REQ-83: after the three tries of a restart's repair failed, it may be tried again this long after the last failure. */
 export const RECONCILE_RETRY_MS = 5 * 60_000;
@@ -690,9 +690,15 @@ export function createAutoCards(options: AutoCardsOptions) {
     if (known?.title && card.title === known.title && title && title !== card.title) { patch.title = title; next.title = title; }
     if (Object.keys(patch).length) operations.push({ op: 'update', id: card.id, patch });
     if (operations.length) {
-      const result = await store.mutateBoard(board.id, { actor: { kind: 'agent', agentId: agent.id },
-        requestId: newId(), operations: normalizeOperations(operations) });
-      if (operations.some(o => o.op === 'move')) next.moved = { cause: change.cause ?? 'reconcile', revision: result.data.revision, at: now() };
+      try {
+        const result = await store.mutateBoard(board.id, { actor: { kind: 'agent', agentId: agent.id },
+          requestId: newId(), ifRevision: board.revision, operations: normalizeOperations(operations) });
+        if (operations.some(o => o.op === 'move')) next.moved = { cause: change.cause ?? 'reconcile', revision: result.data.revision, at: now() };
+      } catch (error) {
+        // D65: leave the newer board and applied state alone. The next signal reads and judges again.
+        if (isKanbanError(error) && error.code === 'E_REVISION_CONFLICT' && error.committed === false) return 'held';
+        throw error;
+      }
     }
     await remember(agent.id, next);
     return operations.length ? 'updated' : held && to !== card.stageId ? 'paused' : 'unchanged';

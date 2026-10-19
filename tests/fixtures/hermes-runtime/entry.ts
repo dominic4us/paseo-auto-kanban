@@ -27,6 +27,7 @@ import * as stageTime from './client/stage-time.js';
 import * as busyView from './client/busy-view.js';
 import * as refreshModel from './client/refresh-model.js';
 import * as moveModel from './client/move-model.js';
+import * as checkupModel from './client/checkup-model.js';
 import * as i18n from './client/i18n.js';
 import * as leaderIcons from './client/leader-icons.js';
 import * as providerIcons from './client/provider-icons.js';
@@ -50,7 +51,7 @@ const MODULES: Record<string, Record<string, unknown>> = {
   'client/palette': palette, 'client/panel-style': panelStyle, 'client/lead-status': leadStatusModel,
   'client/signal-model': signalModel, 'client/card-meta': cardMeta, 'client/card-order': cardOrder,
   'client/order-model': orderModel, 'client/filter-model': filterModel, 'client/stage-time': stageTime,
-  'client/busy-view': busyView, 'client/refresh-model': refreshModel, 'client/move-model': moveModel, 'client/i18n': i18n,
+  'client/busy-view': busyView, 'client/refresh-model': refreshModel, 'client/move-model': moveModel, 'client/checkup-model': checkupModel, 'client/i18n': i18n,
   'client/leader-icons': leaderIcons, 'client/provider-icons': providerIcons, 'client/stage-color': stageColor,
   'client/mail-tip': mailTip, 'client/card-groups': cardGroups, 'client/presentation': presentation,
   'shared/core/domain': domain, 'shared/dispatch': dispatch, 'shared/criteria': criteria, 'shared/archive': archive,
@@ -77,16 +78,17 @@ const readBucket = (id: string): signalModel.SignalBucket => buckets[id] ?? 'unk
 /** The computations the screens make from sizes, per scale. */
 function sized(): Record<string, () => unknown> {
   const flows: Record<string, () => unknown> = {};
-  templates.forEach(template => {
-    const definition = workflowTemplates.builtinDefinition(template, 'ko');
-    [900, 360].forEach(width => {
-      flows['flowLayout ' + template.id + ' ' + width] = () => {
+  // D57 (research/418): English too, and at 760 — the narrowest column, where long names take three lines and diamonds grow.
+  templates.forEach(template => (['ko', 'en'] as const).forEach(locale => {
+    const definition = workflowTemplates.builtinDefinition(template, locale);
+    [900, 760, 360].forEach(width => {
+      flows['flowLayout ' + template.id + (locale === 'ko' ? '' : ' en') + ' ' + width] = () => {
         const flow = workflowModel.flowLayout(definition.stages, width, {}, {});
         return { flow, obstacles: workflowModel.flowObstacles(flow), routes: definition.edges.map(edge =>
           workflowModel.route(flow.at.get(edge.from)!, flow.at.get(edge.to)!, !!edge.back)) };
       };
     });
-  });
+  }));
   return {
     ...flows,
     boardLayout: () => [360, 759, 760, 1400].map(width => [layout.boardLayout(width, true), layout.boardLayout(width, false)]),
@@ -118,6 +120,9 @@ function sized(): Record<string, () => unknown> {
     gridWidth: () => [swimlaneModel.gridWidth(), swimlaneModel.gridWidth(1), swimlaneModel.swimlaneWidth(3)],
     tableWidths: () => workflowModel.tableWidths([['단계', '요청'], ['아주 긴 단계 이름 하나', '두 번째'], ['x']], 600),
     chipLines: () => [workflowModel.chipLines('3건 진행 · 1건 대기', 104), workflowModel.chipLines('짧음', 220)],
+    stageLabels: () => ['Not selected · withdrawn', 'Do (handed off)', 'My review?', 'Review · edit?', '브리프·원자료 파악', '검증·통합?', 'Pass?', '']
+      .map(label => [workflowModel.labelWidth(label, 12.5), workflowModel.labelLineCount(label, 72, 70, 12.5), workflowModel.diamondSize(label, 82),
+        workflowModel.diamondSize(label, 60)]),
     wrapWords: () => [workflowModel.wrapWords('요청 받기 다음 검토 후 반영 그리고 기록', 80, 12), workflowModel.wrapNote('규칙 충돌 1 · 버전 0.2.3', 60, 11)],
   };
 }
@@ -150,6 +155,24 @@ function unsized(): Record<string, () => unknown> {
         valid: workflow.workflowDefinitionSchema ? workflow.workflowDefinitionSchema.safeParse(definition).success : '[none]' };
     }),
     dwell: () => stages.map(stage => stageTime.dwellKind(stage.stageId, stages)),
+    // REQ-149: the check up's four rules over one board — R1 (every agent archived), R2 at and past 7 days, R3 past 14, R4 a draft,
+    // what is held elsewhere, the plan of a choice, the skip list and the reason lines in both languages.
+    checkup: () => {
+      const day = checkupModel.DAY_MS, ago = (days: number, ms = 0) => new Date(NOW - days * day - ms).toISOString();
+      const cards = [statusCard('r1', { stageId: 'doing', agentIds: ['w2'], updatedAt: ago(1) }), statusCard('r2', { stageId: 'review', updatedAt: ago(7, 1), stageEnteredAt: ago(9) }),
+        statusCard('edge', { stageId: 'doing', updatedAt: ago(7), stageEnteredAt: ago(7) }), statusCard('r3', { stageId: 'todo', updatedAt: ago(20), stageEnteredAt: ago(20) }),
+        statusCard('r4', { stageId: 'todo', intent: 'draft', updatedAt: ago(15), createdAt: ago(15) }), statusCard('held', { stageId: 'doing', agentIds: ['w2'], blocked: true }),
+        statusCard('quiet', { stageId: 'doing', agentIds: ['lead'], updatedAt: ago(10), stageEnteredAt: ago(10) })];
+      const board = { summary: { id: 'board-1', revision: 'rev:1' }, stages: stages.map(stage => ({ ...stage, cards: cards.filter(card => card.stageId === stage.stageId) })) };
+      const signals = { archived: (id: string) => id === 'w2', activity: (id: string) => id === 'lead' ? ago(8) : undefined, ready: true };
+      const list = checkupModel.checkupCandidates([board], signals, NOW);
+      const selected = new Set(list.map(c => c.key));
+      const skips = checkupModel.addSkip({}, list[0]!, NOW);
+      return { list, groups: checkupModel.checkupGroups(list).map(g => [g.rule, g.cards.length]), counts: checkupModel.selectionCounts(list, selected),
+        done: checkupModel.checkupPlan(list, selected, 'done'), archive: checkupModel.checkupPlan(list, selected, 'archive').boards.map(b => checkupModel.operationsOf(b.cards)),
+        skipped: checkupModel.withoutSkipped(list, skips, NOW).length, read: checkupModel.readSkips({ ok: skips[list[0]!.key], bad: 1 }),
+        lines: (['ko', 'en'] as const).map(locale => list.map(c => checkupModel.checkupLine(c, 'paseo-kanban', id => 'Agent ' + id, i18n.copy(locale)))) };
+    },
   };
 }
 function run(group: Record<string, () => unknown>): Json {

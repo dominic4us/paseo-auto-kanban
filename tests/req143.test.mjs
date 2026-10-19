@@ -9,10 +9,11 @@ import fs from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { join } from 'node:path';
-import { setUiScale } from '../dist/client/ui-scale.js';
+import { px, setUiScale } from '../dist/client/ui-scale.js';
+import { textWidth } from '../dist/client/layout.js';
 import { copy } from '../dist/client/i18n.js';
 import { BUILTIN_WORKFLOWS, builtinDefinition } from '../dist/shared/workflow-templates.js';
-import { flowLayout, flowLabelLayout, flowObstacles, flowOverlay, loopLabel, stageCounts, spotRect } from '../dist/client/workflow-model.js';
+import { FLOW, flowLayout, flowLabelLayout, flowObstacles, flowOverlay, loopLabel, stageCounts, spotRect } from '../dist/client/workflow-model.js';
 import { d53History, d53Reading } from './fixtures/d53.mjs';
 import { testTmpdir } from './helpers.mjs';
 
@@ -207,4 +208,48 @@ test('D56 crowded forward captions allocate space and keep node text geometry un
   }
   const placement = placeAll(def, 760);
   assert.deepEqual(clashes({ ...placement, forward: [], placed: [...placement.forward, ...placement.placed] }), []);
+});
+
+// D57 (research/418): a step's name is never cut on the flow. The gate's Chromium laid these over three lines where the
+// flow gave two (391 J2, and a chosen step's bold name in a 2px border), in the narrowest column (`FLOW.minCol`).
+const D57_CUT = {
+  box: { 'Not selected · withdrawn': [80, 100, 150], 'Research · benchmarks': [80, 100, 150], 'Final report · settle': [80, 100, 150],
+    'Client review · talks': [80, 100, 150], 'Report · carry forward': [80, 100, 150], 'Do (handed off)': [100], 'Final polish · guide': [100] },
+  diamond: { 'My review?': [80, 100, 150], 'Fit · needs?': [80, 100, 150], 'Review · edit?': [80, 100, 150], 'My round?': [80, 150], 'Final check?': [80] },
+};
+for (const scale of [80, 100, 150]) test(`D57 the long English step names get the room they take (${scale}%)`, () => {
+  setUiScale(scale);
+  try {
+    const seen = new Set();
+    for (const t of BUILTIN_WORKFLOWS) {
+      const stages = builtinDefinition(t, 'en').stages, cols = Math.max(...stages.map(s => s.col)) + 1;
+      const L = flowLayout(stages, Math.round((40 + cols * 104) * scale / 100));
+      assert.equal(L.colW, FLOW.minCol);
+      for (const n of L.at.values()) {
+        const label = n.stage.label;
+        if (D57_CUT.box[label]?.includes(scale)) {
+          seen.add(label);
+          assert.ok(n.labelLines >= 3, `${label}: ${n.labelLines} lines`);
+          assert.ok(n.h >= FLOW.nodePad + n.labelLines * FLOW.labelLine, `${label}: ${n.h} high`);
+        }
+        if (D57_CUT.diamond[label]?.includes(scale)) { seen.add(label); assert.ok(n.w > FLOW.diamond && n.h === n.w, `${label}: ${n.w}`); }
+      }
+    }
+    assert.equal(seen.size, Object.values(D57_CUT).flatMap(Object.values).filter(s => s.includes(scale)).length);
+  } finally { setUiScale(100); }
+});
+
+for (const scale of [80, 100, 150]) test(`D57 Korean steps keep their size, English ones never get fewer lines (${scale}%)`, () => {
+  setUiScale(scale);
+  try {
+    for (const t of BUILTIN_WORKFLOWS) for (const locale of ['ko', 'en']) for (const width of [1600, 1118, 760, 520]) {
+      const L = flowLayout(builtinDefinition(t, locale).stages, width);
+      for (const n of L.at.values()) {
+        const before = textWidth(n.stage.label, FLOW.label) > L.nodeW - px(10) ? 2 : 1, where = `${t.id} ${locale} ${width} ${n.stage.label}`;
+        if (n.stage.shape === 'diamond') { if (locale === 'ko') assert.equal(n.w, FLOW.diamond, where); }
+        else if (locale === 'ko') assert.equal(n.labelLines, before, where);
+        else assert.ok(n.labelLines >= before, where);
+      }
+    }
+  } finally { setUiScale(100); }
 });

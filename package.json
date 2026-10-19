@@ -1,16 +1,16 @@
 {
   "name": "paseo-auto-kanban",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "A Kanban board for Paseo that follows your coding agents: cards for each agent, stages per workspace, and a local ledger you can read and edit from the CLI.",
   "license": "Apache-2.0",
-  "author": "panto-dominic",
-  "homepage": "https://github.com/panto-dominic/paseo-auto-kanban#readme",
+  "author": "dominic4us",
+  "homepage": "https://github.com/dominic4us/paseo-auto-kanban#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/panto-dominic/paseo-auto-kanban.git"
+    "url": "git+https://github.com/dominic4us/paseo-auto-kanban.git"
   },
   "bugs": {
-    "url": "https://github.com/panto-dominic/paseo-auto-kanban/issues"
+    "url": "https://github.com/dominic4us/paseo-auto-kanban/issues"
   },
   "keywords": [
     "paseo",

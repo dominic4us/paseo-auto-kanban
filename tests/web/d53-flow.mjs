@@ -47,13 +47,20 @@ export async function d53FlowScenes(browser, out, check) {
           const w = Math.min(a.rect.r,b.rect.r)-Math.max(a.rect.l,b.rect.l), h = Math.min(a.rect.b,b.rect.b)-Math.max(a.rect.t,b.rect.t);
           if (w > 0 && h > 0) forwardHits.push({ a:a.text, b:b.text, w, h });
         }
-        return { canvas, loops, hits, forwardHits, notes:el.querySelectorAll('[data-testid^="flow-note-"], [data-testid^="flow-count-"]').length,
+        // D57 (research/418): a step name laid over more lines than its clamp shows, or wider than its box.
+        const names = [...el.querySelectorAll('[data-testid^="flow-node-"]')].map(n => n.querySelector('div[dir]')).flatMap(t => {
+          const range = document.createRange(); range.selectNodeContents(t);
+          const lines = new Set([...range.getClientRects()].map(q => Math.round(q.top))).size, clamp = Number(getComputedStyle(t).webkitLineClamp) || Infinity;
+          return lines > clamp || t.scrollWidth > t.clientWidth + 1 ? [{ text:t.textContent, lines, clamp }] : [];
+        });
+        return { canvas, loops, hits, forwardHits, names, notes:el.querySelectorAll('[data-testid^="flow-note-"], [data-testid^="flow-count-"]').length,
           outside:[...loops, ...obstacles.filter(o => o.id === 'flow-edge-label')].filter(l => l.rect.l < canvas.l || l.rect.r > canvas.r || l.rect.t < canvas.t || l.rect.b > canvas.b) };
       });
       check(scene, 'D56 component forward border overlap is exactly zero', geo.forwardHits.length === 0, JSON.stringify(geo.forwardHits));
       check(scene, 'D53 exact bare fixture: two labels, no notes or counts', geo.loops.length === 2 && geo.notes === 0 && geo.loops.every(l => l.text.includes('301→302 · 303→304 · 305→306')), JSON.stringify(geo));
       check(scene, 'D53 component loop border overlap is exactly zero', geo.hits.length === 0, JSON.stringify(geo.hits));
       check(scene, 'D53 component labels inside canvas and uncut', geo.outside.length === 0 && geo.loops.every(l => !l.clipped), JSON.stringify(geo.outside));
+      check(scene, 'D57 component step names uncut', geo.names.length === 0, JSON.stringify(geo.names));
       check(scene, 'no page errors', errors.length === 0, errors.join(' | '));
       results.push({ scene, ...geo, errors });
       await p.getByTestId('flow-canvas').screenshot({ path: path.join(dir, scene + '.png') });

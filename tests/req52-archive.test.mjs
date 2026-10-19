@@ -315,11 +315,11 @@ test('298-F2: the screen\'s own choice lasts only until the server\'s next readi
   const { shownArchive } = await import('../dist/client/archive-model.js');
   const first = { days: 7 };
   assert.deepEqual(shownArchive(undefined, null), { days: 7, damaged: false });
-  assert.deepEqual(shownArchive(first, { days: 14, base: first, saving: true }), { days: 14, damaged: false }, 'while saving');
+  assert.deepEqual(shownArchive(first, { days: 14, base: first, saving: true }), { days: 7, damaged: false }, 'an unconfirmed choice cannot override the server');
   assert.deepEqual(shownArchive(first, { days: 14, base: first }), { days: 14, damaged: false }, 'saved, the same reading');
   assert.deepEqual(shownArchive({ days: 0 }, { days: 14, base: first }), { days: 0, damaged: false }, 'another screen\'s later value wins');
   assert.deepEqual(shownArchive({ days: 0, damaged: true }, { days: 14, base: first }), { days: 0, damaged: true }, 'the notice is not hidden');
   const damaged = { days: 0, damaged: true };
   assert.deepEqual(shownArchive(damaged, { days: 3, base: damaged }), { days: 3, damaged: false }, 'just saved over the damaged file');
-  assert.deepEqual(shownArchive({ days: 0, damaged: true }, { days: 3, base: damaged, saving: true }), { days: 3, damaged: false });
+  assert.deepEqual(shownArchive({ days: 0, damaged: true }, { days: 3, base: damaged, saving: true }), { days: 0, damaged: true });
 });

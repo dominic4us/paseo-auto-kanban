@@ -8,8 +8,8 @@ import type { Copy } from './i18n.js';
 import type { HostPlatform } from './layout.js';
 import { Button, Notice, QuietLink } from './components.js';
 import { KanbanSheet } from './kanban-sheet.js';
-import { useSessionValue } from './session.js';
-import { archivedLine, shownArchive, type ArchiveChoice } from './archive-model.js';
+import { useConfirmedValue } from './confirmed-value.js';
+import { archivedLine, shownArchive } from './archive-model.js';
 import { px } from './ui-scale.js';
 
 /**
@@ -25,22 +25,19 @@ export { archivedDoneOf, archivedLine } from './archive-model.js';
 
 export type AutoArchiveSwitch = { days: number; damaged: boolean; set: (days: number) => Promise<boolean> };
 /** The automatic archive's days as the server read them, until a write it confirmed; the demo never saves. */
-export function useAutoArchive(scope: string, remote: AutoArchiveDTO | undefined, persist: boolean): AutoArchiveSwitch {
-  const save = useRpc(archiveSettingsSet);
-  // 298-F2: the screen's own choice only until the server's next reading (`shownArchive`); a refused write shows the server's again.
-  const [local, setLocal] = useSessionValue<ArchiveChoice | null>(scope, 'autoArchiveChoice', null);
+export function useAutoArchive(scope: string, remote: AutoArchiveDTO | undefined, persist: boolean,
+  readToken: unknown = remote): AutoArchiveSwitch {
+  const save = useRpc(archiveSettingsSet), confirmed = useConfirmedValue(scope, remote, readToken, 'autoArchiveChoice');
   const set = async (days: number) => {
     if (!persist) return false;
-    const base = remote;
-    setLocal({ days, base, saving: true });
+    const ticket = confirmed.begin(); if (!ticket) return false;
     try {
       const reply = await save({ days });
-      if (reply?.ok) { setLocal({ days: reply.data.days, base }); return true; }
-    } catch { /* below */ }
-    setLocal(null);
-    return false;
+      if (!reply?.ok) return false;
+      confirmed.confirm(ticket, { days: reply.data.days }); return true;
+    } catch { return false; }
   };
-  return { ...shownArchive(remote, local), set };
+  return { ...shownArchive(confirmed.value, null), set };
 }
 
 /** The settings row's choices: Off, 3, 7, 14, 30 days (a value saved elsewhere shows as one more choice). */

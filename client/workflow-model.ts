@@ -189,6 +189,59 @@ export function noteBlocksOf(lines: readonly string[], room: number): string[][]
   }
   return blocks.filter(b => b.length);
 }
+/**
+ * D57 (research/418): a bold label's width for its line count — a chosen step's label is bold — ASCII from Arial Bold's
+ * advances (per 1000) with 5% to spare, each letter rounded up to a whole pixel, so a Latin name is counted close to what it
+ * takes; a Hangul or CJK character as wide as the size and any other 0.6 of it, as `textWidth`. `textWidth`'s 0.6 for every
+ * Latin letter would count "Research · direction" three lines where it takes two; this counts no name short in the gate's fonts.
+ */
+const BOLD_ADVANCE = [278, 333, 474, 556, 556, 889, 722, 238, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556, 556, 556, 556, 556, 556, 556,
+  556, 333, 333, 584, 584, 584, 611, 975, 722, 722, 722, 722, 667, 611, 778, 722, 278, 556, 722, 611, 833, 722, 778, 667, 778, 722, 667, 611, 722,
+  667, 944, 667, 667, 611, 333, 278, 333, 584, 556, 333, 556, 611, 556, 611, 556, 333, 611, 611, 278, 278, 556, 278, 889, 611, 611, 611, 611,
+  389, 556, 333, 611, 556, 778, 556, 556, 500, 389, 280, 389, 584];
+const WIDE_CHAR = /[ᄀ-ᇿ⺀-鿿가-힯豈-﫿＀-￯]/;
+export function labelWidth(text: string, size: number): number {
+  let width = 0;
+  for (const ch of text) {
+    const code = ch.codePointAt(0)!;
+    // Each letter to a whole pixel up: a screen that lays letters on whole pixels widens "it" by a third.
+    width += WIDE_CHAR.test(ch) ? size : Math.ceil(code >= 32 && code <= 126 ? BOLD_ADVANCE[code - 32]! / 1000 * size * 1.05 : size * .6);
+  }
+  return width;
+}
+/**
+ * D57: the lines a step's label takes — never fewer than before (one, or two when wider than `room`). Hangul breaks
+ * between any two syllables, so a name with it takes its width over `room`; a Latin name breaks only at its spaces, so its
+ * words are laid in `labelRoom` (a chosen step's: a 2px border) as the screen lays them, a word wider than that alone taking
+ * as many lines as it fills.
+ */
+export function labelLineCount(label: string, room: number, labelRoom: number, size: number): number {
+  const before = textWidth(label, size) > room ? 2 : 1;
+  if (WIDE_CHAR.test(label)) return Math.max(before, Math.ceil(textWidth(label, size) / room));
+  let lines = 0, line = '';
+  for (const word of label.split(' ')) {
+    const next = line ? line + ' ' + word : word;
+    if (line && labelWidth(next, size) <= labelRoom) { line = next; continue; }
+    if (line) lines += Math.max(1, Math.ceil(labelWidth(line, size) / labelRoom));
+    line = word;
+  }
+  return Math.max(before, lines + Math.max(1, Math.ceil(labelWidth(line, size) / labelRoom)));
+}
+/**
+ * D57: a decision's diamond — `FLOW.diamond`, or larger when its label (bold, in two lines at most, broken at a space)
+ * needs a wider square inside it: "My review?" was laid over three lines and cut. Never wider than the steps (`cap`).
+ */
+export function diamondSize(label: string, cap: number): number {
+  const size = px(11.5), words = label.split(' ');
+  let need = labelWidth(label, size);
+  if (WIDE_CHAR.test(label)) {
+    // Hangul breaks anywhere: two lines of the diamond's square hold it as before; past that, half its width and a syllable.
+    const width = textWidth(label, size);
+    need = width <= 2 * FLOW.diamond / Math.SQRT2 ? 0 : width / 2 + size;
+  } else for (let i = 1; i < words.length; i++)
+    need = Math.min(need, Math.max(labelWidth(words.slice(0, i).join(' '), size), labelWidth(words.slice(i).join(' '), size)));
+  return Math.max(FLOW.diamond, Math.min(cap, Math.ceil(need * Math.SQRT2)));
+}
 /** A count chip's lines: one when it fits the column, else its " · " parts in two lines as even as they go. */
 export function chipLines(text: string, colW: number): string[] {
   if (textWidth(text, FLOW.note) <= colW - px(20)) return [text];
@@ -218,7 +271,7 @@ export function flowLayout(stages: readonly WorkflowStage[], width: number, note
   const nodeW = Math.min(FLOW.maxNodeW, colW - px(22)), room = nodeW - px(10);
   const sized = stages.map(stage => {
     const chip = counts[stage.id] ? chipLines(counts[stage.id]!, colW) : [];
-    if (stage.shape === 'diamond') return { stage, w: FLOW.diamond, h: FLOW.diamond, labelLines: 1, note: [], chip };
+    if (stage.shape === 'diamond') { const side = diamondSize(stage.label, nodeW); return { stage, w: side, h: side, labelLines: 1, note: [], chip }; }
     const parts = notes[stage.id] ?? [], joined = parts.join(' ');
     const blocks = !parts.length ? [] : textWidth(joined, FLOW.note) <= room ? [[joined]]
       : parts.flatMap(part => segmented ? noteBlocksOf(wrapNote(part, room, FLOW.note), room) : [wrapWords(part, room, FLOW.note)]);
@@ -226,7 +279,8 @@ export function flowLayout(stages: readonly WorkflowStage[], width: number, note
     // 314-F4: a 건's line wider than the node is laid over more screen lines — the node grows for them, so nothing is cut.
     const blockLines = blocks.map(block => block.reduce((n, line) => n + (segmented ? noteLineCount(line, room) : 1), 0));
     const noteLines = blockLines.reduce((a, b) => a + b, 0);
-    const labelLines = textWidth(stage.label, FLOW.label) > room ? 2 : 1;
+    // D57: as many lines as the name takes, so none is cut (it was two at most: "Not selected · withdrawn" lost a line).
+    const labelLines = labelLineCount(stage.label, room, nodeW - px(8) - 4, FLOW.label);
     return { stage, w: nodeW, h: Math.max(FLOW.nodeH, FLOW.nodePad + labelLines * FLOW.labelLine + noteLines * FLOW.noteLine), labelLines, note, chip,
       ...(segmented ? { noteBlocks: blocks, noteBlockLines: blockLines } : {}) };
   });

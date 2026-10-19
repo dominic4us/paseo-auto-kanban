@@ -5,13 +5,13 @@
 **A Paseo kanban your agents update themselves.**
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/lead-dark.gif">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/lead.gif" width="802" alt="Animated demo: a lead agent's card, marked with a gold crown, splits the work between two sub-agents; each sub-agent gets its own card tagged with the lead's name, the lead card counts its sub-cards and how many are running, and when one sub-agent finishes its card moves to Review.">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/lead-dark.gif">
+  <img src="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/lead.gif" width="802" alt="Animated demo: a lead agent's card, marked with a gold crown, splits the work between two sub-agents; each sub-agent gets its own card tagged with the lead's name, the lead card counts its sub-cards and how many are running, and when one sub-agent finishes its card moves to Review.">
 </picture>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/hero-dark.gif">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/hero.gif" width="802" alt="An agent starts in Paseo and a card appears on its own in To Do, moves to In progress while the agent works, asks for you when the agent requests a permission, and waits in Review when the agent stops.">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/hero-dark.gif">
+  <img src="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/hero.gif" width="802" alt="An agent starts in Paseo and a card appears on its own in To Do, moves to In progress while the agent works, asks for you when the agent requests a permission, and waits in Review when the agent stops.">
 </picture>
 
 ```sh
@@ -38,8 +38,8 @@ work. One board per workspace, every project on one screen, and a "needs you" co
 a person has to act on.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/overview-dark.gif">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/overview.gif" width="800" alt="One board shows several projects with agents at work, highlights the card whose agent is waiting for a response, then shows the same board on a phone.">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/overview-dark.gif">
+  <img src="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/overview.gif" width="800" alt="One board shows several projects with agents at work, highlights the card whose agent is waiting for a response, then shows the same board on a phone.">
 </picture>
 
 - **Automatic cards.** Every top-level agent gets a card. Turn started → In progress, permission request →
@@ -54,11 +54,11 @@ a person has to act on.
   each card, automatic refresh, a phone layout, English and Korean, light and dark.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/busy-dark.gif">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/busy.gif" width="800" alt="A card in Review gets a dashed border when it is marked busy, then turns orange after two hours and the board's &quot;Needs attention&quot; count goes up.">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/busy-dark.gif">
+  <img src="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/busy.gif" width="800" alt="A card in Review gets a dashed border when it is marked busy, then turns orange after two hours and the board's &quot;Needs attention&quot; count goes up.">
 </picture>
 
-<img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/card-detail.png" width="800" alt="Card details (demo data, dark theme): title, stage, next action, priority and the linked agent with its state">
+<img src="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/card-detail.png" width="800" alt="Card details (demo data, dark theme): title, stage, next action, priority and the linked agent with its state">
 
 ## Install
 
@@ -89,7 +89,7 @@ not fill a board.
 **From Git** at a release tag instead of npm (the same plugin):
 
 ```sh
-paseo plugin install https://github.com/panto-dominic/paseo-auto-kanban --ref v0.2.3
+paseo plugin install https://github.com/dominic4us/paseo-auto-kanban --ref v0.2.4
 ```
 
 The npm package is published from 0.2.1 on. 0.8.x installs plugins only from a folder or Git, not from npm.
@@ -127,7 +127,7 @@ The folder keeps the project's earlier name, `paseo-kanban`, so boards made befo
 | `PROCESS.md` (generated, optional) | the workspace's own folder — see below |
 | `.kanban/workflow.json` | the workspace's own folder, only when you press **Export** in the workflow view |
 | Display settings (theme, screen size, board position, filters) | `~/paseo-kanban-data/ui-state.json`, per connected host |
-| Last theme and language, to draw before the first read | the app's local storage, keys starting with `paseo-kanban:` |
+| Last theme and language, to draw before the first read; where the sidebar link opens Kanban | the app's local storage, keys starting with `paseo-kanban:` |
 
 Treat the data folder and any `PROCESS.md` as private: they contain your card titles and notes.
 Details of every file are in [docs/reference.md](docs/reference.md#data-folder).
@@ -149,6 +149,12 @@ Kanban screen (on some phone screens, from the ⋯ menu) → **Kanban settings**
 Sending a card to an agent is **never** automatic: when you move a draft card to In progress, a confirmation
 shows which chat will receive it, and only after you press **Send** does the server send the card to that
 workspace's lead chat as a prompt (see [docs/reference.md](docs/reference.md#sending-a-draft-to-an-agent)).
+
+**Check up** never moves anything by itself either. The button beside refresh (on a phone, the first row of the gear's
+settings sheet) lists cards that may be finished or forgotten: cards in progress or review whose agents are all archived,
+cards that have not moved for over 7 days, requests waiting in To Do for over 14 days and drafts older than 14 days.
+Nothing is ticked at first; you tick cards and choose **Move to Done** (with Undo) or **Archive** (restorable from
+**Archived cards**), or skip a card for now. Tidying the Done column stays the Done column's own **Tidy**.
 
 The plugin also reads, without writing, Paseo's own workspace and label records under `~/.paseo/projects/`
 to show names, labels and colours.
@@ -181,7 +187,7 @@ rm -f ~/.local/bin/kanban
 The package has no runtime dependencies and runs no install scripts. To build it from source instead:
 
 ```sh
-git clone https://github.com/panto-dominic/paseo-auto-kanban --branch v0.2.3
+git clone https://github.com/dominic4us/paseo-auto-kanban --branch v0.2.4
 cd paseo-auto-kanban && npm ci --ignore-scripts && npm run build
 npm link            # or link dist/src/cli/main.js into a folder on your PATH yourself
 kanban --version
@@ -274,8 +280,18 @@ This stops and removes the plugin. Paseo prints the removed entry once, marked `
 
 ## Limitations
 
+- **Automatic refresh across screens.** When two Kanban screens are open in the same app, the automatic refresh indicator may briefly show an older value just after a refresh; refresh once more to correct it. Saved settings are not lost.
+
 - **One machine per data folder.** Boards live on the Paseo server's disk. Do not share one data folder
-  between machines or containers; lock recovery relies on the local process table (automatic on Linux).
+  between machines or containers; lock recovery relies on the local process table. If Paseo stops in the middle
+  of a write, a later write on Linux, Windows or macOS can reclaim the lock it left once the lock is over
+  60 seconds old and its owner can be shown gone on this machine. When that cannot be shown — as can happen after
+  a restart, when another process has taken the old process number, or for a lock from another machine or an
+  older version — the lock stays. Then run `kanban doctor` and, with Paseo stopped, `kanban unlock --force`
+  ([Locks and recovery](docs/reference.md#locks-and-recovery)). On Windows and macOS this machine is recognised by
+  an id in `%LOCALAPPDATA%\paseo-auto-kanban` or `~/Library/Application Support/paseo-auto-kanban`: do not copy or
+  sync that folder to another machine — automatic recovery could then release another machine's lock while it is
+  still writing.
 - **No drag and drop.** Move cards with the stage menu or the card detail.
 - **Mobile apps** are checked less than the web UI; keyboard and safe-area behaviour may vary by device.
 - **The workflow view** (beta) reads workspace folders only on a Linux server, and exporting a workflow file

@@ -5,13 +5,13 @@
 **由 Paseo 智能体自行更新的任务看板（Board）。**
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/lead-dark.gif">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/lead.gif" width="802" alt="演示动画：带金色皇冠的主导智能体（Lead）卡片（Card）将工作分配给两个子智能体。每个子智能体都有带主导智能体名称标签的卡片；主导智能体卡片显示子卡片数量和运行中的数量。一个子智能体结束后，其卡片移至待审核（Review）。">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/lead-dark.gif">
+  <img src="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/lead.gif" width="802" alt="演示动画：带金色皇冠的主导智能体（Lead）卡片（Card）将工作分配给两个子智能体。每个子智能体都有带主导智能体名称标签的卡片；主导智能体卡片显示子卡片数量和运行中的数量。一个子智能体结束后，其卡片移至待审核（Review）。">
 </picture>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/hero-dark.gif">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/hero.gif" width="802" alt="在 Paseo 中启动智能体后，卡片会自动出现在待办（To Do）列；智能体工作时移至进行中（In progress），请求权限时提醒您回应，停止后在待审核（Review）列等待。">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/hero-dark.gif">
+  <img src="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/hero.gif" width="802" alt="在 Paseo 中启动智能体后，卡片会自动出现在待办（To Do）列；智能体工作时移至进行中（In progress），请求权限时提醒您回应，停止后在待审核（Review）列等待。">
 </picture>
 
 ```sh
@@ -36,8 +36,8 @@ paseo plugin install npm:paseo-auto-kanban
 “需要关注（Needs attention）”计数只统计需要人工处理的事项。
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/overview-dark.gif">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/overview.gif" width="800" alt="同一屏幕显示多个项目和正在工作的智能体，突出显示等待回应的智能体卡片，随后在手机上展示同一个看板。">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/overview-dark.gif">
+  <img src="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/overview.gif" width="800" alt="同一屏幕显示多个项目和正在工作的智能体，突出显示等待回应的智能体卡片，随后在手机上展示同一个看板。">
 </picture>
 
 智能体停止后，测试或构建可能仍在运行。给卡片添加忙碌标记
@@ -45,8 +45,8 @@ paseo plugin install npm:paseo-auto-kanban
 您可以在卡片详情中查看并清除该标记。
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/busy-dark.gif">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/busy.gif" width="800" alt="待审核（Review）卡片被标记为忙碌后，边框变为虚线；两小时后变为橙色，看板的“需要关注（Needs attention）”计数随之增加。">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/busy-dark.gif">
+  <img src="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/busy.gif" width="800" alt="待审核（Review）卡片被标记为忙碌后，边框变为虚线；两小时后变为橙色，看板的“需要关注（Needs attention）”计数随之增加。">
 </picture>
 
 ## 安装
@@ -70,7 +70,7 @@ Node.js **22 或更高版本**。
    或者，通过 Git 指定发布标签安装：
 
    ```sh
-   paseo plugin install https://github.com/panto-dominic/paseo-auto-kanban --ref v0.2.3
+   paseo plugin install https://github.com/dominic4us/paseo-auto-kanban --ref v0.2.4
    ```
 
    两种方式安装的是同一个插件。npm 包从 0.2.1 起发布，Paseo 安装时不会执行包脚本。
@@ -192,4 +192,4 @@ kanban --version
 
 许可证：[Apache-2.0](LICENSE)
 
-本文由 AI 翻译。如有不自然的表述，请通过 [Issue](https://github.com/panto-dominic/paseo-auto-kanban/issues) 告知我们。
+本文由 AI 翻译。如有不自然的表述，请通过 [Issue](https://github.com/dominic4us/paseo-auto-kanban/issues) 告知我们。

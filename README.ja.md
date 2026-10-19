@@ -5,13 +5,13 @@
 **Paseo のエージェントが自分で更新するタスクボード（Board）です。**
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/lead-dark.gif">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/lead.gif" width="802" alt="デモ動画：金色の王冠が付いたリードエージェント（Lead）のカード（Card）が、2 つのサブエージェントに作業を割り振ります。各サブエージェントにはリードエージェント名のタグが付いたカードが作られ、リードエージェントのカードにはサブカード数と実行中の数が表示されます。1 つが終了すると、そのカードがレビュー（Review）に移動します。">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/lead-dark.gif">
+  <img src="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/lead.gif" width="802" alt="デモ動画：金色の王冠が付いたリードエージェント（Lead）のカード（Card）が、2 つのサブエージェントに作業を割り振ります。各サブエージェントにはリードエージェント名のタグが付いたカードが作られ、リードエージェントのカードにはサブカード数と実行中の数が表示されます。1 つが終了すると、そのカードがレビュー（Review）に移動します。">
 </picture>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/hero-dark.gif">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/hero.gif" width="802" alt="Paseo でエージェントを開始すると、未着手（To Do）にカードが自動で現れ、作業中は進行中（In progress）に移動します。権限を求めると対応を促し、停止するとレビュー（Review）で待機します。">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/hero-dark.gif">
+  <img src="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/hero.gif" width="802" alt="Paseo でエージェントを開始すると、未着手（To Do）にカードが自動で現れ、作業中は進行中（In progress）に移動します。権限を求めると対応を促し、停止するとレビュー（Review）で待機します。">
 </picture>
 
 ```sh
@@ -36,8 +36,8 @@ Paseo でエージェントを作ると、そのワークスペースのボー�
 人が対応する必要のあるものだけを「要確認（Needs attention）」として数えます。
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/overview-dark.gif">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/overview.gif" width="800" alt="1 つの画面に複数のプロジェクトと作業中のエージェントが表示され、応答待ちのエージェントのカードが強調されます。続いて同じボードがスマートフォンに表示されます。">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/overview-dark.gif">
+  <img src="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/overview.gif" width="800" alt="1 つの画面に複数のプロジェクトと作業中のエージェントが表示され、応答待ちのエージェントのカードが強調されます。続いて同じボードがスマートフォンに表示されます。">
 </picture>
 
 エージェントが停止しても、テストやビルドがまだ実行中の場合があります。カードに作業中の印を付けると
@@ -45,8 +45,8 @@ Paseo でエージェントを作ると、そのワークスペースのボー�
 カードの詳細でこの印を確認し、解除できます。
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/busy-dark.gif">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/busy.gif" width="800" alt="レビュー（Review）のカードに作業中の印を付けると枠線が破線になり、2 時間後にオレンジ色に変わって、ボードの「要確認（Needs attention）」の数が増えます。">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/busy-dark.gif">
+  <img src="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/busy.gif" width="800" alt="レビュー（Review）のカードに作業中の印を付けると枠線が破線になり、2 時間後にオレンジ色に変わって、ボードの「要確認（Needs attention）」の数が増えます。">
 </picture>
 
 ## インストール
@@ -70,7 +70,7 @@ Node.js **22 以降**が必要です。
    または、Git からリリースタグを指定してインストールします。
 
    ```sh
-   paseo plugin install https://github.com/panto-dominic/paseo-auto-kanban --ref v0.2.3
+   paseo plugin install https://github.com/dominic4us/paseo-auto-kanban --ref v0.2.4
    ```
 
    どちらも同じプラグインです。npm パッケージは 0.2.1 から公開されており、Paseo はパッケージのスクリプトを実行せずにインストールします。
@@ -192,4 +192,4 @@ kanban --version
 
 ライセンス：[Apache-2.0](LICENSE)
 
-この文書は AI によって翻訳されました。不自然な表現があれば、[Issue](https://github.com/panto-dominic/paseo-auto-kanban/issues) でお知らせください。
+この文書は AI によって翻訳されました。不自然な表現があれば、[Issue](https://github.com/dominic4us/paseo-auto-kanban/issues) でお知らせください。

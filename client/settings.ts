@@ -10,8 +10,9 @@ import { clampScale, setUiScale, UI_SCALE } from './ui-scale.js';
 
 /**
  * REQ-66: the Kanban settings window. The server remembers each row per host in `ui-state.json`; an
- * absent row is its default. What this client saved wins over what a read brought, and it is shared by
- * every screen of the host (the board, the list and the workspace panel poll by the same switch), so a
+ * absent row is its default. Confirmed display preferences are shared by
+ * every screen of the host (the board, the list and the workspace panel poll by the same switch); a fresh server
+ * read supersedes the auto-refresh confirmation. A
  * change made in the window reaches them all without another read.
  */
 /** REQ-90: `labs` is the lab's fields as stored — every one absent (off, no folder, the default short-name rule) by default. */
@@ -26,11 +27,12 @@ export const DEFAULT_SETTINGS: KanbanSettings = { boardAlign: 'center', autoRefr
  * of theirs has answered, so it cannot come in as `remote` like the other rows.
  */
 /** REQ-139: `uiScale` likewise — the size is set above the screens, before their reads answer. */
-type Store = { saved: UiSettingsDTO; theme: ThemeChoice | undefined; uiScale: number | undefined; listeners: Set<() => void> };
+type Store = { saved: UiSettingsDTO; theme: ThemeChoice | undefined; uiScale: number | undefined; listeners: Set<() => void>;
+  refreshRead: object | null; refreshEpoch: number; refreshSequence: number; remoteRefresh: boolean | undefined };
 const stores = new Map<string, Store>();
 function storeFor(hostId: string): Store {
   let store = stores.get(hostId);
-  if (!store) { store = { saved: {}, theme: readThemeHint(hostId), uiScale: readScaleHint(hostId), listeners: new Set() }; stores.set(hostId, store); }
+  if (!store) { store = { saved: {}, theme: readThemeHint(hostId), uiScale: readScaleHint(hostId), listeners: new Set(), refreshRead: null, refreshEpoch: 0, refreshSequence: 0, remoteRefresh: undefined }; stores.set(hostId, store); }
   return store;
 }
 const notify = (store: Store) => { for (const listener of [...store.listeners]) listener(); };
@@ -40,6 +42,14 @@ export function commitSettings(hostId: string, patch: UiSettingsDTO) {
   store.saved = { ...store.saved, ...patch };
   if (patch.theme) writeThemeHint(hostId, patch.theme);
   if (patch.uiScale !== undefined) writeScaleHint(hostId, clampScale(patch.uiScale));
+  notify(store);
+}
+/** 451 F3: called only after useRead accepted a successful settings read. Even equal values are authoritative. */
+export function noteRefreshRead(hostId: string, value: boolean | undefined, token: object) {
+  const store = storeFor(hostId);
+  if (store.refreshRead === token) return;
+  store.refreshRead = token; store.refreshEpoch++; store.remoteRefresh = value ?? DEFAULT_SETTINGS.autoRefresh;
+  store.saved = { ...store.saved }; delete store.saved.autoRefresh;
   notify(store);
 }
 /** REQ-70: a read's settings; only a changed theme wakes the screens. REQ-139: or a changed size. */
@@ -78,7 +88,7 @@ export function useKanbanSettings(hostId: string, remote: UiSettingsDTO | undefi
   const saved = useSyncExternalStore(listener => { store.listeners.add(listener); return () => { store.listeners.delete(listener); }; },
     () => store.saved, () => store.saved);
   useEffect(() => { if (remote) noteRemoteSettings(hostId, remote); }, [hostId, remote]);
-  return resolveSettings(remote, saved);
+  return resolveSettings(remote, { ...saved, autoRefresh: saved.autoRefresh ?? store.remoteRefresh ?? remote?.autoRefresh ?? DEFAULT_SETTINGS.autoRefresh });
 }
 /** REQ-70: the host's theme choice for the screens: what this client saved, else what a read brought. */
 export function useThemeChoice(hostId: string): ThemeChoice {
@@ -185,10 +195,17 @@ export function useRowSaves() {
 /** The settings rows stored in `ui-state.json`. The demo never saves. */
 export function useSettingsWriter(hostId: string) {
   const save = useRpc(uiStateSet);
+  const lifetime = useRef({ hostId, alive: true });
+  if (lifetime.current.hostId !== hostId) lifetime.current = { hostId, alive: true };
+  const owner = lifetime.current;
+  useEffect(() => { owner.alive = true; return () => { owner.alive = false; }; }, [owner]);
   return async (patch: UiSettingsDTO): Promise<boolean> => {
+    const store = storeFor(hostId), guarded = patch.autoRefresh !== undefined;
+    if (guarded && !owner.alive) return false;
+    const epoch = store.refreshEpoch, sequence = guarded ? ++store.refreshSequence : 0;
     const reply = await save({ hostId, settings: patch });
     if (!reply?.ok) return false;
-    commitSettings(hostId, patch);
+    if (!guarded || owner.alive && store.refreshEpoch === epoch && store.refreshSequence === sequence) commitSettings(hostId, patch);
     return true;
   };
 }

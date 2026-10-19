@@ -405,7 +405,7 @@ function FlowStep({ n, colors: c, bg, hot, on, outlined, state }: {
   const chip = n.chip.length ? <Chip key="count" testID={'flow-count-' + id} x={n.cx} y={n.chipTop} text={n.chip}
     fg={outlined ? readable(c.foregroundMuted, bg) : c.foreground} bg={bg} {...(outlined ? {} : { line: c.border })} /> : null;
   if (n.stage.shape === 'diamond') {
-    const side = FLOW.diamond / Math.SQRT2;
+    const side = n.w / Math.SQRT2;
     return <>
       <View testID={'flow-node-' + id} accessibilityState={{ selected: on }} style={{ position: 'absolute', left: n.left, top: n.top, width: n.w, height: n.h, alignItems: 'center', justifyContent: 'center' }}>
         <View style={{ position: 'absolute', width: side, height: side, borderWidth: on ? 2 : 1, borderColor: line, backgroundColor: fill, transform: [{ rotate: '45deg' }], borderRadius: px(3) }} />

@@ -119,6 +119,10 @@ interface LockOwner {
     pidNamespace: string | null;
     hostname: string;
     createdAt: string;
+    /** D63: written only off Linux, where no /proc start identity exists; see `portableLiveness`. */
+    platform?: string;
+    bootTime?: number;
+    machineId?: string;
 }
 interface LockRecord {
     owner: LockOwner | null;
@@ -146,6 +150,14 @@ export interface UnlockOptions {
 }
 const hash = (value: string | Uint8Array): string => createHash('sha256').update(value).digest('hex');
 const codeOf = (error: unknown): string | undefined => (error as NodeJS.ErrnoException)?.code;
+/** D63: this boot's start in epoch milliseconds, from the system uptime. */
+const bootTime = (): number => Math.round(Date.now() - os.uptime() * 1000);
+/**
+ * D63: how far two readings of one boot's start may differ — the wall clock and the uptime counter drift apart over
+ * days and the wall clock may be stepped. It is an estimate, not proof of one boot: a lock left just before a quick
+ * restart can still pass, its owner having ended with the restart. Other machines are told apart by the machine id.
+ */
+const BOOT_TOLERANCE_MS = 300_000;
 function measure(): Measurement { return { start: performance.now(),
      io: { ...emptyReads(),
      lockHeldMs: 0,
@@ -247,11 +259,16 @@ export class Store {
     private readonly timeout: number;
     private readonly afterCommit: StoreOptions['afterCommit'];
     private readonly paseoHome: string;
+    private readonly home: string;
+    private readonly environment: Record<string, string | undefined>;
+    private readonly machineIds = new Map<string, string>();
     constructor(public readonly dataDir: string, public readonly forbiddenRoots: readonly string[], public readonly context: DomainContext, options: StoreOptions) {
         this.link = options.fileSystem?.link ?? fs.link;
         this.afterCommit = options.afterCommit;
         this.paseoHome = (options.environment ?? process.env).PASEO_HOME
             ?? path.join(options.homeDir ?? os.homedir(), '.paseo');
+        this.home = options.homeDir ?? os.homedir();
+        this.environment = options.environment ?? process.env;
         this.timeout = options.lockTimeoutMs ?? 30000;
         if (!(this.timeout > 0 && this.timeout <= 30000))
             fail('E_VALIDATION', 'Lock timeout must be between 1 and 30000 milliseconds.');
@@ -466,7 +483,76 @@ export class Store {
              bootId: identity.boot,
              pidNamespace: identity.namespace,
              hostname: os.hostname(),
-             createdAt: new Date().toISOString() };
+             createdAt: new Date().toISOString(),
+             ...(process.platform === 'linux' ? {} : { platform: process.platform, bootTime: bootTime(),
+                 ...await this.machineId().then(machineId => machineId === null ? {} : { machineId }) }) };
+    }
+    /**
+     * D63 (gate 416 F1): where this machine keeps its id — the user's local, non-roaming application data, never the
+     * data folder, which is the thing two machines might wrongly share. Read off Linux only.
+     */
+    private machineIdFile(): string {
+        const local = process.platform === 'win32'
+            ? (path.isAbsolute(this.environment.LOCALAPPDATA ?? '') ? this.environment.LOCALAPPDATA! : path.join(this.home, 'AppData', 'Local'))
+            : process.platform === 'darwin' ? path.join(this.home, 'Library', 'Application Support')
+            : path.join(this.home, '.config');
+        return path.join(local, 'paseo-auto-kanban', 'machine-id');
+    }
+    /**
+     * D63 (gate 416 F1): a random id made once per machine and user, without asking the operating system through an
+     * outside command. `null` — no automatic recovery — when it cannot be read or made, or would sit in the data folder.
+     */
+    private async machineId(): Promise<string | null> {
+        const file = this.machineIdFile();
+        if (!await this.outsideData(file))
+            return null;
+        const known = this.machineIds.get(file);
+        if (known)
+            return known;
+        try {
+            let value: string;
+            try {
+                value = await fs.readFile(file, 'utf8');
+            }
+            catch (error) {
+                if (codeOf(error) !== 'ENOENT')
+                    return null;
+                await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
+                const made = randomUUID();
+                try {
+                    await fs.writeFile(file, `${made}\n`, { flag: 'wx', mode: 0o600 });
+                    value = made;
+                }
+                catch (raced) {
+                    if (codeOf(raced) !== 'EEXIST')
+                        return null;
+                    value = await fs.readFile(file, 'utf8');
+                }
+            }
+            value = value.trim();
+            if (!isUUID(value) || !await this.outsideData(file))
+                return null;
+            this.machineIds.set(file, value);
+            return value;
+        }
+        catch {
+            return null;
+        }
+    }
+    /**
+     * D63 (gate 417 F2): whether the machine id file really lies outside the data folder — the path with every link in
+     * it followed, so a link from the application data into the data folder cannot share one id between machines.
+     * Asked on every use, the cached id included; a path that cannot be resolved counts as inside.
+     */
+    private async outsideData(file: string): Promise<boolean> {
+        if (!path.isAbsolute(file))
+            return false;
+        try {
+            return !inside(await canonicalPath(file), this.dataDir);
+        }
+        catch {
+            return false;
+        }
     }
     private async lockRecord(file: string): Promise<LockRecord | null> {
         try {
@@ -508,6 +594,8 @@ export class Store {
         }
     }
     private async liveness(owner: LockOwner | null): Promise<'live' | 'dead' | 'unknown'> {
+        if (process.platform !== 'linux')
+            return this.portableLiveness(owner);
         if (!owner || owner.hostname !== os.hostname() || !owner.procStartTicks || !owner.bootId || !owner.pidNamespace)
             return 'unknown';
         try {
@@ -519,6 +607,33 @@ export class Store {
         catch {
             return 'unknown';
         }
+    }
+    /**
+     * D63: Windows and macOS have no /proc start identity. An owner is dead only when its lock names this machine's id,
+     * host name and platform and a boot start within the tolerance, and no process now has its pid (ESRCH). A pid in use — the owner, or another process that
+     * reused it (EPERM included) — cannot be told apart without a start time, so it stays 'unknown': never reclaimed
+     * automatically, and never 'live' either, so forced offline recovery remains open.
+     */
+    private async portableLiveness(owner: LockOwner | null): Promise<'dead' | 'unknown'> {
+        if (!owner || owner.hostname !== os.hostname() || owner.platform !== process.platform ||
+            owner.procStartTicks !== null || owner.bootId !== null || owner.pidNamespace !== null ||
+            typeof owner.bootTime !== 'number' || !Number.isFinite(owner.bootTime) ||
+            Math.abs(bootTime() - owner.bootTime) > BOOT_TOLERANCE_MS ||
+            !Number.isSafeInteger(owner.pid) || owner.pid <= 0 || !isUUID(owner.machineId))
+            return 'unknown';
+        // Gate 416 F1: a host name and a boot time can match on another machine sharing the folder; its pid table is
+        // not ours, so ESRCH here says nothing about it. Only this machine's own id lets the local answer count.
+        const machine = await this.machineId();
+        if (machine === null || machine !== owner.machineId)
+            return 'unknown';
+        try {
+            process.kill(owner.pid, 0);
+        }
+        catch (error) {
+            if (codeOf(error) === 'ESRCH')
+                return 'dead';
+        }
+        return 'unknown';
     }
     private async createLock(file: string, owner: LockOwner): Promise<LockRecord> {
         await this.safeParents(file);

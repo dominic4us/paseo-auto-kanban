@@ -20,7 +20,7 @@ import { crowdedTitleRow, glyphLine, MOBILE } from './mobile-layout.js';
 import { bottomClearance, projectHeaderHeight, STICKY, stickyHeaderStyle } from './layout.js';
 import { palette } from './palette.js';
 import { copy } from './i18n.js';
-import { projectOptions as projectChoices, projectWorkspaceKeys, sameName, workspaceDetail, workspaceName } from './presentation.js';
+import { projectOptions as projectChoices, projectWorkspaceKeys, sameName, workspaceDetail, workspaceEntry, workspaceName } from './presentation.js';
 import { MobileControls } from './mobile-controls.js';
 import { Button, IconButton, Notice, QuietLink, TipArea, ViewedCardContext, useViewedCard } from './components.js';
 import { FamilyFocusContext, LinkedCard, useFamilyFocus } from './card-group.js';
@@ -51,6 +51,7 @@ import { MobileMailboxSheet } from './mobile-mailbox.js';
 import { EMPTY_MAIL_FILTER } from './mail-list-model.js';
 import { mailAlias } from '../shared/mailbox.js';
 import { ArchivedSheet, archivedDoneOf, DoneHeadTools, TidyConfirm, TidyNote, useAutoArchive } from './archive.js';
+import { useCheckup } from './checkup.js';
 import { px } from './ui-scale.js';
 
 export function MobileSwimlaneScreen({ width, onList, onBoard, preview = false, onPreview = () => {}, ...props }: PluginSurfaceProps & {
@@ -64,10 +65,10 @@ export function MobileSwimlaneScreen({ width, onList, onBoard, preview = false, 
   const state = useBoardFilters(scope, source.labels?.available === true, hidden, present), { filters, lanes, projects } = state;
   const hiddenKey = filters.hiddenProjects.join('\u0000');
   const [order, setOrder] = useLaneOrder(scope, props.host.id, source.order, !preview);
-  const autoCards = useAutoCards(scope, props.host.id, source.autoCards, !preview);
-  const workspaceAuto = useWorkspaceAutoCards(scope, source.autoCardsOff, !preview);
+  const autoCards = useAutoCards(scope, props.host.id, source.autoCards, !preview, source.settingsRead);
+  const workspaceAuto = useWorkspaceAutoCards(scope, source.autoCardsOff, !preview, source.settingsRead);
   // REQ-52: as on the wide board — the days (settings), "Tidy" on the Done tab and a workspace's archived list (its ⋯ sheet).
-  const autoArchive = useAutoArchive(scope, source.autoArchive, !preview);
+  const autoArchive = useAutoArchive(scope, source.autoArchive, !preview, source.settingsRead);
   const [tidy, setTidy] = useState<{ boardId: string; ask: boolean; text?: string } | null>(null);
   const [archivedOf, setArchivedOf] = useState<{ boardId: string; name: string; stages: { stageId: string; name: string }[] } | null>(null);
   // REQ-148: '' until a tab is chosen (or the screen opened on one, below); the tab shown is the model's `stageId`.
@@ -124,6 +125,13 @@ export function MobileSwimlaneScreen({ width, onList, onBoard, preview = false, 
   // REQ-82 ②③: "Done" always shows on an archived card here, and a long press opens the stage menu; none in the demo.
   const moves = useQuickMoves({ hostId: props.host.id, enabled: !preview, touch: true, boards: source.boards,
     refresh: source.revalidate, m, colors: c, platform: props.layout.platform, navigation: props.navigation, agents: agentLinks });
+  // REQ-149: the check up, as on the wide board — the boards shown (hidden projects left out), never the demo's. D60: no glyph of
+  // its own in the top bar; it is the settings sheet's first row, and ⚙ carries how many cards it found.
+  const checkupBoards = useMemo(() => source.boards.filter(b => !filters.hiddenProjects.includes(workspaceEntry(source.directory, b.summary.workspaceId, b.summary.cwd)?.projectId ?? '')),
+    [source.boards, source.directory, hiddenKey]);
+  const checkup = useCheckup({ hostId: props.host.id, scope, source: signalSource, boards: checkupBoards, enabled: !preview && source.ready, refresh: source.refresh });
+  const boardName = (boardId: string) => { const board = source.boards.find(b => b.summary.id === boardId);
+    return board ? workspaceName(board.summary.workspaceId, board.summary.cwd, source.directory) : ''; };
   const options = { query: filters.query, labels: filters.labels, ...(source.labels ? { workspaceLabels: source.labels } : {}), projects, orphaned, order, grouped, cardOrder, archived, agents: agentLinks };
   // Research/174 D2: a busy mark past two hours by the clock alone needs a person too — rebuilt when one crosses.
   const overdue = useMinuteKey(now => overdueKey(source.boards, now), source.boards.some(b => !!b.summary.busy));
@@ -307,21 +315,27 @@ export function MobileSwimlaneScreen({ width, onList, onBoard, preview = false, 
       badge={mailboxBadge} onPress={() => openMailbox()} />] : []),
     <IconButton key="view" testID="view-toggle" name="List" label={m.listView} colors={c} mobile disabled={preview}
       onPress={() => { if (!preview) onList(); }} />,
-    <IconButton key="settings" testID="open-settings" name="Settings" label={m.settings} colors={c} mobile
-      buttonRef={settingsWindow.opener} onPress={settingsWindow.open} />,
+    <IconButton key="settings" testID="open-settings" name="Settings" label={checkup.count ? m.checkupSettingsBadge(checkup.count) : m.settings} colors={c} mobile
+      badge={checkup.count} buttonRef={settingsWindow.opener} onPress={settingsWindow.open} />,
   ];
   const crowded = crowdedTitleRow(width, glyphs.length, px(4));
   // D60: crowded, the glyphs keep one line under the title — closer together, or the last beside the title.
   const line = crowded ? glyphLine(width, glyphs.length, px(4)) : { lifted: 0, gap: px(4) };
   const lifted = line.lifted ? glyphs.splice(glyphs.length - line.lifted) : null;
+  // REQ-68: five glyphs leave the title about 130px; the title keeps its width and the status line gives way.
+  const name = <Text numberOfLines={1} style={{ flexShrink: 0, color: c.foreground, fontSize: px(18), fontWeight: '600' }}>{m.kanban}</Text>;
+  // REQ-78: inside the title, so the 390px screen keeps its three rows (the 168px budget counts them).
+  const ready = !preview && source.directorySettled && <DirectoryReadyMark />;
+  // D62: paused, the time is said whole — under the title while glyphs share the title's line (beside it are 8–92px at
+  // 100%, and too few for the English beside a lifted ⚙); with five or six glyphs on that line, only "Paused · 09:12".
+  const under = !preview && source.refreshStatus.kind === 'paused' && (!crowded || !!lifted);
+  const status = !preview && <RefreshStatus status={source.refreshStatus} colors={c} m={m} compact short={under && !crowded} />;
   // REQ-139: a size that leaves the title no room puts it on a line of its own, over the glyphs.
-  const title = <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'baseline', gap: px(8),
+  const title = under ? <View testID="mobile-title-stack" style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
+    <View style={{ flexDirection: 'row' }}>{name}{ready}</View>{status}</View>
+    : <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'baseline', gap: px(8),
     ...(crowded && !lifted ? { flexBasis: '100%' as const, height: MOBILE.appbarHeight, alignItems: 'center' as const } : {}) }}>
-    {/* REQ-68: five glyphs leave the title about 130px; the title keeps its width and the status line gives way. */}
-    <Text numberOfLines={1} style={{ flexShrink: 0, color: c.foreground, fontSize: px(18), fontWeight: '600' }}>{m.kanban}</Text>
-    {/* REQ-78: inside the title, so the 390px screen keeps its three rows (the 168px budget counts them). */}
-    {!preview && source.directorySettled && <DirectoryReadyMark />}
-    {!preview && <RefreshStatus status={source.refreshStatus} colors={c} m={m} compact />}
+    {name}{ready}{status}
   </View>;
   return <QuickMoveContext.Provider value={moves.context}><ViewedCardContext.Provider value={viewed}>
   <FamilyFocusContext.Provider value={family.value}><FreshCardContext.Provider value={fresh.value}>
@@ -372,7 +386,8 @@ export function MobileSwimlaneScreen({ width, onList, onBoard, preview = false, 
       leads={workspaceLeadEntries(source.boards, source.directory, agentLinks, archived, m)}
       about={source.about} connection={{ host: props.host.label, observedAt: source.observedAt }} colors={c} m={m} platform={props.layout.platform}
       demo={{ on: preview, onChange: toggleDemo }} orderReset={{ enabled: arrange.arranged, onReset: arrange.resetAll }}
-      labs={{ mail: source.mail, onChange: source.revalidate }} autoArchive={autoArchive} hiddenBoards={source.hiddenBoards} />
+      labs={{ mail: source.mail, onChange: source.revalidate }} autoArchive={autoArchive} hiddenBoards={source.hiddenBoards}
+      checkup={preview ? undefined : { count: checkup.count, onOpen: () => { settingsWindow.sheet.onClose(); checkup.open(); } }} />
     {!preview && archivedOf && <ArchivedSheet open boardId={archivedOf.boardId} name={archivedOf.name} stages={archivedOf.stages}
       onClose={() => setArchivedOf(null)} onChanged={source.refresh} colors={c} m={m} platform={props.layout.platform} mobile />}
     <MenuSheet title={m.filters} open={filtersOpen} onClose={() => setFiltersOpen(false)} onDismiss={restoreFilterFocus} colors={c} platform={props.layout.platform} closeLabel={m.close}>{sc => <>
@@ -396,6 +411,8 @@ export function MobileSwimlaneScreen({ width, onList, onBoard, preview = false, 
       onPicked={() => { const target = trying; setTrying(null); source.refresh(); if (target) setWorkflow(target); }} />}
     {mailboxOn && <MobileMailboxSheet hostId={props.host.id} scope={mailScope} open={mailboxOpen} read={mailList} workspaces={mailWorkspaces} rule={source.mailAlias}
       onClose={closeMailbox} colors={c} m={m} platform={props.layout.platform} />}
+    {checkup.layer({ workspaceOf: boardName, colors: c, m, platform: props.layout.platform, mobile: true, bottom,
+      onOpenCard: (boardId, cardId) => setDetail({ boardId, cardId }) })}
     {moves.layer(bottom)}
   </View>
   </FreshCardContext.Provider></FamilyFocusContext.Provider>

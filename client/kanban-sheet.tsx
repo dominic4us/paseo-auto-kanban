@@ -26,7 +26,7 @@ const SHEET_EASING = Easing.out(Easing.cubic);
  * (`navigationInset`) plus 8px above the bottom, so no row rests under the bar; with the keyboard up the keyboard is the edge.
  * REQ-87 ⑥: the only close in it is the round × at the right of its head (a pull down, a press outside and the back
  * button close it too); a list inside it has no "Close" row of its own. Wider web windows get a centred dialog. `scroll={false}` hands the body
- * the whole height (an editor with its own scroll and footer).
+ * the whole `height` (an editor with its own scroll and footer); without one the body is as tall as it holds (D67).
  */
 export function KanbanSheet({ title, open, onClose, onDismiss, colors: c, platform, closeLabel, testID, closeTestID,
   centered, width = px(560), height, scroll = true, children, canClose, headerExtra, onBack, notice }: {
@@ -104,6 +104,14 @@ export function KanbanSheet({ title, open, onClose, onDismiss, colors: c, platfo
     onPanResponderRelease: (_, g) => { if (g.dy > SHEET_DRAG_CLOSE || g.vy > 1) requestCloseRef.current(); else offset.setValue(0); },
     onPanResponderTerminate: () => offset.setValue(0),
   }), [offset]);
+  // D67: the body grows to fill the sheet only when the sheet has a height (`scroll={false}` with `height`). On the phone
+  // Yoga sizes a sheet without a height to its content, and a growing (`flex: 1`) body counts as nothing there: the body
+  // was laid out at 0 and the sheet dropped to its head (Automation's tabs; the web's flexbox hid it). Without a height a
+  // `scroll={false}` body is as tall as what it holds and shrinks within the sheet (the empty check up, the wide window).
+  // 480 F1: long-hands only — a web host drops a removed `flex` shorthand's long-hands with it, so going from Automation to
+  // Display took `flexShrink` away and Display's body ran past the sheet without scrolling.
+  const maxHeight = screen.height * (dialog ? .85 : .9), fill = !scroll && !!height;
+  const grow = fill ? { flexGrow: 1, flexBasis: 0 } : {};
   const shape = dialog
     ? { width: Math.min(width, screen.width - px(32)), borderRadius: px(12) }
     : { width: Math.min(width, screen.width), borderTopLeftRadius: px(16), borderTopRightRadius: px(16), borderBottomWidth: 0,
@@ -118,7 +126,7 @@ export function KanbanSheet({ title, open, onClose, onDismiss, colors: c, platfo
           style={{ flex: 1, backgroundColor: c.modalBackdrop }} />
       </Animated.View>
       <Animated.View testID={testID} role="dialog" aria-label={title} accessibilityViewIsModal
-        style={{ ...shape, ...(height ? { height } : {}), maxHeight: screen.height * (dialog ? .85 : .9), flexShrink: 1, minHeight: 0,
+        style={{ ...shape, ...(height ? { height } : {}), maxHeight, flexShrink: 1, minHeight: 0,
           overflow: 'hidden', backgroundColor: c.surface0, borderWidth: 1, borderColor: c.border }}>
         <View {...(dialog ? {} : drag.panHandlers)}>
           {/* D28: a drag-to-close cue needs 3:1; the old opacity-.5 muted grey composited under that on the sheet. */}
@@ -134,13 +142,13 @@ export function KanbanSheet({ title, open, onClose, onDismiss, colors: c, platfo
           </View>
         </View>
         {/* REQ-87 ⑦: the content box itself stops above the bar; the sheet's own background fills the rest down to the edge. */}
-        <View testID="sheet-content" style={{ flexShrink: 1, minHeight: 0, ...(scroll ? {} : { flex: 1 }),
+        <View testID="sheet-content" style={{ flexShrink: 1, minHeight: 0, ...grow,
           paddingBottom: dialog ? 0 : inset + sheetBottomGap() }}>
           {notice}
           {scroll
             ? <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ padding: px(16), paddingBottom: dialog ? px(20) : px(8), gap: px(8) }}>{children}</ScrollView>
-            : <View style={{ flex: 1, minHeight: 0 }}>{children}</View>}
+            : <View style={{ flexShrink: 1, minHeight: 0, ...grow }}>{children}</View>}
         </View>
       </Animated.View>
     </KeyboardAvoidingView>

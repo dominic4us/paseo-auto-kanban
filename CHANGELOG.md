@@ -3,6 +3,36 @@
 All notable changes, newest first. Versions before 0.2.0 were private test builds published under the plugin
 ID `paseo-kanban`; this summary groups them by theme.
 
+## 0.2.4 — 2026-10-18
+
+- **Automation settings follow the server:** fresh reads replace confirmed local values; replies from older requests or screen instances cannot restore pending choices.
+
+- **Automation error feedback:** failed tabs use readable theme error colors; a refused archive-period change keeps the last confirmed saved period.
+
+- **Automation settings:** Cards, Archive, and Status & refresh tabs keep the existing controls and lists together, with keyboard navigation and visible attention marks.
+  - **Known limitation:** When two Kanban screens are open in the same app, the automatic refresh indicator may briefly show an older value just after a refresh; refresh once more to correct it. Saved settings are not lost.
+- **Phone settings sheet:** the Kanban settings sheet now scrolls to the end of long sections such as Automation, stays open when switching the Automation tabs, and scrolls the Display section at 150% after visiting Automation.
+
+- **Kanban in the Explorer:** a new Kanban tab beside Files and Changes shows the full overview of all workspaces, using the existing phone layout below 760px as the panel narrows.
+- **Open Kanban beside your agent:** a workspace Command Center action opens the Explorer tab; on newer desktop hosts the sidebar can too (see below), with the overview kept as the fallback on older hosts and phones.
+- **Explorer sidebar fixes:** workspace routes now use the host's validation instead of an empty SDK handle, and opening Kanban from a compact web sidebar closes that sidebar.
+- **Sidebar link:** clicking Kanban in Paseo's sidebar now opens it in the main view by default. To open it in the right panel instead, choose Display settings → **Sidebar link opens in** → **Right panel** (saved per device). The Command Center action is now **Kanban: Open in right panel**.
+
+- **Check up conflict messages:** Korean and English now explain that another change on the same board left cards untouched, and ask you to reopen Check up and review them.
+- **Automatic cards respect intervening changes:** updates use the board revision they read; a conflict leaves the newer board intact and is judged again on the next signal.
+
+- **Check up: cards to finish or put away, chosen by you.** A new button beside refresh (on a phone, the first row of the
+  gear's settings sheet, whose gear shows the number) lists cards that look finished or forgotten, from what the board and
+  the agents already say: cards in progress or review whose agents are all archived (suggested: Done), cards that have not
+  moved and whose agents have been quiet for over 7 days, requests waiting in the first column for over 14 days, and drafts
+  never sent for over 14 days (suggested: Archive). Nothing is ticked and nothing moves by itself: you tick cards and choose
+  **Move to Done**, which offers Undo, or **Archive**, which asks first and can be restored from **Archived cards**; a draft
+  is left out of Done. **Skip** keeps a card out until it changes or seven days pass, on that device. Each board is written
+  only on the revision it was read at, and Undo only on the revision the check up's own write left: if anything was
+  written to that board meanwhile, nothing more is written there, so no card changed elsewhere — even moved away and back,
+  or archived again — is ever overridden, and the notice says so. On a busy board Undo is therefore refused more often. The Done column's
+  **Tidy** is unchanged.
+
 ## 0.2.3
 
 - **Boards and cards are created again on a Windows Paseo server (update recommended on Windows).** There, saving failed

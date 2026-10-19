@@ -105,7 +105,7 @@ and the `kanban` CLI keeps working.
   under this ID (enabled or disabled), so `paseo plugin install` would refuse it with "Plugin ID … is already
   configured". If `update` cannot be used, remove it first and then install the tag:
   `paseo plugin remove paseo-auto-kanban`, then
-  `paseo plugin install https://github.com/panto-dominic/paseo-auto-kanban --ref <previous-release-tag>`.
+  `paseo plugin install https://github.com/dominic4us/paseo-auto-kanban --ref <previous-release-tag>`.
   Removing keeps the data directory; Paseo's own per-plugin settings start fresh.
 - From a checkout: check out the previous tag or commit, then `paseo plugin reload paseo-auto-kanban`.
 

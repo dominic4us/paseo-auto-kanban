@@ -560,7 +560,13 @@ export type ArchivedCard = z.infer<typeof archivedCard>;
 export const archivedList = defineRpc({ name: 'kanban.v1.archived.list',
   input: z.strictObject({ boardId }),
   output: envelope(z.object({ cards: z.array(archivedCard), total: z.number(), archivedDone: z.number() })) });
-/** REQ-52: a person brings an archived card back to the stage it left; it then gets its full days again. */
+/**
+ * REQ-52: a person brings an archived card back to the stage it left; it then gets its full days again.
+ * REQ-149 (gates 431·433 F3): `ifRevision` — the check up's Undo restores the card only while the board is still at that revision
+ * (the one its own archive, or its previous restore, produced: nobody wrote to the board since), the ledger's compare-and-swap;
+ * otherwise nothing is written and `kept` says the card was left as it is. `revision`: the board's revision after the restore,
+ * for the next card's. Without it (the archived list), as before.
+ */
 export const archivedRestore = defineRpc({ name: 'kanban.v1.archived.restore',
-  input: z.strictObject({ boardId, cardId }),
-  output: envelope(z.object({ changed: z.boolean() })) });
+  input: z.strictObject({ boardId, cardId, ifRevision: z.string().regex(/^[0-9a-f-]{36}:[1-9][0-9]*$/).optional() }),
+  output: envelope(z.object({ changed: z.boolean(), kept: z.literal(true).optional(), revision: z.string().optional() })) });

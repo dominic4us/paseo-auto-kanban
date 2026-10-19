@@ -34,13 +34,13 @@ test('REQ-141 W5·W7 Apache-2.0: the full license text with its copyright line, 
   assert.match(license, /^\s+Apache License\n\s+Version 2\.0, January 2004\n/);
   assert.match(license, /TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION/);
   assert.match(license, /END OF TERMS AND CONDITIONS/);
-  assert.match(license, /\n   Copyright 2026 panto-dominic\n/);
+  assert.match(license, /\n   Copyright 2026 dominic4us\n/);
   assert.doesNotMatch(license, /\[yyyy\]|\[name of copyright owner\]/, 'the placeholder is filled in');
   assert.equal(license.split('\n').length, 203, 'the whole text, 202 lines');
   assert.equal(pkg.license, 'Apache-2.0');
-  assert.equal(pkg.author, 'panto-dominic');
+  assert.equal(pkg.author, 'dominic4us');
   assert.ok(pkg.description.length > 20);
-  const home = 'https://github.com/panto-dominic/paseo-auto-kanban';
+  const home = 'https://github.com/dominic4us/paseo-auto-kanban';
   assert.deepEqual([pkg.homepage, pkg.repository, pkg.bugs], [home + '#readme', { type: 'git', url: 'git+' + home + '.git' }, { url: home + '/issues' }]);
   assert.ok(pkg.keywords.includes('paseo') && pkg.keywords.includes('kanban'));
   assert.notEqual(pkg.private, true, 'publishable to npm since 0.2.1; git installs keep compiling the sources');

@@ -8,7 +8,7 @@ import { CellPanel } from './cell-panel.js';
 import { useSessionValue } from './session.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { knownRevisions, noteActivity, useAutoRefresh, useShownWatch } from './auto-refresh.js';
-import { answeredSettings, useCardOrder, useKanbanSettings, useKanbanTheme, useUiScale } from './settings.js';
+import { answeredSettings, noteRefreshRead, useCardOrder, useKanbanSettings, useKanbanTheme, useUiScale } from './settings.js';
 import { sortCards } from './card-order.js';
 import { SortMenu } from './view-tools.js';
 import { useAutoCards, useWorkspaceAutoCards, workspaceAutoEntries, workspaceLeadEntries } from './auto-cards.js';
@@ -49,7 +49,8 @@ export function BoardScreen({ selector, onBack, workspaceTitle, panel = false, .
   const get = useRpc(boardGet);
   const key = `${props.host.id}:${selector.boardId ?? selector.workspaceId}`;
   // REQ-66: the host id brings the host's settings along, so a panel opened first obeys auto refresh off.
-  const state = useRead(key, () => get({ ...selector, hostId: props.host.id }));
+  const state = useRead(key, () => get({ ...selector, hostId: props.host.id }), true, undefined,
+    (data, token) => noteRefreshRead(props.host.id, data.settings?.autoRefresh, token));
   // Observation a: the last language kept for the host until this read answers; `null` = no words yet.
   const locale = useScreenLocale(props.host.id, state.data?.locale, !state.data && !state.error);
   const names = useDirectory(props.host.id, true, locale ?? 'en');
@@ -76,10 +77,10 @@ export function BoardScreen({ selector, onBack, workspaceTitle, panel = false, .
   // REQ-79: the same card order as the swimlane board (the same scope), so a choice made on either is on both at once.
   const [cardOrder, setCardOrder] = useCardOrder(props.host.id + ':surface', props.host.id, settings.cardOrder, true);
   // REQ-67 ⑥/REQ-68: the same settings window as the Kanban screen, from this board's ⚙ (the narrow panel's ⋯).
-  const autoCards = useAutoCards(props.host.id + ':surface', props.host.id, state.data?.autoCards, true);
-  const workspaceAuto = useWorkspaceAutoCards(props.host.id + ':surface', state.data?.autoCardsOff, true);
+  const autoCards = useAutoCards(props.host.id + ':surface', props.host.id, state.data?.autoCards, true, state.readToken);
+  const workspaceAuto = useWorkspaceAutoCards(props.host.id + ':surface', state.data?.autoCardsOff, true, state.readToken);
   // REQ-52: as on the swimlane board — the days (settings), the done column's "Archived N" and "Tidy", the archived list.
-  const autoArchive = useAutoArchive(props.host.id + ':surface', state.data?.autoArchive, true);
+  const autoArchive = useAutoArchive(props.host.id + ':surface', state.data?.autoArchive, true, state.readToken);
   const [tidy, setTidy] = useState<{ ask: boolean; text?: string } | null>(null), [archivedOpen, setArchivedOpen] = useState(false);
   const settingsWindow = useSettingsWindow(width, () => setMenu(false)), settingsRoot = settingsWindow.root;
   // REQ-68: a board that belongs to a Paseo workspace opens it from an ↗ in the top bar (once in ⋯).

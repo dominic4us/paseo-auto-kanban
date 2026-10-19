@@ -5,13 +5,13 @@
 **Un tablero de tareas (Board) de Paseo que tus agentes actualizan por sí mismos.**
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/lead-dark.gif">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/lead.gif" width="802" alt="Demostración animada: la tarjeta (Card) de un agente líder (Lead), marcada con una corona dorada, reparte trabajo entre dos subagentes. Cada subagente recibe una tarjeta con el nombre del agente líder; la tarjeta del agente líder cuenta las subtarjetas y cuántas están en ejecución. Cuando termina un subagente, su tarjeta pasa a revisión (Review).">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/lead-dark.gif">
+  <img src="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/lead.gif" width="802" alt="Demostración animada: la tarjeta (Card) de un agente líder (Lead), marcada con una corona dorada, reparte trabajo entre dos subagentes. Cada subagente recibe una tarjeta con el nombre del agente líder; la tarjeta del agente líder cuenta las subtarjetas y cuántas están en ejecución. Cuando termina un subagente, su tarjeta pasa a revisión (Review).">
 </picture>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/hero-dark.gif">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/hero.gif" width="802" alt="Al iniciar un agente en Paseo, aparece automáticamente una tarjeta en pendientes (To Do), pasa a en curso (In progress) mientras trabaja, pide tu atención si solicita un permiso y espera en revisión (Review) cuando se detiene.">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/hero-dark.gif">
+  <img src="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/hero.gif" width="802" alt="Al iniciar un agente en Paseo, aparece automáticamente una tarjeta en pendientes (To Do), pasa a en curso (In progress) mientras trabaja, pide tu atención si solicita un permiso y espera en revisión (Review) cuando se detiene.">
 </picture>
 
 ```sh
@@ -37,8 +37,8 @@ y qué ha terminado de verdad. Paseo muestra las conversaciones; este plugin mue
 y el contador «Requiere atención (Needs attention)» solo incluye lo que necesita una intervención humana.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/overview-dark.gif">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/overview.gif" width="800" alt="Una pantalla muestra varios proyectos con agentes trabajando, resalta la tarjeta del agente que espera una respuesta y después muestra el mismo tablero en un teléfono.">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/overview-dark.gif">
+  <img src="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/overview.gif" width="800" alt="Una pantalla muestra varios proyectos con agentes trabajando, resalta la tarjeta del agente que espera una respuesta y después muestra el mismo tablero en un teléfono.">
 </picture>
 
 Aunque un agente se haya detenido, puede que las pruebas o una compilación sigan ejecutándose. Marca la tarjeta como ocupada
@@ -46,8 +46,8 @@ Aunque un agente se haya detenido, puede que las pruebas o una compilación siga
 Puedes consultar y quitar la marca desde los detalles de la tarjeta.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/busy-dark.gif">
-  <img src="https://raw.githubusercontent.com/panto-dominic/paseo-auto-kanban/main/docs/images/busy.gif" width="800" alt="Una tarjeta en revisión (Review) adquiere un borde discontinuo al marcarla como ocupada. Tras dos horas se vuelve naranja y aumenta el contador de elementos que requieren atención (Needs attention) del tablero.">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/busy-dark.gif">
+  <img src="https://raw.githubusercontent.com/dominic4us/paseo-auto-kanban/main/docs/images/busy.gif" width="800" alt="Una tarjeta en revisión (Review) adquiere un borde discontinuo al marcarla como ocupada. Tras dos horas se vuelve naranja y aumenta el contador de elementos que requieren atención (Needs attention) del tablero.">
 </picture>
 
 ## Instalación
@@ -71,7 +71,7 @@ Node.js **22 o posterior**.
    O desde Git, indicando una etiqueta de versión:
 
    ```sh
-   paseo plugin install https://github.com/panto-dominic/paseo-auto-kanban --ref v0.2.3
+   paseo plugin install https://github.com/dominic4us/paseo-auto-kanban --ref v0.2.4
    ```
 
    Ambas opciones instalan el mismo plugin. El paquete npm se publica desde 0.2.1 y Paseo lo instala sin ejecutar scripts del paquete.
@@ -193,4 +193,4 @@ Trata la carpeta de datos y cualquier `PROCESS.md` como privados: contienen los 
 
 Licencia: [Apache-2.0](LICENSE)
 
-Este documento ha sido traducido por IA. Si encuentras expresiones poco naturales, comunícalas mediante una [incidencia](https://github.com/panto-dominic/paseo-auto-kanban/issues).
+Este documento ha sido traducido por IA. Si encuentras expresiones poco naturales, comunícalas mediante una [incidencia](https://github.com/dominic4us/paseo-auto-kanban/issues).

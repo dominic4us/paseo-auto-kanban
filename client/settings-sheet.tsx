@@ -1,13 +1,14 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Modal as NativeModal, Pressable, Text, View, useWindowDimensions } from 'react-native';
 import { Icon, ScrollView, TextInput } from '@getpaseo/plugin/client/react-native';
 import type { BoardAlign, LabsDTO, MailAliasRule, MailDTO, ThemeChoice, UiSettingsDTO } from '../shared/rpc.js';
 import type { Copy } from './i18n.js';
-import type { Palette } from './palette.js';
+import { readable, type Palette } from './palette.js';
 import { SETTINGS_WINDOW, settingsWindowSize, type HostPlatform } from './layout.js';
 import { Button, IconButton, Notice, usePointerTip } from './components.js';
 import { canStep, px, stepScale, UI_SCALE } from './ui-scale.js';
 import { useRowSaves, useSettingsWriter, type KanbanSettings, type RowState } from './settings.js';
+import { sidebarCanOpenPanel, useOpenLocation, writeOpenLocation, type OpenLocation } from './open-location.js';
 import type { AutoCardsSwitch, WorkspaceAutoSwitch } from './auto-cards.js';
 import { normalizeCwd } from '../shared/rpc.js';
 import { devDemoEntry } from './demo.js';
@@ -15,6 +16,7 @@ import { clockTime } from './refresh-status.js';
 import { KanbanSheet } from './kanban-sheet.js';
 import { AutoArchiveChoice, type AutoArchiveSwitch } from './archive.js';
 import type { HiddenBoards } from './hidden-boards.js';
+import { CheckupSettingsRow } from './checkup.js';
 
 /**
  * REQ-66: the Kanban settings window. The structure follows a desktop settings window — categories on
@@ -25,6 +27,7 @@ import type { HiddenBoards } from './hidden-boards.js';
  * area when it can be measured. Below 760px, and on native hosts, it is one column: categories first,
  * then the chosen category's rows, with ‹ back — in a Kanban sheet from the bottom (REQ-72), not the host's.
  */
+type AutomationTab = 'cards' | 'archive' | 'status';
 export type SettingsCategory = 'display' | 'automation' | 'about' | 'labs';
 export type PluginArea = { width: number; height?: number | undefined; x?: number | undefined; y?: number | undefined };
 
@@ -64,7 +67,7 @@ export type WorkspaceAutoCards = { entries: { cwd: string; name: string }[]; swi
 /** REQ-137: the read-only "Leads by workspace" lines (`workspaceLeadEntries`); a screen without the boards' cards passes none. */
 export type WorkspaceLeads = { cwd: string; name: string; text: string; kind: string }[];
 export function SettingsSheet({ open, onClose, onDismiss, hostId, settings, autoCards, readOnly, about, area, colors, m, platform,
-  demo, orderReset, connection, labs, workspaces, leads, autoArchive, hiddenBoards }: {
+  demo, orderReset, connection, labs, workspaces, leads, autoArchive, hiddenBoards, checkup }: {
   open: boolean; onClose: () => void; onDismiss?: () => void; hostId: string; settings: KanbanSettings; autoCards: AutoCardsSwitch;
   readOnly: boolean; about?: { version: string; release?: string | undefined } | undefined; area: PluginArea;
   colors: Palette; m: Copy; platform: HostPlatform; demo?: DemoSwitch | undefined; orderReset?: OrderReset | undefined;
@@ -74,14 +77,21 @@ export function SettingsSheet({ open, onClose, onDismiss, hostId, settings, auto
   autoArchive?: AutoArchiveSwitch | undefined;
   /** REQ-138: the empty boards of archived or gone workspaces the screen leaves out; none hidden (and not shown again) shows no row. */
   hiddenBoards?: HiddenBoards | undefined;
+  /** REQ-149: the phone's way to the check up — the first row of the category list, with how many cards it found. */
+  checkup?: { count: number; onOpen: () => void } | undefined;
 }) {
   const screen = useWindowDimensions();
   const wide = platform === 'web' && area.width >= SETTINGS_WINDOW.narrow;
   const [category, setCategory] = useState<SettingsCategory | null>(wide ? 'display' : null);
+  const [automationTab, setAutomationTab] = useState<AutomationTab>('cards');
+  const automationId = useId();
   // Every opening starts at the first category (wide) or at the category list (one column).
   // REQ-67 ⑥: and without the row errors of the last opening (a save still on its way keeps its note).
   const rows = useRowSaves(), write = useSettingsWriter(hostId);
+  // REQ-158: where the left menu opens Kanban; only a newer web host's menu can open the right panel.
+  const openIn = useOpenLocation(hostId), openInShown = platform === 'web' && sidebarCanOpenPanel();
   useEffect(() => { if (open) { setCategory(wide ? 'display' : null); rows.clearFailed(); } }, [open, wide]);
+  useEffect(() => { if (open) setAutomationTab('cards'); }, [open]);
   // REQ-72: the window and the sheet are both drawn here, background and text in the chosen theme.
   const c = colors;
   // D28: `c.border` reads at ~1.2:1 on the sheet, too faint to find; `c.divider` is the set's own line
@@ -93,6 +103,14 @@ export function SettingsSheet({ open, onClose, onDismiss, hostId, settings, auto
   // spelling (`normalizeCwd`); two Windows folders differing only in case are two rows, as the server judges them apart.
   const workspaceRows = (workspaces?.entries ?? []).map(w => ({ ...w, key: normalizeCwd(w.cwd) }))
     .filter((w, index, all) => !!w.key && all.findIndex(other => other.key === w.key) === index);
+  // A failed workspace must stay visible even while another row is saving.
+  const workspaceStates = workspaceRows.map(w => rows.state('autoCards:' + w.key));
+  const workspaceState = workspaceStates.find(state => state?.state === 'failed') ?? workspaceStates.find(Boolean) ?? null;
+  const automationAttention = {
+    cards: rows.state('autoCards')?.state === 'failed' || workspaceState?.state === 'failed',
+    archive: rows.state('autoArchive')?.state === 'failed' || !!autoArchive?.damaged,
+    status: rows.state('autoRefresh')?.state === 'failed' || !!leads?.some(w => w.kind === 'setUnusable'),
+  };
   const categories: { id: SettingsCategory; label: string }[] = [
     { id: 'display', label: m.settingsDisplay }, { id: 'automation', label: m.settingsAutomation }, { id: 'about', label: m.settingsAbout },
     ...(labsShown ? [{ id: 'labs' as const, label: m.settingsLabs }] : [])];
@@ -101,7 +119,8 @@ export function SettingsSheet({ open, onClose, onDismiss, hostId, settings, auto
   const stacked = !wide;
   const checkedAt = connection?.observedAt ? Date.parse(connection.observedAt) : NaN;
   const connected = connection ? connection.host + (Number.isFinite(checkedAt) ? ' · ' + m.lastCheckedAt(clockTime(checkedAt)) : '') : '';
-  const body = (id: SettingsCategory) => <View testID={'settings-category-' + id}>
+  const body = (id: SettingsCategory) => <View testID={'settings-category-' + id}
+    style={id === 'automation' ? { flex: 1, minHeight: 0 } : undefined}>
     {id === 'display' && <>
       {/* REQ-70: the theme leads the category. Four choices; Paseo (the host's colours) until one is picked. */}
       <SettingRow testID="setting-theme" title={m.theme} help={m.themeHelp} colors={c} m={m} stacked
@@ -113,10 +132,14 @@ export function SettingsSheet({ open, onClose, onDismiss, hostId, settings, auto
         state={rows.state('uiScale')} onRetry={() => rows.retry('uiScale')}
         control={<ScaleControl value={settings.uiScale} colors={c} m={m} mobile={stacked} disabled={readOnly || rows.state('uiScale')?.state === 'saving'}
           onChange={value => { if (!readOnly && value !== settings.uiScale) void rows.run('uiScale', () => write({ uiScale: value })); }} />} />
-      <SettingRow testID="setting-board-align" title={m.boardAlign} help={m.boardAlignHelp} colors={c} m={m} stacked last={!orderReset}
+      <SettingRow testID="setting-board-align" title={m.boardAlign} help={m.boardAlignHelp} colors={c} m={m} stacked last={!orderReset && !openInShown}
         state={rows.state('boardAlign')} onRetry={() => rows.retry('boardAlign')}
         control={<AlignChoice value={settings.boardAlign} colors={c} m={m} disabled={readOnly || rows.state('boardAlign')?.state === 'saving'}
           onChange={value => { if (!readOnly && value !== settings.boardAlign) void rows.run('boardAlign', () => write({ boardAlign: value })); }} />} />
+      {/* REQ-158: kept on this device at once, with no server write, so the row has no saving or failed state. */}
+      {openInShown && <SettingRow testID="setting-open-in" title={m.openIn} help={m.openInHelp} colors={c} m={m} stacked last={!orderReset}
+        state={null} control={<OpenInChoice value={openIn} colors={c} m={m} disabled={readOnly}
+          onChange={value => { if (!readOnly && value !== openIn) writeOpenLocation(hostId, value); }} />} />}
       {/* REQ-68: the way back from every arranged project and workspace (REQ-59 ③), once in ⋯. Like there, the
           demo resets its own in-memory order. */}
       {orderReset && <SettingRow testID="setting-order-reset" title={m.resetAllOrder} help={m.resetOrderHelp} colors={c} m={m} stacked={stacked} last
@@ -125,6 +148,18 @@ export function SettingsSheet({ open, onClose, onDismiss, hostId, settings, auto
             disabled={!orderReset.enabled} onPress={orderReset.onReset} /></View>} />}
     </>}
     {id === 'automation' && <>
+      <AutomationTabs value={automationTab} onChange={setAutomationTab} attention={automationAttention} id={automationId} colors={c} m={m} />
+      <ScrollView key={automationTab} testID="automation-scroll" style={{ flex: 1, minHeight: 0 }} keyboardShouldPersistTaps="handled">
+      {(['cards', 'archive', 'status'] as const).filter(tab => tab !== automationTab).map(tab => <View key={tab} role="tabpanel"
+        nativeID={automationId + '-panel-' + tab} style={{ display: 'none' }}
+        {...({ 'aria-labelledby': automationId + '-tab-' + tab } as object)} />)}
+      <View role="tabpanel" nativeID={automationId + '-panel-' + automationTab} testID={'automation-panel-' + automationTab}
+        {...({ 'aria-labelledby': automationId + '-tab-' + automationTab, tabIndex: 0 } as object)}>
+      <Text testID="automation-panel-title" accessibilityRole="header" style={{ color: c.foregroundMuted,
+        fontSize: px(11), fontWeight: '600', paddingTop: px(12), paddingBottom: px(4) }}>
+        {automationTab === 'cards' ? m.automationCardsTitle : automationTab === 'archive' ? m.automationArchiveTitle : m.automationStatusTitle}
+      </Text>
+      {automationTab === 'cards' && <>
       <SettingRow testID="setting-auto-cards" title={m.autoCards} help={m.autoCardsHelp} colors={c} m={m} stacked={stacked}
         state={rows.state('autoCards')} onRetry={() => rows.retry('autoCards')}
         control={<SettingSwitch testID="auto-cards-toggle" label={m.autoCards} value={autoCards[0]} colors={c}
@@ -133,19 +168,21 @@ export function SettingsSheet({ open, onClose, onDismiss, hostId, settings, auto
       {/* D44: each workspace's own switch — off stops its cards, their moves and its automatic board. */}
       {!!workspaceRows.length && <SettingRow testID="setting-auto-cards-workspaces" title={m.autoCardsWorkspaces}
         help={autoCards[0] ? m.autoCardsWorkspacesHelp : m.autoCardsWorkspacesHostOff} colors={c} m={m} stacked
-        state={workspaceRows.map(w => rows.state('autoCards:' + w.key)).find(Boolean) ?? null}
+        state={workspaceState}
         onRetry={() => workspaceRows.forEach(w => { if (rows.state('autoCards:' + w.key)?.state === 'failed') rows.retry('autoCards:' + w.key); })}
         control={<View testID="auto-cards-workspace-list" style={{ alignSelf: 'stretch' }}>
           {workspaceRows.map((w, index) => <View key={w.key} testID={'auto-cards-workspace-' + index}
             style={{ minHeight: px(40), flexDirection: 'row', alignItems: 'center', gap: px(12),
               borderTopWidth: index ? 1 : 0, borderColor: divider }}>
-            <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, color: c.foreground, fontSize: px(13) }}>{w.name}</Text>
+            <Text style={{ flex: 1, minWidth: 0, color: c.foreground, fontSize: px(13) }}>{w.name}</Text>
             <SettingSwitch testID={'auto-cards-workspace-toggle-' + index} label={m.autoCardsWorkspaces + ' · ' + w.name}
               value={workspaces!.switch.isOn(w.cwd)} colors={c}
               disabled={readOnly || !autoCards[0] || rows.state('autoCards:' + w.key)?.state === 'saving'}
               onChange={next => { if (!readOnly) void rows.run('autoCards:' + w.key, () => workspaces!.switch.set(w.cwd, next)); }} />
           </View>)}
         </View>} />}
+      </>}
+      {automationTab === 'archive' && <>
       {/* REQ-52 (research/294): finished cards archived by themselves after these days, or never (Off). */}
       {autoArchive && <SettingRow testID="setting-auto-archive" title={m.autoArchive} help={m.autoArchiveHelp} colors={c} m={m} stacked
         state={rows.state('autoArchive')} onRetry={() => rows.retry('autoArchive')}
@@ -155,6 +192,8 @@ export function SettingsSheet({ open, onClose, onDismiss, hostId, settings, auto
             onChange={days => { if (!readOnly) void rows.run('autoArchive', () => autoArchive.set(days)); }} />
           {autoArchive.damaged && <Notice testID="auto-archive-damaged" text={m.autoArchiveDamaged} colors={c} error />}
         </View>} />}
+      </>}
+      {automationTab === 'status' && <>
       {/* REQ-137 (research/273 B ⑤): who leads each workspace, read only — changed from a card's ⋯ ("Mark as lead"). */}
       {!!leads?.length && <SettingRow testID="setting-lead-status" title={m.leadStatusTitle} help={m.leadStatusHelp} colors={c} m={m} stacked state={null}
         control={<View testID="lead-status-list" style={{ alignSelf: 'stretch' }}>
@@ -171,6 +210,10 @@ export function SettingsSheet({ open, onClose, onDismiss, hostId, settings, auto
         control={<SettingSwitch testID="auto-refresh-toggle" label={m.autoRefresh} value={settings.autoRefresh} colors={c}
           disabled={readOnly || rows.state('autoRefresh')?.state === 'saving'}
           onChange={next => { if (!readOnly) void rows.run('autoRefresh', () => write({ autoRefresh: next })); }} />} />
+      </>}
+      </View>
+      {readOnly && <View style={{ paddingTop: px(12) }}><Notice text={m.demoReadOnly} colors={c} /></View>}
+      </ScrollView>
     </>}
     {id === 'about' && <>
       {/* REQ-68: the demo switch, once "Preview demo data" in ⋯. It stays on while the demo is showing, to turn it off.
@@ -191,9 +234,10 @@ export function SettingsSheet({ open, onClose, onDismiss, hostId, settings, auto
     </>}
     {id === 'labs' && labsShown && <LabsSection labs={settings.labs} readOnly={readOnly} rows={rows} write={write} link={labs}
       colors={c} m={m} stacked={stacked} />}
-    {readOnly && id !== 'about' && <View style={{ paddingTop: px(12) }}><Notice text={m.demoReadOnly} colors={c} /></View>}
+    {readOnly && id !== 'about' && id !== 'automation' && <View style={{ paddingTop: px(12) }}><Notice text={m.demoReadOnly} colors={c} /></View>}
   </View>;
   const categoryList = <View testID="settings-category-list">
+    {checkup && <CheckupSettingsRow count={checkup.count} onPress={checkup.onOpen} colors={c} m={m} />}
     {categories.map((entry, index) => <Pressable key={entry.id} testID={'settings-open-' + entry.id} accessibilityRole="button"
       accessibilityLabel={entry.label} onPress={() => setCategory(entry.id)}
       style={{ minHeight: px(48), flexDirection: 'row', alignItems: 'center', gap: px(8),
@@ -203,7 +247,7 @@ export function SettingsSheet({ open, onClose, onDismiss, hostId, settings, auto
     </Pressable>)}
   </View>;
   // One column: the list of categories, or one category under a ‹ back to the list.
-  const column = <View style={{ gap: px(4) }}>
+  const column = <View style={{ gap: px(4), ...(category === 'automation' ? { flex: 1, minHeight: 0, padding: px(16), paddingBottom: px(8) } : {}) }}>
     {category && <View style={{ flexDirection: 'row', alignItems: 'center', gap: px(4), marginLeft: px(-8) }}>
       <IconButton testID="settings-back" name="ChevronLeft" label={m.settingsBack} onPress={() => setCategory(null)}
         colors={c} mobile plain iconSize={px(22)} />
@@ -211,8 +255,11 @@ export function SettingsSheet({ open, onClose, onDismiss, hostId, settings, auto
     </View>}
     {category ? body(category) : categoryList}
   </View>;
+  // D67: Automation's list scrolls under its tabs by itself, so its sheet is as tall as a sheet may be (90%) — without a
+  // height Yoga lays that list out at 0 on the phone. The other categories scroll with the sheet and size to their rows.
   if (!wide) return <KanbanSheet testID="settings-sheet" closeTestID="settings-close" title={m.settings} open={open} onClose={onClose}
-    onDismiss={onDismiss} colors={c} platform={platform} closeLabel={m.close} centered={false}>{column}</KanbanSheet>;
+    onDismiss={onDismiss} colors={c} platform={platform} closeLabel={m.close} centered={false} scroll={category !== 'automation'}
+    {...(category === 'automation' ? { height: screen.height * .9 } : {})}>{column}</KanbanSheet>;
   const header = <View style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: px(16), paddingRight: px(8), minHeight: px(48),
     borderBottomWidth: 1, borderColor: c.border }}>
     <Text accessibilityRole="header" style={{ flex: 1, color: c.foreground, fontSize: px(15), fontWeight: '600' }}>{m.settings}</Text>
@@ -244,13 +291,48 @@ export function SettingsSheet({ open, onClose, onDismiss, hostId, settings, auto
               </Pressable>;
             })}
           </View>
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: px(20), paddingVertical: px(8) }}>
+          {category === 'automation' ? <View style={{ flex: 1, minWidth: 0, paddingHorizontal: px(20), paddingVertical: px(8) }}>{body('automation')}</View>
+          : <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: px(20), paddingVertical: px(8) }}>
             {body(category ?? 'display')}
-          </ScrollView>
+          </ScrollView>}
         </View>
       </View>
     </View>
   </NativeModal>;
+}
+
+/** REQ-151: automatic activation, one Tab stop, and paired tab/panel names on web and native.
+ * Wrap labels rather than hide or horizontally scroll them at 360px / 150%. The bar stays above the list's scroll.
+ */
+function AutomationTabs({ value, onChange, attention, id, colors: c, m }: {
+  value: AutomationTab; onChange: (next: AutomationTab) => void; attention: Record<AutomationTab, boolean>;
+  id: string; colors: Palette; m: Copy;
+}) {
+  const refs = useRef<(View | null)[]>([]);
+  const danger = readable(c.statusDanger, c.surface0, 4.5);
+  const tabs: { id: AutomationTab; label: string }[] = [
+    { id: 'cards', label: m.automationCardsTab }, { id: 'archive', label: m.automationArchiveTab }, { id: 'status', label: m.automationStatusTab }];
+  return <View testID="automation-tabs" role="tablist" accessibilityLabel={m.settingsAutomation}
+    style={{ flexDirection: 'row', flexShrink: 0, borderBottomWidth: 1, borderColor: c.divider }}>
+    {tabs.map((tab, index) => {
+      const selected = value === tab.id, label = tab.label + (attention[tab.id] ? ' · ' + m.automationNeedsAttention : '');
+      const keys = { tabIndex: selected ? 0 : -1, 'aria-controls': id + '-panel-' + tab.id,
+        onKeyDown: (e: { key?: string; preventDefault?: () => void }) => {
+          const next = e.key === 'ArrowRight' ? (index + 1) % tabs.length : e.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length
+            : e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : e.key === ' ' || e.key === 'Enter' ? index : -1;
+          if (next < 0) return;
+          e.preventDefault?.(); onChange(tabs[next]!.id); refs.current[next]?.focus();
+        } } as object;
+      return <Pressable key={tab.id} ref={node => { refs.current[index] = node; }} nativeID={id + '-tab-' + tab.id}
+        testID={'automation-tab-' + tab.id} role="tab" accessibilityRole="tab" accessibilityLabel={label}
+        accessibilityState={{ selected }} aria-selected={selected} {...keys} onPress={() => onChange(tab.id)}
+        style={{ flex: 1, minWidth: 0, minHeight: px(44), paddingHorizontal: px(4), paddingVertical: px(8), justifyContent: 'center',
+          borderBottomWidth: 2, borderBottomColor: selected ? (attention[tab.id] ? danger : c.accent) : 'transparent' }}>
+        <Text style={{ color: attention[tab.id] ? danger : selected ? c.foreground : c.foregroundMuted, fontSize: px(13), lineHeight: px(18),
+          fontWeight: selected ? '600' : '400', textAlign: 'center' }}>{tab.label}{attention[tab.id] ? ' !' : ''}</Text>
+      </Pressable>;
+    })}
+  </View>;
 }
 
 /**
@@ -411,6 +493,30 @@ function AlignChoice({ value, onChange, disabled, colors: c, m }: {
  * first in its category, so above would be cut off by the scroll area). REQ-80: by every glyph's rule
  * (`usePointerTip`) — a click leaves no tip behind, the keyboard's focus shows it.
  */
+/** REQ-158: the main screen or the right panel, drawn like the board position's choices — a Paseo window, the place lit. */
+function OpenInChoice({ value, onChange, disabled, colors: c, m }: {
+  value: OpenLocation; onChange: (next: OpenLocation) => void; disabled: boolean; colors: Palette; m: Copy;
+}) {
+  const choices: { id: OpenLocation; label: string }[] = [{ id: 'main', label: m.openInMain }, { id: 'panel', label: m.openInPanel }];
+  return <View accessibilityRole="radiogroup" role="radiogroup" accessibilityLabel={m.openIn} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: px(8) }}>
+    {choices.map(choice => {
+      const selected = choice.id === value, lit = selected ? c.accent : c.foregroundMuted;
+      const part = (on: boolean, width?: number) => <View style={{ ...(width ? { width: px(width) } : { flex: 1 }), borderRadius: px(2),
+        backgroundColor: on ? lit : c.foregroundMuted, opacity: on ? 1 : .3 }} />;
+      return <Pressable key={choice.id} testID={'open-in-' + choice.id} accessibilityRole="radio" accessibilityLabel={choice.label}
+        accessibilityState={{ checked: selected, disabled }} role="radio" aria-checked={selected} aria-disabled={disabled} disabled={disabled} onPress={() => onChange(choice.id)}
+        style={{ alignItems: 'center', gap: px(6), padding: px(8), borderRadius: px(8), borderWidth: 1, opacity: disabled && !selected ? .5 : 1,
+          borderColor: selected ? c.accent : c.border, backgroundColor: selected ? c.surface2 : 'transparent' }}>
+        {/* Paseo's left menu, then the main screen and, for the panel, the right panel beside the chat. */}
+        <View testID={'open-in-picture-' + choice.id} style={{ width: px(64), height: px(36), borderRadius: px(4), borderWidth: 1, borderColor: c.border,
+          backgroundColor: c.surface1, padding: px(4), flexDirection: 'row', gap: px(3) }}>
+          {part(false, 10)}{part(choice.id === 'main')}{choice.id === 'panel' && part(true, 18)}
+        </View>
+        <Text style={{ color: selected ? c.foreground : c.foregroundMuted, fontSize: px(12), fontWeight: selected ? '600' : '400' }}>{choice.label}</Text>
+      </Pressable>;
+    })}
+  </View>;
+}
 function ThemeChoiceRow({ value, onChange, disabled, colors: c, m }: {
   value: ThemeChoice; onChange: (next: ThemeChoice) => void; disabled: boolean; colors: Palette; m: Copy;
 }) {

@@ -68,7 +68,7 @@ jobs:
       id-token: write # proves this workflow's identity to npm without a token; the only write-like permission
     env:
       # Files the package should hold (npm pack --dry-run). Change it together with a release that adds or removes files.
-      EXPECTED_PACK_FILES: '225'
+      EXPECTED_PACK_FILES: '237'
       PACK_FILES_TOLERANCE: '5'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

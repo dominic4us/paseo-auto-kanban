@@ -211,11 +211,14 @@ the previous value and offers **Try again**.
 
 | Category | Rows |
 |---|---|
-| Display | Theme (Paseo, system, light, dark), Screen size (80–150 %, only the Kanban area), Board position (left / centre / right on screens wider than the board), Reset order |
+| Display | Theme (Paseo, system, light, dark), Screen size (80–150 %, only the Kanban area), Board position (left / centre / right on screens wider than the board), Sidebar link opens in (main view / right panel; desktop web and app hosts with the newer sidebar only), Reset order |
 | Automation | Agent auto cards, By workspace, Archive finished cards, Leads by workspace (read only), Auto refresh |
 | About | Version, connected host, hidden empty boards |
 
-Display rows are stored per host in `ui-state.json`. The screen language comes from `locale` in `config.json`.
+Display rows are stored per host in `ui-state.json`, except **Sidebar link opens in**: it is this device's choice, kept in
+the app's local storage (`paseo-kanban:open-in:<host>`) and applied at once. With **Right panel**, the sidebar's Kanban link
+opens the Kanban tab beside Files and Changes while a workspace is open in a wide window, and the main view otherwise.
+The screen language comes from `locale` in `config.json`.
 A **Labs** category appears only on devices with the developer key; its features are experimental, off by
 default, and not supported.
 
@@ -422,8 +425,30 @@ referenced later in the same batch. Guards may be in the file or the CLI options
 
 Run `kanban doctor --workspace BOARD_ID`. When an owner is confirmed dead but too recent, the output includes the
 reclaim time. `kanban unlock` requires a lock older than 60 seconds and proof that its process is gone or its
-start identity differs; a slow live owner is never taken over. Linux identifies abandoned locks through `/proc`;
-elsewhere, offline recovery is needed.
+start identity differs; a slow live owner is never taken over. Linux identifies abandoned locks through `/proc`.
+On Windows and macOS a lock also records the platform, an estimate of when the machine started (the clock minus
+the uptime) and a random machine id kept in the user's application data, outside the data folder:
+`%LOCALAPPDATA%\paseo-auto-kanban\machine-id` on Windows (`<home>\AppData\Local\…` when `LOCALAPPDATA` is unset
+or not an absolute path), `~/Library/Application Support/paseo-auto-kanban/machine-id` on macOS, made on first use.
+Its owner counts as gone only when the lock's machine id, host name (exact match) and platform equal this
+machine's, its start estimate is within five minutes of this machine's, and no process has its pid. The start
+estimate is not proof of the same boot — a lock left just before a quick restart may still be reclaimed, its owner
+having ended with the restart. A lock is not reclaimed automatically, and needs offline recovery, when its pid is in
+use (by the owner or by another process that reused it); when it comes from another machine or platform, or was
+written off Linux by version 0.2.2 or earlier; when the start estimates differ by more than five minutes, as after a
+restart that followed a longer run or after a large clock change; or when this process has no machine id. It has
+none when the file cannot be read or made or does not hold a valid id (an empty file, for instance), and when the
+file's path — with every link in it followed, checked on each use — lies inside the data folder or cannot be
+resolved. A running process keeps the id it first read: if the file is later emptied or deleted, that process
+goes on using the old id until it restarts, while a new process finds no id (emptied) or makes a new one (deleted),
+and locks with the old id then need offline recovery.
+
+The machine id tells machines apart only while each machine has its own copy. Do not share one data folder between
+machines (as above), and do not copy or sync the application data folder — `%LOCALAPPDATA%\paseo-auto-kanban` or
+`~/Library/Application Support/paseo-auto-kanban` — to another machine, whether by a sync service, a backup restore
+or a disk image. Two machines with the same id, host name and platform could then take each other's lock while its
+owner is still writing, and a change that was reported as saved could be lost. If such a copy happened, delete the
+`machine-id` file on one of the machines; a new id is made on next use.
 
 An unknown namespace or unavailable process identity needs offline recovery: stop all writers, inspect the
 reported paths, then `kanban unlock --force` (which asserts writers are stopped — never put it in an automatic

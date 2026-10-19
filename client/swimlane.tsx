@@ -16,7 +16,7 @@ import { overdueKey, swimlaneModel, allLanesFolded, concealFamily, expandLane, f
   type LaneStates, type LaneView, type ProjectGroup } from './swimlane-model.js';
 import { useCardOrder, useGroupByProject } from './settings.js';
 import { FoldAllButton, GroupToggle, SortMenu } from './view-tools.js';
-import { projectOptions as projectChoices, projectWorkspaceKeys, sameName, workspaceDetail, workspaceName } from './presentation.js';
+import { projectOptions as projectChoices, projectWorkspaceKeys, sameName, workspaceDetail, workspaceEntry, workspaceName } from './presentation.js';
 import { palette } from './palette.js';
 import { copy } from './i18n.js';
 import { stageColor } from './stage-color.js';
@@ -48,6 +48,7 @@ import { LaneViewSwitch, WorkflowPanel } from './workflow.js';
 import { laneOffer, settlePicks, toggleLaneView, type LaneViews, type PickOverrides } from './workflow-model.js';
 import { TryWorkflowButton } from './workflow-pick.js';
 import { ArchivedSheet, archivedDoneOf, DoneHeadTools, TidyConfirm, TidyNote, useAutoArchive } from './archive.js';
+import { CheckupButton, useCheckup } from './checkup.js';
 import { px } from './ui-scale.js';
 
 export function SwimlaneScreen({ width, onList, onBoard, preview = false, onPreview = () => {}, ...props }: PluginSurfaceProps & {
@@ -61,10 +62,10 @@ export function SwimlaneScreen({ width, onList, onBoard, preview = false, onPrev
   const state = useBoardFilters(scope, source.labels?.available === true, hidden, present), { filters, lanes, projects } = state;
   const hiddenKey = filters.hiddenProjects.join('\u0000');
   const [order, setOrder] = useLaneOrder(scope, props.host.id, source.order, !preview);
-  const autoCards = useAutoCards(scope, props.host.id, source.autoCards, !preview);
-  const workspaceAuto = useWorkspaceAutoCards(scope, source.autoCardsOff, !preview);
+  const autoCards = useAutoCards(scope, props.host.id, source.autoCards, !preview, source.settingsRead);
+  const workspaceAuto = useWorkspaceAutoCards(scope, source.autoCardsOff, !preview, source.settingsRead);
   // REQ-52: the automatic archive's days (settings), the done column's "Tidy" line and a workspace's archived list.
-  const autoArchive = useAutoArchive(scope, source.autoArchive, !preview);
+  const autoArchive = useAutoArchive(scope, source.autoArchive, !preview, source.settingsRead);
   const [tidy, setTidy] = useState<{ boardId: string; ask: boolean; text?: string } | null>(null);
   const [archivedOf, setArchivedOf] = useState<{ boardId: string; name: string; stages: { stageId: string; name: string }[] } | null>(null);
   // Scroll offsets never enter React state: the anchored rows follow an Animated value and the
@@ -107,6 +108,12 @@ export function SwimlaneScreen({ width, onList, onBoard, preview = false, onPrev
   const model = useMemo(() => swimlaneModel(source.boards, source.directory, filters.hiddenProjects, filters.attention, lanes,
     { query: filters.query, labels: filters.labels, ...(source.labels ? { workspaceLabels: source.labels } : {}), projects, orphaned, order, grouped, cardOrder, archived, agents: agentLinks }),
     [source.boards, overdue, source.directory, source.labels, hiddenKey, filters.attention, filters.query, filters.labels, lanes, projects, orphaned, order, grouped, cardOrder, archived, agentLinks]);
+  // REQ-149: the check up looks at the boards the screen shows (hidden projects left out), never the demo's.
+  const checkupBoards = useMemo(() => source.boards.filter(b => !filters.hiddenProjects.includes(workspaceEntry(source.directory, b.summary.workspaceId, b.summary.cwd)?.projectId ?? '')),
+    [source.boards, source.directory, hiddenKey]);
+  const checkup = useCheckup({ hostId: props.host.id, scope, source: signalSource, boards: checkupBoards, enabled: !preview && source.ready, refresh: source.refresh });
+  const boardName = (boardId: string) => { const board = source.boards.find(b => b.summary.id === boardId);
+    return board ? workspaceName(board.summary.workspaceId, board.summary.cwd, source.directory) : ''; };
   // REQ-59: projects move among the projects shown; the group Paseo no longer has is never among them.
   // REQ-64 ④: and among the ones in the same layer (with cards / without).
   const movable = model.groups.filter(g => g.projectId);
@@ -340,6 +347,8 @@ export function SwimlaneScreen({ width, onList, onBoard, preview = false, onPrev
       {/* REQ-66 ④: says whether the board keeps itself fresh, so a 3-minute pause does not read as broken. */}
       <View style={{ flex: 1, minWidth: 0 }}>{!preview && <RefreshStatus status={source.refreshStatus} colors={c} m={m} />}</View>
       <IconButton name="RefreshCw" label={m.refresh} colors={c} mobile={false} disabled={preview} onPress={source.refresh} tooltip />
+      {/* REQ-149: the check up beside refresh, with how many cards it found (none: no number, the button stays). */}
+      <CheckupButton count={checkup.count} onPress={checkup.open} disabled={preview || !source.ready} colors={c} m={m} />
       <IconButton name="Plus" label={m.create} colors={c} mobile={false} disabled={preview || !source.boards.length || !!source.error}
         onPress={() => { if (!preview) { setCreateBoard(null); setCreateLane(null); setCreate(true); } }} tooltip />
       {/* REQ-81: how the board is laid out sits with how the screen is shown — group by project and the card order right
@@ -436,6 +445,8 @@ export function SwimlaneScreen({ width, onList, onBoard, preview = false, onPrev
       onClose={() => setCreate(false)} onChanged={source.refresh} onSaved={fresh.created}
       onCreated={(boardId, cardId) => { setCreate(false); setDetail({ boardId, cardId }); }} />}
     {!preview && source.directorySettled && <DirectoryReadyMark />}
+    {checkup.layer({ workspaceOf: boardName, colors: c, m, platform: props.layout.platform, mobile: false,
+      onOpenCard: (boardId, cardId) => setDetail({ boardId, cardId }) })}
     {moves.layer()}
   </View>
   </FreshCardContext.Provider></FamilyFocusContext.Provider>

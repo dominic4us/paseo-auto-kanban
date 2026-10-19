@@ -12,13 +12,12 @@ export function archivedLine(card: ArchivedCard, stageName: string, m: Copy, now
     : stageName + ' · ' + m.archivedByHand(when) + ' · ' + m.archivedNotDone;
 }
 
-/**
- * REQ-52 / 298-F2: a choice this screen made, held only until the server's own reading says otherwise. `saving` while the write
- * is on its way; once saved, `base` is the reading the screen had when it chose — the choice is shown while that same reading
- * is the latest, and the next reading (which already holds the write, or another screen's later one) wins.
+/** Legacy adapter: only a confirmed choice based on the current reading can extend that reading.
+ * Pending choices never override a server value or damage warning. useAutoArchive now keeps confirmed
+ * values in a component-local request controller and does not create ArchiveChoice.saving objects.
  */
 export type ArchiveChoice = { days: number; base: AutoArchiveDTO | undefined; saving?: true };
 export function shownArchive(remote: AutoArchiveDTO | undefined, local: ArchiveChoice | null): { days: number; damaged: boolean } {
-  if (local && (local.saving || local.base === remote)) return { days: local.days, damaged: false };
+  if (local && !local.saving && local.base === remote) return { days: local.days, damaged: false };
   return { days: remote?.days ?? DEFAULT_ARCHIVE_DAYS, damaged: !!remote?.damaged };
 }

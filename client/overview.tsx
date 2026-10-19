@@ -29,20 +29,21 @@ import { useLaneOrder } from './ui-order.js';
 import { emptyLaneOrder, flatOrder } from './order-model.js';
 import { BoardScreen } from './board.js';
 import { knownRevisions, noteActivity, ShownContext, useAutoRefresh, useShownWatch } from './auto-refresh.js';
-import { answeredSettings, useKanbanSettings, useKanbanTheme, useUiScale } from './settings.js';
+import { answeredSettings, noteRefreshRead, useKanbanSettings, useKanbanTheme, useUiScale } from './settings.js';
 import { useAutoCards, useWorkspaceAutoCards, workspaceAutoEntries } from './auto-cards.js';
 import { SettingsSheet, useSettingsWindow } from './settings-sheet.js';
 import { DirectoryReadyMark, DirectoryStatus, TrackingStatus } from './directory-status.js';
 import { LocalePending, useScreenLocale } from './locale-hint.js';
 import { px } from './ui-scale.js';
 
-export function OverviewScreen(surface: PluginSurfaceProps) {
+export function OverviewScreen(surface: PluginSurfaceProps & { availableWidth?: number }) {
   // REQ-70: every screen below, and what they open, draws with the theme chosen in the settings.
   // REQ-72: the sheets and windows too — Kanban draws them all (KanbanSheet)
   const props = { ...surface, theme: useKanbanTheme(surface.host.id, surface.theme) };
   // REQ-139: and at the size chosen there, set before anything below draws.
   useUiScale(surface.host.id);
-  const [width, setWidth] = useState(useWindowDimensions().width);
+  const [measuredWidth, setWidth] = useState(useWindowDimensions().width);
+  const width = surface.availableWidth ?? measuredWidth;
   const [previewHost, setPreviewHost] = useState<string | null>(null);
   const preview = previewHost === props.host.id;
   useEffect(() => { setPreviewHost(null); }, [props.host.id]);
@@ -60,7 +61,7 @@ export function OverviewScreen(surface: PluginSurfaceProps) {
     {board ? <BoardScreen {...props} key={board} selector={{ boardId: board }} onBack={() => setBoard(null)} />
       : wide && mode === 'swimlane' ? <SwimlaneScreen {...props} preview={preview} onPreview={value => setPreviewHost(value ? props.host.id : null)} width={width} onList={() => setMode('list')} onBoard={setBoard} />
         : (layout === 'mobile' || preview) && mode === 'swimlane' ? <MobileSwimlaneScreen {...props} preview={preview} onPreview={value => setPreviewHost(value ? props.host.id : null)} width={width} onList={() => setMode('list')} onBoard={setBoard} />
-          : <ListOverview {...props} onBoard={setBoard} {...(layout !== 'legacy' ? { onKanban: () => setMode('swimlane') } : {})}
+          : <ListOverview {...props} availableWidth={width} onBoard={setBoard} {...(layout !== 'legacy' ? { onKanban: () => setMode('swimlane') } : {})}
             onDemo={() => { setPreviewHost(props.host.id); setMode('swimlane'); }} />}
   </View></ShownContext.Provider></SignalContext.Provider></PreviewContext.Provider>;
 }
@@ -76,11 +77,13 @@ function useLeadCard(hostId: string, detail: { boardId: string; cardId: string }
   return useMemo(() => !!stages && linkStages(stages, links, lead).some(stage => stage.cards.some(card => card.id === cardId && !!card.crew)),
     [stages, links, cardId, lead]);
 }
-export function ListOverview({ onBoard, onKanban, onDemo, ...props }: PluginSurfaceProps & {
+export function ListOverview({ onBoard, onKanban, onDemo, availableWidth, ...props }: PluginSurfaceProps & {
+  availableWidth?: number;
   /** REQ-68: turning the demo on from this screen's settings shows it on the Kanban screen, where it lives. */
   onBoard: (id: string) => void; onKanban?: () => void; onDemo?: () => void;
 }) {
-  const get = useRpc(overviewGet), state = useRead(props.host.id, () => get({ hostId: props.host.id, includeWorkspaces: true }));
+  const get = useRpc(overviewGet), state = useRead(props.host.id, () => get({ hostId: props.host.id, includeWorkspaces: true }), true, undefined,
+    (data, token) => noteRefreshRead(props.host.id, data.ui?.settings?.autoRefresh, token));
   // Observation a: the last language kept for the host until this read answers; `null` = no words yet.
   const locale = useScreenLocale(props.host.id, state.data?.locale, !state.data && !state.error);
   const names = useDirectory(props.host.id, true, locale ?? 'en');
@@ -102,13 +105,13 @@ export function ListOverview({ onBoard, onKanban, onDemo, ...props }: PluginSurf
   const lead = useLeadCard(props.host.id, detail);
   const [progressOnly, setProgressOnly] = useState(false);
   // REQ-67 ⑥/REQ-68: the same settings window as the Kanban screen, from this screen's ⚙.
-  const autoCards = useAutoCards(props.host.id + ':surface', props.host.id, state.data?.autoCards, true);
-  const workspaceAuto = useWorkspaceAutoCards(props.host.id + ':surface', state.data?.autoCardsOff, true);
+  const autoCards = useAutoCards(props.host.id + ':surface', props.host.id, state.data?.autoCards, true, state.readToken);
+  const workspaceAuto = useWorkspaceAutoCards(props.host.id + ':surface', state.data?.autoCardsOff, true, state.readToken);
   const settingsWindow = useSettingsWindow(useWindowDimensions().width);
   const c = palette(props.theme), m = copy(locale ?? 'en');
   const mobile = props.layout.platform !== 'web' || props.layout.compact;
   const bottom = bottomClearance(props.layout.platform);
-  const screenWidth = useWindowDimensions().width;
+  const windowWidth = useWindowDimensions().width, screenWidth = availableWidth ?? windowWidth;
   // REQ-78 ①②: as on the board, only what the workspace listing can already place is listed — nothing at all before
   // any listing is known, so no workspace is "not found in Paseo" or shown from a hidden project in the meantime.
   // REQ-138: the empty boards of archived or gone workspaces are left out here as on the Kanban screen, from the same switch.

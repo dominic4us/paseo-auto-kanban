@@ -12,22 +12,26 @@ interface FailedReply { ok: false; error: { code: string; message: string; nextA
 /** Last good data survives failures; a route/host change discards it and all late replies. */
 export function useRead<T>(key: string, read: () => Promise<ReadReply<T> | FailedReply>, enabled = true,
   /** REQ-78: what a key shows before its first reply (the directory's last listing in this app session). */
-  initial: (key: string) => T | null = () => null) {
+  initial: (key: string) => T | null = () => null,
+  onAcceptedRead?: (data: T, token: object) => void) {
+  const accepted = useRef(onAcceptedRead); accepted.current = onAcceptedRead;
   const reader = useRef(read); reader.current = read;
   const start = useRef(initial); start.current = initial;
   const epoch = useRef(0);
-  const [state, setState] = useState<{ key: string; data: T | null; error: string; loading: boolean }>(() => ({
-    key, data: initial(key), error: '', loading: false,
+  const [state, setState] = useState<{ key: string; data: T | null; error: string; loading: boolean; readToken: object | null }>(() => ({
+    key, data: initial(key), error: '', loading: false, readToken: null,
   }));
   const refresh = useCallback(async () => {
     if (!enabled) return;
     const current = ++epoch.current;
-    setState(previous => ({ key, data: previous.key === key ? previous.data : start.current(key), error: '', loading: true }));
+    setState(previous => ({ key, data: previous.key === key ? previous.data : start.current(key), error: '', loading: true,
+      readToken: previous.key === key ? previous.readToken : null }));
     try {
       const reply = await reader.current();
       if (current !== epoch.current) return;
       if (!reply.ok) throw new Error(`${reply.error.code}: ${reply.error.message} ${reply.error.nextAction}`);
-      setState({ key, data: reply.data, error: '', loading: false });
+      const readToken = {}; accepted.current?.(reply.data, readToken);
+      setState({ key, data: reply.data, error: '', loading: false, readToken });
     } catch (error) {
       if (current === epoch.current) setState(previous => ({ ...previous,
         error: error instanceof Error ? error.message : String(error), loading: false }));
@@ -45,12 +49,13 @@ export function useRead<T>(key: string, read: () => Promise<ReadReply<T> | Faile
       const reply = await reader.current();
       if (current !== epoch.current) return false;
       if (!reply.ok) { settle(); return false; }
-      setState({ key, data: reply.data, error: '', loading: false });
+      const readToken = {}; accepted.current?.(reply.data, readToken);
+      setState({ key, data: reply.data, error: '', loading: false, readToken });
       return true;
     } catch { if (current === epoch.current) settle(); return false; }
   }, [key, enabled]);
   useEffect(() => { void refresh(); return () => { epoch.current++; }; }, [refresh]);
-  return { ...(state.key === key ? state : { key, data: start.current(key), error: '', loading: true }), refresh, revalidate };
+  return { ...(state.key === key ? state : { key, data: start.current(key), error: '', loading: true, readToken: null }), refresh, revalidate };
 }
 const message = (error: unknown) => error instanceof Error ? error.message : String(error);
 /** A listing, and why the project names are missing from it when only they failed (the workspaces still place every board). */

@@ -1,5 +1,6 @@
 // REQ-79~81 headless browser runner: the real Kanban screen under react-native-web in Chromium, driven only by real
-// input — Playwright mouse moves/presses, the keyboard (Tab, Enter, Escape) and taps. No onPress calls, no DOM click().
+// input — Playwright mouse moves/presses, the keyboard (Tab, Enter, Escape) and taps. Browser scenes never call onPress or DOM click().
+// REQ-152 also runs separate Node VM contract checks of the preserved installed SDK/navigation callbacks (req152-installed.mjs).
 //
 //   npm run build && npm run test:web            (or: node tests/web/run.mjs [output-dir])
 //
@@ -10,13 +11,16 @@
 // read model; nothing touches a ledger. Results: <output-dir>/result.json and screenshots. J4 (research/136): by default a
 // fresh folder per run, _archive/test-web/<KST time>/ (outside git), so a run never overwrites an earlier gate's evidence.
 import fs from 'node:fs';
+import { runReq152 } from './req152.mjs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { build } from 'esbuild';
 import { chromium } from 'playwright-core';
+import { req151Scenes } from './req151.mjs';
 import { d53FlowScenes } from './d53-flow.mjs';
+import { d67Scenes } from './d67-sheet.mjs';
 import { applyOperations, builtinTemplate, summarizeBoard } from '../../dist/server/core/index.js';
 import { dispatchMode, emptyGoneBoards, enteredOf, stageEntries, stageEntry, toBoardDTO, toOverview } from '../../dist/server/read-model.js';
 import { judgeLead, readLeadEntry } from '../../dist/server/dispatch.js';
@@ -130,11 +134,11 @@ const qId = title => q.cards.find(c => c.title === title).id;
 const Q_AGENTS = [[Q_LEAD, []], [Q_SUB, []], [Q_ASK, [{ id: 'perm' }]]].map(([id, pendingPermissions]) => ({ ...AGENTS[0], id, title: 'Agent',
   pendingPermissions, cwd: '/tmp/wks_example01', workspaceId: 'wks_example01' })).concat([Q_OLD, Q_OLD_SUB].map(id => ({ ...AGENTS[0], id, title: 'Agent', status: 'idle',
   archivedAt: T(3), cwd: '/tmp/wks_example01', workspaceId: 'wks_example01' })));
-const leadReads = () => ({ agents: [...AGENTS, ...Q_AGENTS],
-  overview: { ...toOverview([q, b], 'en', T(6)), boardViews: [q, b].map(x => toBoardDTO(x, 'en', 'off', Date.now(), x === q ? Q_OF : undefined)),
+const leadReads = (locale = 'en') => ({ agents: [...AGENTS, ...Q_AGENTS],
+  overview: { ...toOverview([q, b], locale, T(6)), boardViews: [q, b].map(x => toBoardDTO(x, locale, 'off', Date.now(), x === q ? Q_OF : undefined)),
     removedIds: [], workspaceLabels: { available: false, source: 'none', definitions: [], byWorkspace: {} } },
-  boards: Object.fromEntries([q, b].map(x => [x.id, { board: toBoardDTO(x, 'en', 'off', Date.now(), x === q ? Q_OF : undefined),
-    revision: x.revision, locale: 'en', observedAt: T(6) }])) });
+  boards: Object.fromEntries([q, b].map(x => [x.id, { board: toBoardDTO(x, locale, 'off', Date.now(), x === q ? Q_OF : undefined),
+    revision: x.revision, locale: locale, observedAt: T(6) }])) });
 // REQ-104: a lead in review whose sub-card runs, one sub-card waits for you, and whose own check card ("총괄 확인", its own
 // agent) is in progress, started ten minutes ago; and a quiet lead, its sub-card done, last active twenty minutes ago.
 // research/166 J3: a busy lead too — its sub-card done, its own agent at work, last active twenty minutes ago.
@@ -531,7 +535,26 @@ const req145Reads = key => {
  * workspace (gate 340 F1: a card on this board whose agent belongs elsewhere), `…-ko` reads every reply in Korean.
  */
 const fixture = (mode, mobile, remembered = false) => {
-  const f = fixtureBase(mode, mobile, remembered), variant = String(remembered);
+  const f = fixtureBase(mode, mobile, String(remembered).startsWith('req152-') ? 'lead' : remembered), variant = String(remembered);
+  if (variant.startsWith('entry-')) {
+    const [, api, workspace, panelOpen, platform, problem] = variant.split('-');
+    f.entry = { api, workspace: workspace === 'workspace', panelOpen: panelOpen === 'open', platform, problem };
+    f.mobile = platform !== 'web' || problem === 'compact';
+  }
+  // REQ-158: the overview in a newer web host (its left menu registered), in Korean or English.
+  if (variant.startsWith('req158-')) {
+    const lang = variant.slice(7);
+    f.sidebarApi = true;
+    const translate = value => { if (!value || typeof value !== 'object') return; for (const [key, inner] of Object.entries(value)) if (key === 'locale') value[key] = lang; else translate(inner); };
+    translate(f.overview); translate(f.boards); translate(f.cards);
+  }
+  if (variant.startsWith('req152-')) {
+    const [, lang, width] = variant.split('-');
+    f.explorer = Number(width);
+    Object.assign(f, leadReads(lang));
+    const translate = value => { if (!value || typeof value !== 'object') return; for (const [key, inner] of Object.entries(value)) if (key === 'locale') value[key] = lang; else translate(inner); };
+    translate(f.overview); translate(f.boards); translate(f.cards);
+  }
   if (variant.startsWith('lead-panel-foreign')) f.agents = f.agents.map(agent => ({ ...agent, workspaceId: 'wks_foreign', cwd: '/tmp/wks_foreign' }));
   if (variant.startsWith('lead-panel') && variant.endsWith('-ko')) {
     const korean = value => { if (!value || typeof value !== 'object') return; for (const [key, inner] of Object.entries(value)) if (key === 'locale') value[key] = 'ko'; else korean(inner); };
@@ -556,7 +579,7 @@ const fixtureBase = (mode, mobile, remembered = false) => ({ mobile, width: mobi
   projects: { projects: [{ projectId: 'prj_example01', projectDisplayName: 'Example Project' }] }, agents: AGENTS,
   workspaces: { entries: [{ id: 'wks_example01', name: 'Example Workspace', projectId: 'prj_example01', projectDisplayName: 'Example Project' },
     { id: 'wks_example02', name: 'Second Workspace', projectId: 'prj_example01', projectDisplayName: 'Example Project' }], pageInfo: { nextCursor: null } },
-  ...(String(remembered).startsWith('d64-') ? d64Reads(remembered.slice(4)) : String(remembered).startsWith('req148-') ? req148Reads(remembered.slice(7)) : String(remembered).startsWith('d60-') ? d60Reads(remembered.slice(4)) : String(remembered).startsWith('req145-') ? req145Reads(remembered.slice(7)) : String(remembered).startsWith('req52-') ? req52Reads(remembered.slice(6)) : String(remembered).startsWith('req139-') ? req139Reads(remembered.slice(7)) : String(remembered).startsWith('req138-') ? req138Reads(remembered.slice(7)) : String(remembered).startsWith('req137-') ? req137Reads(remembered.slice(7)) : String(remembered).startsWith('req136f2-') ? req136f2Reads(remembered.slice(9)) : String(remembered).startsWith('req136-') ? req136Reads(remembered.slice(7)) : String(remembered).startsWith('req135-') ? req135Reads(remembered.slice(7)) : String(remembered).startsWith('req133-') ? req133Reads(remembered.slice(7)) : String(remembered).startsWith('req130-') ? req130Reads(remembered.slice(7)) : remembered === 'models' ? modelReads() : String(remembered).startsWith('modelsperm-') ? permReads(remembered.slice(11)) : String(remembered).startsWith('modelstate-') ? stateReads(remembered.slice(11)) : remembered === 'mail128long' ? mail128Reads(true) : remembered === 'mail128en' ? mail128Reads(false, 'en') : remembered === 'mailnodir' ? mailReads(MAIL, 'ko', '') : String(remembered).startsWith('wf-') ? workflowReads(remembered.slice(3)) : String(remembered).startsWith('bplong-') ? longNameReads({ locale: remembered.slice(7) }) : String(remembered).startsWith('dispatchheld-') ? heldReads(remembered.slice(13)) : String(remembered).startsWith('dispatch-') ? dispatchReads(remembered.slice(9)) : remembered === 'newlead' ? newLeadReads() : remembered === 'topic' ? topicReads() : remembered === 'lead' || String(remembered).startsWith('lead-panel') ? leadReads() : remembered === 'status' ? statusReads() : remembered === 'refs' ? refReads() : remembered === 'dwell' ? dwellReads() : remembered === 'busy' ? busyReads() : remembered === 'mail' ? mailReads() : remembered === 'mail128' ? mail128Reads() : remembered === 'mailtall' ? mailReads(MAIL_TALL) : remembered ? { ...lateReads(undefined), later: lateReads(LATE_OF) } : {}) });
+  ...(String(remembered).startsWith('req151-') ? req151Reads(remembered.slice(7)) : String(remembered).startsWith('req149-') ? req149Reads(remembered.slice(7)) : String(remembered).startsWith('d64-') ? d64Reads(remembered.slice(4)) : String(remembered).startsWith('req148-') ? req148Reads(remembered.slice(7)) : String(remembered).startsWith('d60-') ? d60Reads(remembered.slice(4)) : String(remembered).startsWith('req145-') ? req145Reads(remembered.slice(7)) : String(remembered).startsWith('req52-') ? req52Reads(remembered.slice(6)) : String(remembered).startsWith('req139-') ? req139Reads(remembered.slice(7)) : String(remembered).startsWith('req138-') ? req138Reads(remembered.slice(7)) : String(remembered).startsWith('req137-') ? req137Reads(remembered.slice(7)) : String(remembered).startsWith('req136f2-') ? req136f2Reads(remembered.slice(9)) : String(remembered).startsWith('req136-') ? req136Reads(remembered.slice(7)) : String(remembered).startsWith('req135-') ? req135Reads(remembered.slice(7)) : String(remembered).startsWith('req133-') ? req133Reads(remembered.slice(7)) : String(remembered).startsWith('req130-') ? req130Reads(remembered.slice(7)) : remembered === 'models' ? modelReads() : String(remembered).startsWith('modelsperm-') ? permReads(remembered.slice(11)) : String(remembered).startsWith('modelstate-') ? stateReads(remembered.slice(11)) : remembered === 'mail128long' ? mail128Reads(true) : remembered === 'mail128en' ? mail128Reads(false, 'en') : remembered === 'mailnodir' ? mailReads(MAIL, 'ko', '') : String(remembered).startsWith('wf-') ? workflowReads(remembered.slice(3)) : String(remembered).startsWith('bplong-') ? longNameReads({ locale: remembered.slice(7) }) : String(remembered).startsWith('dispatchheld-') ? heldReads(remembered.slice(13)) : String(remembered).startsWith('dispatch-') ? dispatchReads(remembered.slice(9)) : remembered === 'newlead' ? newLeadReads() : remembered === 'topic' ? topicReads() : remembered === 'lead' || String(remembered).startsWith('lead-panel') ? leadReads() : remembered === 'status' ? statusReads() : remembered === 'refs' ? refReads() : remembered === 'dwell' ? dwellReads() : remembered === 'busy' ? busyReads() : remembered === 'mail' ? mailReads() : remembered === 'mail128' ? mail128Reads() : remembered === 'mailtall' ? mailReads(MAIL_TALL) : remembered ? { ...lateReads(undefined), later: lateReads(LATE_OF) } : {}) });
 
 // REQ-126: agents named "<label>-<version>-<thinking>" — the version from the host's model list (`models`). A lead "총괄-09_…" in
 // review, a topic lead and its worker (two agents: "· +1") in progress, a label from before 09-30 ("실행_Sol-6"), a long label on a
@@ -979,6 +1002,63 @@ const d64Reads = spec => { const [percent, locale, n] = spec.split('-');
   return { ui: { hiddenProjects: [], order: { projects: [], workspaces: [] }, ...(percent === '100' ? {} : { settings: { uiScale: Number(percent) } }) },
     overview: { ...toOverview(boards, locale, T(6)), boardViews: boards.map(view), removedIds: [], workspaceLabels: { available: false, source: 'none', definitions: [], byWorkspace: {} } },
     boards: Object.fromEntries(boards.map(x => [x.id, { board: view(x), revision: x.revision, locale, observedAt: T(6) }])) }; };
+/**
+ * REQ-149 (research/423): a check up's boards — 'req149-<percent>-<ko|en>-<full|empty>'. Full: "Example Workspace" holds two cards
+ * whose agents are all archived (R1: one in progress, one in review with two agents), one still for 9 days with its agent quiet as
+ * long (R2), a request 27 days in To Do (R3), a 26-day-old draft (R4), fresh work and a finished card (neither a candidate);
+ * "Second Workspace" one more R1 and one R3. Empty: the fresh and finished cards only. Moves and archives show in the reads
+ * (`liveMoves`). Made-up names only.
+ */
+const R149_IDS = Object.fromEntries(['gone', 'goneTwo', 'goneThree', 'quiet', 'busy'].map((key, i) => [key, '00000000-0000-4000-8000-0000001490' + String(i).padStart(2, '0')]));
+const R149T = { r1: 'Release script dry run', r1pair: 'Notice for testers', r2: 'Report wording', r3: 'Licence decision', r4: 'Old idea draft',
+  fresh: 'Fresh work', fin: 'Finished work', r1b: 'Second board leftover', r3b: 'Backlog item' };
+const req149Reads = spec => {
+  const [percent, locale, data] = spec.split('-'), now = Date.now(), ago = days => new Date(now - days * 86400_000).toISOString();
+  let one = newBoard('7', 'wks_example01'), two = newBoard('8', 'wks_example02');
+  const put = (board, title, stageId, days, agentIds = [], extra = {}) => {
+    board = applyOperations(board, [{ ...add(title, stageId), ...extra }], actor, ctx(ago(days))).board;
+    for (const agentId of agentIds) board = applyOperations(board, [{ op: 'link', id: board.cards.at(-1).id, agentId }], actor, ctx(ago(days))).board;
+    return board;
+  };
+  // Oldest first: the ledger never lets a board's time run backwards.
+  one = put(one, R149T.fin, 'done', 30);
+  if (data === 'full') {
+    one = put(one, R149T.r3, 'todo', 27);
+    one = put(one, R149T.r4, 'todo', 26, [], { intent: 'draft' });
+    one = put(one, R149T.r1pair, 'review', 10, [R149_IDS.gone, R149_IDS.goneTwo]);
+    one = put(one, R149T.r2, 'doing', 9, [R149_IDS.quiet]);
+    one = put(one, R149T.r1, 'doing', 3, [R149_IDS.gone]);
+    two = put(two, R149T.r3b, 'todo', 20);
+    two = put(two, R149T.r1b, 'doing', 2, [R149_IDS.goneThree]);
+  }
+  one = put(one, R149T.fresh, 'doing', 0, [R149_IDS.busy]);
+  const boards = [one, two], view = x => toBoardDTO(x, locale, 'off', now);
+  const agents = [R_AGENT(R149_IDS.gone, { archivedAt: ago(2), status: 'closed', labels: { profile: '실행_Opus' } }),
+    R_AGENT(R149_IDS.goneTwo, { archivedAt: ago(9), status: 'closed', labels: { profile: '검토_Sonnet' } }),
+    R_AGENT(R149_IDS.goneThree, { archivedAt: ago(1), status: 'closed', labels: { profile: '실행_Opus' } }),
+    R_AGENT(R149_IDS.quiet, { lastActivityAt: ago(9), updatedAt: ago(9), labels: { profile: '산출물_Opus' } }),
+    R_AGENT(R149_IDS.busy, { status: 'running', lastActivityAt: ago(0), updatedAt: ago(0) })];
+  return { liveMoves: true, agents: [...AGENTS, ...agents], cardLocale: locale,
+    ui: { hiddenProjects: [], order: { projects: [], workspaces: [] }, ...(percent === '100' ? {} : { settings: { uiScale: Number(percent) } }) },
+    overview: { ...toOverview(boards, locale, new Date(now).toISOString()), boardViews: boards.map(view), removedIds: [],
+      workspaceLabels: { available: false, source: 'none', definitions: [], byWorkspace: {} } },
+    boards: Object.fromEntries(boards.map(x => [x.id, { board: view(x), revision: x.revision, locale, observedAt: new Date(now).toISOString() }])),
+    cards: Object.fromEntries(boards.flatMap(x => x.cards.map(card => [card.id, { boardId: x.id, revision: x.revision, card, template: x.template,
+      history: x.history.filter(h => h.cardId === card.id), ...enteredOf(stageEntry(stageEntries(x), card)) }]))) };
+};
+// REQ-151: real overview and settings, synthetic workspace lists (0/1/3/10), old lead warning, damaged archive.
+const req151Reads = spec => {
+  const [percent, locale, data = 'normal'] = spec.split('-'), count = data === 'empty' ? 0 : data === 'one' ? 1 : data === 'many' ? 10 : 3;
+  const boards = Array.from({ length: count }, (_, i) => newBoard((i + 1).toString(16), 'wks_req151_' + i));
+  const views = boards.map(board => toBoardDTO(board, locale, 'off', Date.now()));
+  if (data === 'unusable' && views[0]) { views[0].summary.lead = RL.mark; views[0].summary.leadNow = { agentId: RL.plain, title: 'Lead-02', by: 'name', mark: 'unusable' }; }
+  return { agents: data === 'unusable' ? req137Reads('unusable-' + locale).agents : [],
+    ui: { hiddenProjects: [], order: { projects: [], workspaces: [] }, settings: { uiScale: Number(percent), autoRefresh: true } },
+    workspaces: { entries: boards.map((board, i) => ({ id: board.workspaceId, name: locale === 'ko' ? '작업공간 ' + (i + 1) : 'Workspace ' + (i + 1), projectId: 'prj_example01', projectDisplayName: 'Example Project' })), pageInfo: { nextCursor: null } },
+    overview: { ...toOverview(boards, locale, T(6)), boardViews: views, removedIds: [], autoArchive: data === 'damaged' ? { days: 7, damaged: true } : { days: 7 },
+      workspaceLabels: { available: false, source: 'none', definitions: [], byWorkspace: {} } },
+    boards: Object.fromEntries(boards.map((board, i) => [board.id, { board: views[i], revision: board.revision, locale, observedAt: T(6) }])) };
+};
 const workflowReads = (spec = 'gate-ko') => {
   // REQ-125: a third part picks a built-in — for the second workspace (no file), or (`resting-<id>`) for the first, whose file wins.
   const [data, locale = 'ko', ...rest] = spec.split('-'), pickSpec = rest.join('-');
@@ -995,7 +1075,11 @@ const workflowReads = (spec = 'gate-ko') => {
 // ---- bundle -------------------------------------------------------------------------------------------------------
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kanban-web-'));
 await build({ entryPoints: [path.join(here, 'page.tsx')], bundle: true, format: 'iife', outfile: path.join(dir, 'page.js'),
-  jsx: 'automatic', target: 'es2022', logLevel: 'error', define: { 'process.env.NODE_ENV': '"development"', global: 'globalThis' },
+  jsx: 'automatic', target: 'es2022', logLevel: 'error',
+  // Gate-only source override for byte comparison with 6d668c4; default always bundles this worktree.
+  plugins: process.env.KANBAN_WEB_REQ151_BASELINE ? [{ name: 'req151-baseline', setup(b) {
+    b.onLoad({ filter: /client\/(settings-sheet\.tsx|i18n\.ts)$/ }, args => ({ contents: fs.readFileSync(path.join(process.env.KANBAN_WEB_REQ151_BASELINE, path.basename(args.path)), 'utf8'), loader: args.path.endsWith('tsx') ? 'tsx' : 'ts' }));
+  } }] : [], define: { 'process.env.NODE_ENV': '"development"', global: 'globalThis' },
   nodePaths: [path.join(here, 'node_modules'), path.join(root, 'node_modules')],
   alias: { 'react-native': 'react-native-web', '@getpaseo/plugin/client/react-native': path.join(here, 'shims/plugin-react-native.tsx'),
     '@getpaseo/plugin/client': path.join(here, 'shims/plugin-client.tsx'), react: path.join(root, 'node_modules/react'),
@@ -1102,7 +1186,7 @@ try {
   // REQ-135: =req135 the family line. REQ-136: =req136 only the English screen fixes (research/277) — early1, early2, req124, d47, req130,
   // req133, req134, req135 and req136 are all of it.
   // REQ-143: =req143 only the built-in banner line, the wide flow's loop labels and the phone's 건 table heading (research/347 X4·X9·X10).
-  const ONLY = process.env.KANBAN_WEB_ONLY ?? '', D47 = ONLY === 'd47', R130 = ONLY === 'req130', R133 = ONLY === 'req133', R134 = ONLY === 'req134', R135 = ONLY === 'req135', R136 = ONLY === 'req136', R137 = ONLY === 'req137', R125 = ONLY === 'req125', R52 = ONLY === 'req52', R125U1 = ONLY === 'req125u1', R125U2 = ONLY === 'req125u2', R125U3 = ONLY === 'req125u3', R125U4 = ONLY === 'req125u4', R138 = ONLY === 'req138', R139 = ONLY === 'req139', R142 = ONLY === 'req142', R143 = ONLY === 'req143', R145 = ONLY === 'req145', R148 = ONLY === 'req148', D64 = ONLY === 'd64';
+  const ONLY = process.env.KANBAN_WEB_ONLY ?? '', D47 = ONLY === 'd47', R130 = ONLY === 'req130', R133 = ONLY === 'req133', R134 = ONLY === 'req134', R135 = ONLY === 'req135', R136 = ONLY === 'req136', R137 = ONLY === 'req137', R125 = ONLY === 'req125', R52 = ONLY === 'req52', R125U1 = ONLY === 'req125u1', R125U2 = ONLY === 'req125u2', R125U3 = ONLY === 'req125u3', R125U4 = ONLY === 'req125u4', R138 = ONLY === 'req138', R139 = ONLY === 'req139', R142 = ONLY === 'req142', R143 = ONLY === 'req143', R145 = ONLY === 'req145', R148 = ONLY === 'req148', D64 = ONLY === 'd64', D62 = ONLY === 'd62', R149 = ONLY === 'req149', R151 = ONLY === 'req151', R152 = ONLY === 'req152', D67 = ONLY === 'd67';
   // Optional small foreground slices of req143 on a busy machine; default still runs the complete bundle.
   // 0:44, 44:88, ..., 220:264 cover D53; 'base' runs the earlier REQ-143 scenes. The first slice includes the component cases.
   const d53SliceText = process.env.KANBAN_WEB_D53_SLICE;
@@ -1128,7 +1212,7 @@ try {
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] }); await p.waitForTimeout(900);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] }); await p.waitForTimeout(400);
   };
-  if (ONLY !== 'req124' && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !E2) {
+  if (ONLY !== 'req124' && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !D62 && !R149 && !R151 && !R152 && !E2) {
   for (const mode of ['light', 'dark']) {
     const c = palette(PASEO_THEMES[mode]), scene = `wide-${mode}`, line = selectedLine(c, c.surface0);
     const p = await (await browser.newContext({ viewport: { width: 1400, height: 900 } })).newPage();
@@ -1999,7 +2083,7 @@ try {
   }
   // REQ-133: =early grew past ten minutes (588 s at 0.1.48, over 595 s now), so it runs as =early1 (the scenes above) and =early2
   // (from here); =early is still both. Their shared helpers are declared before the first half.
-  if (ONLY !== 'req124' && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !E1) {
+  if (ONLY !== 'req124' && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !D62 && !R149 && !R151 && !R152 && !E1) {
   // ---- REQ-95·96 by real input: the lead card first whatever the order, its head title, crown and stage edge; the orange of
   // an awaited answer; "Go to agent ↗" on hover and atop ⋯; "Response needed" to the agent that waits; the phone's sheet ----
   const opened = p => p.evaluate(() => window.__opened.slice());
@@ -3148,7 +3232,7 @@ try {
       els.filter(e => e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1).map(e => e.innerText));
     check(scene, 'no label or note cut', cut.length === 0, JSON.stringify(cut));
   }
-  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64) {
+  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !D62 && !R149 && !R151 && !R152) {
   // ---- REQ-124 2단위 (research/215·216·217): the wide lane heading's "보드 | 워크플로", only on the lane whose workspace holds
   // a workflow definition; the flow (steps, straight-angled lines, the diamond, the loops that went back, the chosen release's
   // way bold), the release × step table whose states are told apart ("기록 없음" is not "not done"), and a cell's evidence.
@@ -3293,7 +3377,7 @@ try {
     await p.context().close();
   }
   }
-  if (!EARLY && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64) {
+  if (!EARLY && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !D62 && !R149 && !R151 && !R152) {
   // ---- REQ-126: every agent named "<label>-<version>-<thinking>" on the cards (a lead, a topic lead, a worker with "· +1", an old label, a
   // long label on a crowded card, no label, archived, unknown) and in the detail (assignees, author, the move's reason, the history) ----
   for (const [mode, mobile] of [['light', false], ['dark', false], ['light', true], ['dark', true]]) {
@@ -3353,7 +3437,7 @@ try {
     await p.context().close();
   }
   }
-  if (!EARLY && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64) {
+  if (!EARLY && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !D62 && !R149 && !R151 && !R152) {
   // ---- D45: the wide detail's side panel (280px) keeps each assignee row on one line — a long label ("…_Astra-6-XHigh", also
   // the card's author), an old one ("실행_Sol-6-High"), new ones ("실행_Sol-6.1-High", with a second agent) — the name cut at its end,
   // the state and id whole; on 390px the rows read and wrap as before. ----
@@ -3581,7 +3665,7 @@ try {
   }
   fs.writeFileSync(path.join(out, 'd47.json'), JSON.stringify(d47Log, null, 2) + '\n');
   }
-  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64) {
+  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !D62 && !R149 && !R151 && !R152) {
   // ---- research/210 (208-D1) kept, REQ-124 ③: on 390px no workflow button in this release (not even on the lane with a
   // definition); the gate's real names keep eight characters and more, the heading's parts side by side inside the screen. ----
   for (const [mode, lang] of [['light', 'en'], ['dark', 'en'], ['light', 'ko'], ['dark', 'ko']]) {
@@ -3619,7 +3703,7 @@ try {
     await p.context().close();
   }
   }
-  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64) {
+  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !D62 && !R149 && !R151 && !R152) {
   // ---- REQ-127: the board screen a lane's name opens has the lane's "보드 | 워크플로" too, beside its title — only for a workspace
   // with a definition, only on a wide window. The workflow takes the board's whole width in place of its columns; the choice is the
   // lane's own (one session value), so the lane shows what its board showed when it is left. 1400 and 1920, light and dark. ----
@@ -4556,6 +4640,7 @@ try {
     const tab = mobile ? 'settings-open-automation' : 'settings-tab-automation';
     await p.waitForSelector(byId(tab), { timeout: 5000 }).catch(() => {});
     await press(byId(tab));
+    await press(byId('automation-tab-status'));
     await p.waitForSelector(byId('setting-lead-status'), { timeout: 5000 }).catch(() => {});
     await p.locator(byId('setting-lead-status')).first().scrollIntoViewIfNeeded().catch(() => {}); await p.waitForTimeout(300);
     const lines = await p.locator(byId('lead-status-list') + ' [data-testid^="lead-status-text-"]').allInnerTexts();
@@ -4600,6 +4685,7 @@ try {
       await press(byId('open-settings'));
       const tab = mobile ? 'settings-open-automation' : 'settings-tab-automation';
       await p.waitForSelector(byId(tab), { timeout: 5000 }).catch(() => {}); await press(byId(tab));
+      await press(byId('automation-tab-status'));
       await p.waitForSelector(byId('setting-lead-status'), { timeout: 5000 }).catch(() => {});
       await p.locator(byId('setting-lead-status')).first().scrollIntoViewIfNeeded().catch(() => {}); await p.waitForTimeout(300);
       const lines = (await p.locator(byId('lead-status-list') + ' [data-testid^="lead-status-text-"]').allInnerTexts()).map(t => t.trim());
@@ -4617,6 +4703,7 @@ try {
       await press(byId('open-settings'));
       const tab = mobile ? 'settings-open-automation' : 'settings-tab-automation';
       await p.waitForSelector(byId(tab), { timeout: 5000 }).catch(() => {}); await press(byId(tab));
+      await press(byId('automation-tab-status'));
       await p.waitForSelector(byId('setting-lead-status'), { timeout: 5000 }).catch(() => {});
       await p.locator(byId('setting-lead-status')).first().scrollIntoViewIfNeeded().catch(() => {}); await p.waitForTimeout(300);
       const lines = (await p.locator(byId('lead-status-list') + ' [data-testid^="lead-status-text-"]').allInnerTexts()).map(t => t.trim());
@@ -5501,6 +5588,7 @@ try {
     const tab = wide ? 'settings-tab-automation' : 'settings-open-automation';
     await p.waitForSelector(byId(tab), { timeout: 5000 }).catch(() => {});
     await press(byId(tab));
+    await press(byId('automation-tab-archive'));
     await p.waitForSelector(byId('setting-auto-archive'), { timeout: 5000 }).catch(() => {});
     await p.locator(byId('setting-auto-archive')).first().scrollIntoViewIfNeeded().catch(() => {});
     check(scene, 'the setting: 7 days chosen, Off among the choices', (await p.locator(byId('auto-archive-7')).first().getAttribute('aria-checked')) === 'true'
@@ -5521,6 +5609,7 @@ try {
       await p.getByRole('button', { name: m.refresh, exact: true }).first().click(); await p.waitForTimeout(500);
       await press(byId('open-settings'));
       await p.waitForSelector(byId(tab), { timeout: 5000 }).catch(() => {}); await press(byId(tab));
+      await press(byId('automation-tab-archive'));
       await p.waitForSelector(byId('setting-auto-archive'), { timeout: 5000 }).catch(() => {});
       await p.locator(byId('setting-auto-archive')).first().scrollIntoViewIfNeeded().catch(() => {});
     };
@@ -6658,7 +6747,14 @@ try {
           const cv = el.querySelector('[data-testid="flow-canvas"]');
           const clipped = root => [...root.querySelectorAll('*')].filter(n => n.innerText?.trim() && n.scrollWidth > n.clientWidth + 1
             && getComputedStyle(n).overflowX !== 'visible' && getComputedStyle(n).textOverflow !== 'ellipsis').map(n => n.innerText);
-          if (!cv) { const ladder = el.querySelector('[data-testid="mobile-workflow-ladder"]'); return { mobile: true, ladder: rect(ladder), clipped: clipped(ladder) }; }
+          // D57 (research/418): a name laid over more lines than its clamp shows, or wider than its box, is cut.
+          const cutNames = texts => texts.flatMap(t => {
+            const range = document.createRange(); range.selectNodeContents(t);
+            const lines = new Set([...range.getClientRects()].map(q => Math.round(q.top))).size, clamp = Number(getComputedStyle(t).webkitLineClamp) || Infinity;
+            return lines > clamp || t.scrollWidth > t.clientWidth + 1 ? [{ text: t.textContent, lines, clamp, scrollWidth: t.scrollWidth, clientWidth: t.clientWidth }] : [];
+          });
+          if (!cv) { const ladder = el.querySelector('[data-testid="mobile-workflow-ladder"]');
+            return { mobile: true, ladder: rect(ladder), clipped: clipped(ladder), names: cutNames([...ladder.querySelectorAll('[data-testid^="ladder-step-"] div[dir]')]) }; }
           const obstacles = [...cv.querySelectorAll('[data-testid^="flow-node-"], [data-testid^="flow-count-"], [data-testid="flow-edge-label"]')]
             .map(n => ({ id: n.dataset.testid, text: n.innerText, rect: rect(n) }));
           const loops = [...cv.querySelectorAll('[data-testid="flow-loop-label"]')].map(n => ({ text: n.innerText, rect: rect(n), clipped: clipped(n) }));
@@ -6674,16 +6770,19 @@ try {
             if (w > 0 && h > 0) forwardHits.push({ a:a.text, b:b.text, w, h });
           }
           const outside = [...loops, ...obstacles.filter(o => o.id === 'flow-edge-label')].filter(l => l.rect.l < canvas.l || l.rect.r > canvas.r || l.rect.t < canvas.t || l.rect.b > canvas.b);
-          return { mobile: false, canvas, obstacles, loops, hits, forwardHits, outside, clipped: loops.flatMap(l => l.clipped) };
+          const names = cutNames([...cv.querySelectorAll('[data-testid^="flow-node-"]')].map(n => n.querySelector('div[dir]')));
+          return { mobile: false, canvas, obstacles, loops, hits, forwardHits, outside, clipped: loops.flatMap(l => l.clipped), names };
         });
         geometry.push({ scene, ...geo });
         if (geo.mobile) {
           check(scene, 'D53 phone ladder stays inside 390 with no sideways clipping', geo.ladder.l >= 0 && geo.ladder.r <= width && geo.clipped.length === 0, JSON.stringify(geo));
+          check(scene, 'D57 no step name cut on the phone ladder', geo.names.length === 0, JSON.stringify(geo.names));
         } else {
           check(scene, 'D56 forward label border overlap is exactly zero', geo.forwardHits.length === 0, JSON.stringify(geo.forwardHits));
           check(scene, 'D53 every loop label drawn', geo.loops.length === t.edges.filter(e => e.back && e[lang]).length, JSON.stringify(geo.loops));
           check(scene, 'D53 loop border overlap is exactly zero', geo.hits.length === 0, JSON.stringify(geo.hits));
           check(scene, 'D53 no label outside canvas or clipped', geo.outside.length === 0 && geo.clipped.length === 0, JSON.stringify({ outside: geo.outside, clipped: geo.clipped }));
+          check(scene, 'D57 no step name cut (lines over its clamp or wider than its box)', geo.names.length === 0, JSON.stringify(geo.names));
         }
         check(scene, 'no page errors', errors.length === 0, errors.join(' | '));
         if (geo.hits?.length || width === 1920 && mode === 'light' && profile === 'history' || width === 760 && t.id === 'sales-b2b' && profile === 'bare') {
@@ -7070,6 +7169,301 @@ try {
   }
   fs.writeFileSync(path.join(out, 'd64-geometry.json'), JSON.stringify(geo64, null, 1) + '\n');
   }
+  // D62 (research/403 J1): paused, the Kanban screen's status says when it last looked, whole — beside a ⚙ lifted up to the title
+  // too — at 360 and 390px, 100, 140 and 150%, in Korean and English, the message lab on and off, light and dark. The header stays
+  // the two lines D60 left it; the list screen says no status at all. d62-status.json keeps each row's boxes and markup.
+  if (ONLY === '' || D62) {
+  const geo62 = [], D62_NOW = Date.parse('2026-10-16T23:41:00Z');
+  for (const W of [360, 390]) for (const percent of [100, 140, 150]) for (const lang of ['ko', 'en']) for (const lab of ['mail', 'plain']) for (const mode of ['light', 'dark']) {
+    const k = percent / 100, scene = `d62-${W}-${percent}-${lang}-${lab}-${mode}`, m = copy(lang);
+    const p = await (await browser.newContext({ viewport: { width: W, height: 780 }, hasTouch: true, isMobile: true, timezoneId: 'Asia/Seoul' })).newPage(); p.setDefaultTimeout(5000);
+    const errors = []; p.on('pageerror', e => errors.push(String(e)));
+    await p.clock.install({ time: D62_NOW });
+    await p.goto(page(mode, true, `d60-${percent}-${lang}-${lab}`)); await p.waitForSelector(byId('open-settings'), { timeout: 15000 }); await p.waitForTimeout(600);
+    // Three minutes with no one touching the screen pause the polling (AUTO_REFRESH.idleMs).
+    await p.clock.fastForward(181000); await p.waitForTimeout(300);
+    const row = await p.locator(byId('mobile-appbar')).first().evaluate(bar => {
+      const rect = e => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; };
+      const status = bar.querySelector('[data-testid="refresh-status"]'), title = bar.querySelector('div[dir="auto"]');
+      const range = document.createRange(); range.selectNodeContents(status);
+      const lines = new Set([...range.getClientRects()].map(q => Math.round(q.top))).size, clamp = Number(getComputedStyle(status).webkitLineClamp) || 1;
+      const glyphs = [...bar.querySelectorAll('[role="button"]')].map(e => ({ id: e.dataset.testid ?? e.getAttribute('aria-label'), ...rect(e.parentElement) }));
+      return { text: status.textContent, label: status.getAttribute('aria-label'), box: rect(status), words: rect(range), lines, clamp,
+        cut: lines > clamp || status.scrollWidth > status.clientWidth + 1 || status.scrollHeight > status.clientHeight + 1,
+        title: rect(title), titleCut: title.scrollWidth > title.clientWidth + 1, glyphs, bar: rect(bar), html: bar.outerHTML };
+    });
+    const at = new Date(D62_NOW + 9 * 3600_000), hhmm = at.toISOString().slice(11, 16), time = row.text.slice(-5);
+    // A line is what overlaps in height (research/403's measure): under the title, the status may set the title above the glyphs' middle.
+    const lines = [];
+    for (const item of [{ id: 'title', ...row.title }, ...row.glyphs].sort((u, v) => u.y - v.y)) {
+      const line = lines.find(l => Math.min(l.bottom, item.y + item.h) - Math.max(l.y, item.y) > Math.min(8, item.h / 2));
+      if (line) { line.items.push(item.id); line.y = Math.min(line.y, item.y); line.bottom = Math.max(line.bottom, item.y + item.h); }
+      else lines.push({ y: item.y, bottom: item.y + item.h, items: [item.id] });
+    }
+    const meets = (a, b) => a.x < b.x + b.w - .5 && b.x < a.x + a.w - .5 && a.y < b.y + b.h - .5 && b.y < a.y + a.h - .5;
+    geo62.push({ scene, text: row.text, lines: row.lines, clamp: row.clamp, cut: row.cut, status: row.box, words: row.words, layout: lines.map(l => l.items), html: row.html });
+    // Shown whole, or as "Paused · 09:12" where five or six glyphs share the title's line; a screen reader hears the whole sentence.
+    check(scene, 'paused, the status says when it last looked', /^\d\d:\d\d$/.test(time) && time >= hhmm
+      && [m.refreshPaused(time), m.refreshPausedShort?.(time)].includes(row.text) && (row.label ?? row.text) === m.refreshPaused(time), JSON.stringify([row.text, row.label]));
+    check(scene, 'the title whole', !row.titleCut && row.title.x >= -.5, JSON.stringify(row.title));
+    check(scene, 'the status whole on the screen, no ellipsis', !row.cut, JSON.stringify({ lines: row.lines, clamp: row.clamp, box: row.box, words: row.words }));
+    check(scene, 'the status inside the screen and the header, clear of the glyphs', row.words.x >= -.5 && row.words.x + row.words.w <= W + .5
+      && row.words.y >= row.bar.y - .5 && row.words.y + row.words.h <= row.bar.y + row.bar.h + .5 && !row.glyphs.some(g => meets(row.words, g)), JSON.stringify(row.words));
+    check(scene, 'the header still two lines at most, no glyph alone, each a finger\'s size', lines.length <= 2
+      && !lines.some(l => l.items.length === 1 && l.items[0] !== 'title') && row.glyphs.every(g => g.w >= 44 * k - .5 && g.h >= 44 * k - .5), JSON.stringify(lines.map(l => l.items)));
+    await p.screenshot({ path: path.join(out, `${scene}.png`), clip: { x: 0, y: 0, width: W, height: Math.ceil(row.bar.y + row.bar.h + 4) } });
+    await p.locator(byId('view-toggle')).first().tap();
+    await p.waitForSelector(byId('list-title-row'), { timeout: 10000 });
+    check(scene, 'the list screen says no status line', await p.locator(byId('list-title-row') + ' ' + byId('refresh-status')).count() === 0);
+    check(scene, 'no page errors', errors.length === 0, errors.join(' | '));
+    await p.context().close();
+  }
+  fs.writeFileSync(path.join(out, 'd62-status.json'), JSON.stringify(geo62, null, 1) + '\n');
+  }
+  // REQ-149 (research/423): the check up. Wide (1920): the button right of refresh with how many cards it found (none: no
+  // number), its window — the groups in the rules' order, nothing ticked, the suggestions, the reason lines — and a person's
+  // choice: Done moves the ticked requests only (a draft left out, said on the button), Undo puts them back, Archive asks
+  // first, Skip keeps a card out on this device (after a reload too), a title opens the card. Phone (360/390): no new glyph in
+  // the top bar, ⚙ carries the number, the settings sheet's first row opens the list, rows and the bottom row inside the
+  // screen and a finger's size, a row's ⋯. Both languages, light and dark, 100 and 150%; the empty state. checkup-geometry.json
+  // keeps the boxes. Made-up names only.
+  if (ONLY === '' || R149) {
+  const geo149 = [];
+  const RULES149 = ['orphaned', 'stalled', 'waiting', 'draft'];
+  const groups149 = p => p.locator('[data-testid^="checkup-group-"]').evaluateAll(els => els.map(e => e.dataset.testid)
+    .filter(id => /^checkup-group-(orphaned|stalled|waiting|draft)$/.test(id)).map(id => id.slice(14)));
+  const rows149 = p => p.locator('[data-testid^="checkup-row-"]').evaluateAll(els => els.filter(e => /^checkup-row-(orphaned|stalled|waiting|draft)-\d+$/.test(e.dataset.testid))
+    .map(e => { const r = e.getBoundingClientRect(), tick = e.querySelector('[data-testid="checkup-tick"]');
+      return { id: e.dataset.testid, x: r.x, y: r.y, w: r.width, h: r.height, ticked: tick?.getAttribute('aria-checked') === 'true',
+        title: e.querySelector('[data-testid="checkup-title"]')?.getAttribute('aria-label') ?? '', line: e.querySelector('[data-testid="checkup-line"]')?.textContent ?? '' }; }));
+  const textOf = async (p, sel) => (await p.locator(sel).first().textContent())?.trim() ?? '';
+  const checkupWrites = p => p.evaluate(() => window.__inputs.filter(v => v.name === 'kanban.v1.board.mutate').map(v => v.input));
+  for (const [W, mobile] of [[1920, false], [390, true], [360, true]]) for (const percent of [100, 150]) for (const lang of ['ko', 'en'])
+  for (const [mode, data] of [['light', 'full'], ...((lang === 'en') === (percent === 150) ? [['dark', 'full']] : []), ...(lang === 'ko' && percent === 100 ? [['light', 'empty']] : [])]) {
+    if (mobile && W === 360 && percent === 100 && data === 'empty') continue;
+    const m = copy(lang), k = percent / 100, suffix = `${mobile ? 'phone' : 'wide'}-${W}-${percent}-${lang}-${mode}-${data}`, scene = 'req149-' + suffix;
+    const H = mobile ? 780 : 1080, flow = data === 'full' && mode === 'light' && percent === 100 && lang === 'ko' && W !== 360;
+    const ctx149 = await browser.newContext(mobile ? { viewport: { width: W, height: H }, hasTouch: true, isMobile: true } : { viewport: { width: W, height: H } });
+    const p = await ctx149.newPage(); p.setDefaultTimeout(5000);
+    const errors = []; p.on('pageerror', e => errors.push(String(e)));
+    const press = async sel => { await p.locator(sel).first().scrollIntoViewIfNeeded(); await p.waitForTimeout(100);
+      if (mobile) await p.locator(sel).first().tap(); else await clickAt(p, sel); await p.waitForTimeout(250); };
+    const url = page(mode, mobile, `req149-${percent}-${lang}-${data}`);
+    await p.goto(url);
+    const want = data === 'full' ? 7 : 0, countSel = mobile ? byId('open-settings-badge') : byId('checkup-count');
+    const ready = await p.waitForSelector(byId(mobile ? 'mobile-swimlane-screen' : 'checkup-button'), { timeout: 15000 }).then(() => true, () => false);
+    check(scene, 'the screen shown', ready);
+    if (!ready) { await ctx149.close(); continue; }
+    if (want) check(scene, 'the number found once the agents are read', await p.waitForFunction(([sel, n]) => document.querySelector(sel)?.textContent?.trim() === n,
+      [countSel, String(want)], { timeout: 10000 }).then(() => true, () => false), await textOf(p, countSel).catch(() => 'none'));
+    else { await p.waitForTimeout(1500); check(scene, 'no number when nothing is found', await p.locator(countSel).count() === 0); }
+    if (!mobile) {
+      const row = await box(p, byId('swimlane-title-row')), button = await box(p, byId('checkup-button'));
+      const refresh = await box(p, byId('swimlane-title-row') + ` [aria-label="${m.refresh}"]`), settings = await box(p, byId('open-settings'));
+      geo149.push({ scene, row, button, refresh, settings });
+      check(scene, 'right of refresh on the title row', button.x > refresh.x + refresh.width - 1 && button.x - (refresh.x + refresh.width) < 16 * k
+        && Math.abs((button.y + button.height / 2) - (refresh.y + refresh.height / 2)) < 1, JSON.stringify({ button, refresh }));
+      check(scene, 'the row still ends at ⚙ inside the window', settings.x + settings.width <= Math.min(W, row.x + row.width) + .5, JSON.stringify({ settings, row }));
+      check(scene, 'its name said to a screen reader', await p.locator(byId('checkup-button')).first().getAttribute('aria-label') === m.checkupLabel(want));
+      check(scene, 'its words whole', await p.locator(byId('checkup-button')).first().evaluate(e => [...e.querySelectorAll('div[dir="auto"]')].every(w => w.scrollWidth <= w.clientWidth + 1)));
+      if (W === 1920 && percent === 100 && lang === 'ko') await p.screenshot({ path: path.join(out, `${scene}-row.png`), clip: { x: 0, y: 0, width: 1920, height: 120 } });
+      await press(byId('checkup-button'));
+    } else {
+      check(scene, 'no glyph of its own in the top bar (D60)', await p.locator(byId('checkup-button')).count() === 0
+        && await p.locator(byId('mobile-appbar') + ' [role="button"]').count() === 5, String(await p.locator(byId('mobile-appbar') + ' [role="button"]').count()));
+      check(scene, '⚙ says the number to a screen reader', await p.locator(byId('open-settings')).first().getAttribute('aria-label') === (want ? m.checkupSettingsBadge(want) : m.settings));
+      if (want) { const badge = await box(p, byId('open-settings-badge')); check(scene, '⚙\'s number inside the screen', badge.x >= 0 && badge.x + badge.width <= W + .5, JSON.stringify(badge)); }
+      await press(byId('open-settings'));
+      const shown = await p.waitForSelector(byId('settings-checkup'), { timeout: 5000 }).then(() => true, () => false);
+      check(scene, 'the settings sheet\'s first row', shown && await p.locator(byId('settings-category-list')).first().evaluate(list => list.firstElementChild?.dataset.testid === 'settings-checkup'));
+      if (shown) {
+        const r = await box(p, byId('settings-checkup'));
+        geo149.push({ scene, settingsRow: r });
+        check(scene, 'the row inside the screen and a finger\'s size', r.x >= 0 && r.x + r.width <= W + .5 && r.height >= 44 * k - .5, JSON.stringify(r));
+        check(scene, 'the row says what it found', await textOf(p, byId('settings-checkup-help')) === m.checkupSettingsHelp(want)
+          && (want ? await textOf(p, byId('settings-checkup-count')) === String(want) : await p.locator(byId('settings-checkup-count')).count() === 0));
+        if (percent === 150 || mode === 'dark' || data === 'empty') await p.screenshot({ path: path.join(out, `${scene}-settings.png`) });
+        await press(byId('settings-checkup'));
+      }
+    }
+    const open = await p.waitForSelector(byId('checkup-sheet'), { timeout: 5000 }).then(() => true, () => false);
+    check(scene, 'the list opens', open);
+    if (!open) { check(scene, 'no page errors', errors.length === 0, errors.join(' | ')); await ctx149.close(); continue; }
+    await p.waitForTimeout(400);
+    if (mobile) check(scene, 'the settings sheet closed behind it', await p.locator(byId('settings-sheet')).count() === 0 || !(await p.locator(byId('settings-sheet')).first().isVisible()));
+    const sheet = await box(p, byId('checkup-sheet'));
+    check(scene, 'the window inside the screen', sheet.x >= -.5 && sheet.x + sheet.width <= W + .5 && sheet.y >= -.5 && sheet.y + sheet.height <= H + .5, JSON.stringify(sheet));
+    check(scene, 'the page no wider than the screen', await p.evaluate(() => document.documentElement.scrollWidth) <= W + 1);
+    if (!want) {
+      check(scene, 'the empty state, apart from Tidy', await p.locator(byId('checkup-empty')).count() === 1 && (await textOf(p, byId('checkup-empty'))).includes(m.checkupEmptyTitle)
+        && await textOf(p, byId('checkup-empty-tidy')) === m.checkupEmptyTidy && await p.locator(byId('checkup-footer')).count() === 0);
+      await p.screenshot({ path: path.join(out, `${scene}-empty.png`) });
+      check(scene, 'no page errors', errors.length === 0, errors.join(' | '));
+      await ctx149.close(); continue;
+    }
+    const rows = await rows149(p);
+    check(scene, 'the groups in the rules\' order', JSON.stringify(await groups149(p)) === JSON.stringify(RULES149), JSON.stringify(await groups149(p)));
+    check(scene, 'every candidate listed, none ticked', rows.length === want && rows.every(r => !r.ticked), JSON.stringify(rows.map(r => [r.id, r.ticked])));
+    check(scene, 'the rows inside the window', rows.every(r => r.x >= sheet.x - .5 && r.x + r.w <= sheet.x + sheet.width + .5), JSON.stringify(rows.map(r => [r.x, r.w])));
+    check(scene, 'the title says how many', (await p.locator(byId('checkup-sheet')).first().getAttribute('aria-label')) === (mobile ? m.checkupPhoneTitle(want) : m.checkupTitle(want)));
+    const first = rows.find(r => r.title.includes(R149T.r1pair)), quiet = rows.find(r => r.title.includes(R149T.r2)), draft = rows.find(r => r.title.includes(R149T.r4));
+    check(scene, 'a reason line names the workspace, the days and the agents', !!first && first.line.startsWith('Example Workspace · ') && first.line.includes(m.checkupArchivedAll(2))
+      && first.line.includes(m.checkupDays(lang === 'ko' ? '검토' : 'Review', 10))
+      && !!quiet && quiet.line.includes(m.checkupLastActive(9, '')) && quiet.line.includes('(산출물_Opus') && !!draft && draft.line.includes(m.checkupDraftDays(26)),
+      JSON.stringify({ first: first?.line, quiet: quiet?.line, draft: draft?.line }));
+    if (!mobile) check(scene, 'the suggestions: Done ×3, Archive ×1, look ×1, none ×2', await p.locator(byId('checkup-suggest-done')).count() === 3
+      && await p.locator(byId('checkup-suggest-archive')).count() === 1 && await p.locator(byId('checkup-suggest-look')).count() === 1 && await p.locator(byId('checkup-suggest-none')).count() === 2);
+    const done = byId('checkup-done'), archive = byId('checkup-archive');
+    check(scene, 'nothing to do before a tick', await p.locator(done).first().getAttribute('aria-disabled') === 'true' && await p.locator(archive).first().getAttribute('aria-disabled') === 'true');
+    const foot = await box(p, done), back = await box(p, archive);
+    geo149.push({ scene, sheet, rows: rows.map(r => ({ id: r.id, x: r.x, y: r.y, w: r.w, h: r.h })), done: foot, archive: back });
+    check(scene, 'the bottom row inside the window', foot.y + foot.height <= sheet.y + sheet.height + .5 && foot.x + foot.width <= sheet.x + sheet.width + .5 && back.x >= sheet.x - .5,
+      JSON.stringify({ foot, back, sheet }));
+    if (mobile) check(scene, 'the bottom row a finger\'s size', foot.height >= 44 * k - .5 && back.height >= 44 * k - .5, JSON.stringify({ foot, back }));
+    // A group's tick takes its cards; a draft ticked too is left out of Done, which says so.
+    await press(byId('checkup-group-tick-orphaned'));
+    let now = await rows149(p);
+    check(scene, 'a group\'s tick takes its three cards', now.filter(r => r.ticked).length === 3 && now.filter(r => r.ticked).every(r => r.id.startsWith('checkup-row-orphaned')));
+    await press(`[data-testid="checkup-row-draft-0"] [data-testid="checkup-tick"]`);
+    check(scene, 'Done says the draft is left out', (await textOf(p, done)) === m.checkupDoneLeftOut(3, 1), await textOf(p, done));
+    if (!mobile) check(scene, 'how many are ticked', await textOf(p, byId('checkup-selected')) === m.checkupSelected(4));
+    if (!flow && (percent === 150 || mode === 'dark' || (!mobile && lang === 'ko'))) await p.screenshot({ path: path.join(out, `${scene}-list.png`) });
+    if (mobile && W === 390 && percent === 100) {
+      await press(`[data-testid="checkup-row-waiting-0"] [data-testid="checkup-row-more"]`);
+      const menu = await p.waitForSelector(byId('checkup-row-menu'), { timeout: 3000 }).then(() => true, () => false);
+      const openBox = menu ? await box(p, byId('checkup-row-menu') + ' ' + byId('checkup-open')) : null;
+      check(scene, 'a row\'s ⋯: open and skip, inside the screen', menu && !!openBox && openBox.x + openBox.width <= W + .5 && await p.locator(byId('checkup-row-menu') + ' ' + byId('checkup-skip')).count() === 1);
+      if (lang === 'ko') await p.screenshot({ path: path.join(out, `${scene}-row-menu.png`) });
+      await press(`[data-testid="checkup-row-waiting-0"] [data-testid="checkup-row-more"]`);
+    }
+    if (flow) {
+      const one = Object.values(JSON.parse(await p.evaluate(() => JSON.stringify(window.__FIXTURE__.boards)))).map(v => v.board);
+      const idOf = title => one.flatMap(b => b.stages.flatMap(s => s.cards)).find(c => c.title === title)?.id;
+      await p.screenshot({ path: path.join(out, `${scene}-list.png`) });
+      await press(done);
+      await p.waitForSelector(byId('checkup-notice'), { timeout: 5000 }).catch(() => {});
+      const writes = await checkupWrites(p), ops = writes.flatMap(w => w.operations);
+      check(scene, 'Done: one write a board, the three requests moved to Done, the draft untouched', writes.length === 2
+        && JSON.stringify(ops.map(o => [o.op, o.id, o.to]).sort()) === JSON.stringify([R149T.r1, R149T.r1pair, R149T.r1b].map(t => ['move', idOf(t), 'done']).sort())
+        && !ops.some(o => o.id === idOf(R149T.r4)), JSON.stringify(writes));
+      check(scene, 'Done says what it did, with Undo', await textOf(p, byId('checkup-notice-text')) === m.checkupMoved(3) && await p.locator(byId('checkup-undo')).count() === 1);
+      await p.waitForTimeout(600);
+      now = await rows149(p);
+      check(scene, 'the moved cards leave the list; the draft stays ticked', now.length === 4 && now.filter(r => r.ticked).map(r => r.id).join() === 'checkup-row-draft-0', JSON.stringify(now.map(r => [r.id, r.ticked])));
+      await p.screenshot({ path: path.join(out, `${scene}-done.png`) });
+      await press(byId('checkup-undo'));
+      await p.waitForFunction(text => document.querySelector('[data-testid="checkup-notice-text"]')?.textContent === text, m.checkupUndone(3), { timeout: 5000 }).catch(() => {});
+      const undoOps = (await checkupWrites(p)).slice(2).flatMap(w => w.operations);
+      check(scene, 'Undo sends each back where it was', await textOf(p, byId('checkup-notice-text')) === m.checkupUndone(3)
+        && JSON.stringify(undoOps.map(o => [o.id, o.to]).sort()) === JSON.stringify([[idOf(R149T.r1), 'doing'], [idOf(R149T.r1pair), 'review'], [idOf(R149T.r1b), 'doing']].sort()), JSON.stringify(undoOps));
+      await p.waitForTimeout(800);
+      check(scene, 'they are listed again', (await rows149(p)).length === 7, String((await rows149(p)).length));
+      // Archive asks first, then archives the ticked draft only.
+      await press(archive);
+      check(scene, 'Archive asks first', await p.locator(byId('checkup-archive-ask')).count() === 1 && await textOf(p, byId('checkup-archive-ask-text')) === m.checkupArchiveAsk(1));
+      await p.screenshot({ path: path.join(out, `${scene}-archive-ask.png`) });
+      const before = (await checkupWrites(p)).length;
+      await press(byId('checkup-archive-go'));
+      await p.waitForTimeout(500);
+      const archived = (await checkupWrites(p)).slice(before).flatMap(w => w.operations);
+      check(scene, 'Archive: the draft only', JSON.stringify(archived) === JSON.stringify([{ op: 'archive', id: idOf(R149T.r4) }]) && await textOf(p, byId('checkup-notice-text')) === m.checkupArchived(1),
+        JSON.stringify(archived));
+      // Skip: out of the list and the number, on this device — after a reload too.
+      const skipSel = mobile ? null : `[data-testid="checkup-row-waiting-0"] [data-testid="checkup-skip"]`;
+      if (mobile) { await press(`[data-testid="checkup-row-waiting-0"] [data-testid="checkup-row-more"]`); await press(byId('checkup-row-menu') + ' ' + byId('checkup-skip')); }
+      else await press(skipSel);
+      check(scene, 'Skip takes the card out of the list', (await rows149(p)).length === 5, String((await rows149(p)).length));
+      await press(byId('checkup-sheet-close'));
+      await p.waitForTimeout(400);
+      check(scene, 'the number follows', await textOf(p, countSel) === '5', await textOf(p, countSel));
+      await p.reload(); await p.waitForTimeout(2500);
+      // The page is read anew from the fixture (the draft back, the moves gone); only the device's skip is kept: 7 − 1.
+      check(scene, 'a skip is kept on this device', await p.waitForFunction(sel => document.querySelector(sel)?.textContent?.trim() === '6', countSel, { timeout: 8000 }).then(() => true, () => false),
+        await textOf(p, countSel).catch(() => 'none'));
+      // A title opens the card (the list closes).
+      if (mobile) { await press(byId('open-settings')); await press(byId('settings-checkup')); } else await press(byId('checkup-button'));
+      await p.waitForSelector(byId('checkup-sheet'), { timeout: 5000 }).catch(() => {});
+      await press(`[data-testid="checkup-row-orphaned-0"] [data-testid="checkup-title"]`);
+      check(scene, 'a title opens the card', await p.waitForSelector(byId('detail-stage'), { timeout: 5000 }).then(() => true, () => false)
+        && !(await p.locator(byId('checkup-sheet')).count() && await p.locator(byId('checkup-sheet')).first().isVisible()));
+      // A refused write says so and keeps the list.
+      await p.keyboard.press('Escape'); await p.waitForTimeout(400);
+    }
+    check(scene, 'no page errors', errors.length === 0, errors.join(' | '));
+    await ctx149.close();
+  }
+  // A write the server refuses: the list stays, the reason is said, nothing is ticked off.
+  {
+    const scene = 'req149-wide-refused', m = copy('ko');
+    const ctx149 = await browser.newContext({ viewport: { width: 1920, height: 1080 } }), p = await ctx149.newPage(); p.setDefaultTimeout(5000);
+    const errors = []; p.on('pageerror', e => errors.push(String(e)));
+    await p.goto(page('light', false, 'req149-100-ko-full'));
+    await p.waitForFunction(() => document.querySelector('[data-testid="checkup-count"]')?.textContent === '7', null, { timeout: 15000 }).catch(() => {});
+    await clickAt(p, byId('checkup-button')); await p.waitForSelector(byId('checkup-sheet'), { timeout: 5000 }).catch(() => {});
+    await clickAt(p, byId('checkup-group-tick-orphaned'));
+    await p.evaluate(() => { window.__failNext = 'failed'; });
+    await clickAt(p, byId('checkup-done')); await p.waitForTimeout(600);
+    const rows = await rows149(p);
+    // The first board's write (two cards) is refused, the second's (one card) goes through: said as such, with Undo for that one.
+    check(scene, 'a refused write: said as refused, the refused cards kept', await textOf(p, byId('checkup-notice-text')) === m.checkupPartialFailed(1, 2) && rows.length === 6
+      && await p.locator(byId('checkup-undo')).count() === 1 && rows.filter(r => r.ticked).length === 2, JSON.stringify({ text: await textOf(p, byId('checkup-notice-text')), rows: rows.length }));
+    await p.screenshot({ path: path.join(out, `${scene}.png`) });
+    check(scene, 'no page errors', errors.length === 0, errors.join(' | '));
+    await ctx149.close();
+  }
+  // J5: the selected cards stay unchanged; only an unselected card on their board is edited.
+  // Exercise all three conflict notices on the existing 360px / 150% check-up fixture, in both languages.
+  for (const lang of ['ko', 'en']) for (const action of ['all', 'partial', 'undo']) {
+    const scene = `req149-j5-360-150-${lang}-${action}`, m = copy(lang);
+    const ctx149 = await browser.newContext({ viewport: { width: 360, height: 780 }, hasTouch: true, isMobile: true });
+    const p = await ctx149.newPage(); p.setDefaultTimeout(5000);
+    const errors = []; p.on('pageerror', e => errors.push(String(e)));
+    const press = async sel => { await p.locator(sel).first().scrollIntoViewIfNeeded(); await p.locator(sel).first().tap(); await p.waitForTimeout(250); };
+    await p.goto(page('light', true, `req149-150-${lang}-full`));
+    await p.waitForFunction(() => document.querySelector('[data-testid="open-settings-badge"]')?.textContent === '7', null, { timeout: 15000 });
+    await press(byId('open-settings')); await press(byId('settings-checkup'));
+    await p.waitForSelector(byId('checkup-sheet'));
+    await press(byId('checkup-group-tick-orphaned'));
+    const editUnselected = async both => p.evaluate(({ both, fresh, backlog }) => {
+      const values = [...window.__cards.values()];
+      const changed = values.filter(v => v.card.title === fresh || both && v.card.title === backlog);
+      for (const other of changed) {
+        other.card.notes = 'An unselected card was edited elsewhere';
+        for (const v of values.filter(v => v.boardId === other.boardId)) {
+          const [epoch, seq] = v.revision.split(':'); v.revision = epoch + ':' + (Number(seq) + 1);
+        }
+      }
+      return changed.map(v => v.card.id);
+    }, { both, fresh: R149T.fresh, backlog: R149T.r3b });
+    if (action !== 'undo') await editUnselected(action === 'all');
+    await press(byId('checkup-done'));
+    if (action === 'undo') { await editUnselected(false); await press(byId('checkup-undo')); }
+    const expected = action === 'all' ? m.checkupLeftAll(3) : action === 'partial' ? m.checkupPartial(1, 2) : m.checkupUndoPartial(1, 2);
+    await p.waitForFunction(text => document.querySelector('[data-testid="checkup-notice-text"]')?.textContent?.trim() === text, expected);
+    check(scene, 'conflict names the board change and asks to reopen Check up', await textOf(p, byId('checkup-notice-text')) === expected, expected);
+    const geometry = await p.locator(byId('checkup-notice-text')).evaluate(e => {
+      const r = e.getBoundingClientRect(), s = getComputedStyle(e);
+      return { x: r.x, y: r.y, w: r.width, h: r.height, scrollW: e.scrollWidth, clientW: e.clientWidth,
+        scrollH: e.scrollHeight, clientH: e.clientHeight, lineClamp: s.webkitLineClamp, overflow: s.overflow };
+    });
+    geo149.push({ scene, notice: geometry });
+    check(scene, 'the whole notice fits at 360px and 150%', geometry.x >= -.5 && geometry.x + geometry.w <= 360.5
+      && geometry.y >= -.5 && geometry.y + geometry.h <= 780.5 && geometry.scrollW <= geometry.clientW + 1
+      && geometry.scrollH <= geometry.clientH + 1 && (!geometry.lineClamp || geometry.lineClamp === 'none'), JSON.stringify(geometry));
+    check(scene, 'no automatic write after conflict', await p.evaluate(({ action, first, second }) => {
+      const values = [...window.__cards.values()], selected = values.filter(v => [first, second].includes(v.card.title));
+      return selected.length === 2 && selected.every(v => v.card.stageId === (action === 'undo' ? 'done' : v.card.title === first ? 'doing' : 'review'));
+    }, { action, first: R149T.r1, second: R149T.r1pair }));
+    await p.screenshot({ path: path.join(out, `${scene}.png`) });
+    check(scene, 'no page errors', errors.length === 0, errors.join(' | '));
+    await ctx149.close();
+  }
+  fs.writeFileSync(path.join(out, 'checkup-geometry.json'), JSON.stringify(geo149, null, 1) + '\n');
+  }
+  if (ONLY === '' || R151) await req151Scenes({ browser, page, out, check, byId });
+  // D67: the phone settings sheet's height, its list's end and taps inside it (research/479).
+  if (ONLY === '' || D67) fs.writeFileSync(path.join(out, 'd67-geometry.json'), JSON.stringify(await d67Scenes({ browser, page, out, check, byId }), null, 1) + '\n');
+  if (ONLY === '' || R152) await runReq152({ browser, page, out, check, byId, clickAt, longPress, copy });
 } catch (error) {
   // J3′: a scene that throws (a wait that timed out) is reported with the checks so far, not lost with them.
   check('runner', 'stopped by an error', false, String(error?.stack ?? error).split('\n').slice(0, 3).join(' | '));

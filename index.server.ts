@@ -124,6 +124,6 @@ export default function contribute(server: PluginServerContext) {
   server.handle(archiveSettingsSet, archive(archiveSettingsSet, async value => (await archiver).setDays(value.days)));
   server.handle(archiveTidy, archive(archiveTidy, async value => (await archiver).tidy(value.boardId)));
   server.handle(archivedList, archive(archivedList, async value => (await archiver).list(value.boardId)));
-  server.handle(archivedRestore, archive(archivedRestore, async value => (await archiver).restore(value.boardId, value.cardId)));
+  server.handle(archivedRestore, archive(archivedRestore, async value => (await archiver).restore(value.boardId, value.cardId, value.ifRevision)));
   return () => { cleanups.forEach(cleanup => { try { cleanup(); } catch { /* already gone */ } }); };
 }

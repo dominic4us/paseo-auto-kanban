@@ -5,13 +5,14 @@ import { overviewGet } from '../shared/rpc.js';
 import { useRead, useDirectory } from './data.js';
 import { createDemoData } from './demo.js';
 import { knownRevisions, useAutoRefresh } from './auto-refresh.js';
-import { answeredSettings, useKanbanSettings } from './settings.js';
+import { answeredSettings, noteRefreshRead, useKanbanSettings } from './settings.js';
 import { placedBoards } from './presentation.js';
 import { useScreenLocale } from './locale-hint.js';
 import { useMovedBoards } from './quick-move.js';
 import { shownBoards, useRevealHidden, type HiddenBoards } from './hidden-boards.js';
 export function useBoardSource(hostId: string, preview: boolean) {
-  const get = useRpc(overviewGet), read = useRead(hostId + ':swimlane', () => get({ includeBoards: true, hostId }), !preview);
+  const get = useRpc(overviewGet), read = useRead(hostId + ':swimlane', () => get({ includeBoards: true, hostId }), !preview, undefined,
+    (data, token) => noteRefreshRead(hostId, data.ui?.settings?.autoRefresh, token));
   // Observation a: the last language kept for the host until this read answers; `null` = no words yet.
   const shownLocale = useScreenLocale(hostId, read.data?.locale, !preview && !read.data && !read.error);
   const locale = shownLocale ?? 'en', names = useDirectory(hostId, !preview, locale);
@@ -52,7 +53,7 @@ export function useBoardSource(hostId: string, preview: boolean) {
     autoArchive: preview ? undefined : read.data?.autoArchive,
     /** REQ-90: what the message folder holds for the lanes, while the lab's badge is on; the rule that names each lane. */
     mail: mailOn ? read.data?.mail : undefined, mailAlias: settings.labs.mailAlias ?? 'compact',
-    settings, refreshStatus,
+    settings, refreshStatus, settingsRead: read.readToken,
     /** REQ-138: the boards left out (`shownBoards`) and the switch that shows them again; none in the demo or with none hidden. */
     hiddenBoards,
     /** REQ-83: the server's automatic tracking — the latest auto refresh look's report, else the read's — and whether the looks keep failing. */

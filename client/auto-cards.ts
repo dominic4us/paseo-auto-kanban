@@ -1,6 +1,6 @@
 import { useRpc } from '@getpaseo/plugin/client';
 import { autoCardsSet, autoCardsWorkspaceSet, normalizeCwd } from '../shared/rpc.js';
-import { useSessionValue } from './session.js';
+import { useConfirmedValue } from './confirmed-value.js';
 import { workspaceLabel, type Directory } from './presentation.js';
 
 export type AutoCardsSwitch = readonly [boolean, (next: boolean) => Promise<boolean>];
@@ -12,20 +12,17 @@ export type AutoCardsSwitch = readonly [boolean, (next: boolean) => Promise<bool
  * so the row can say so and offer the same write again (it used to be swallowed and the switch lied).
  * The demo keeps its own scope and never saves.
  */
-export function useAutoCards(scope: string, hostId: string, remote: boolean | undefined, persist: boolean): AutoCardsSwitch {
-  const save = useRpc(autoCardsSet);
-  const [local, setLocal] = useSessionValue<boolean | null>(scope, 'autoCards', null);
-  const value = local ?? remote ?? true;
+export function useAutoCards(scope: string, hostId: string, remote: boolean | undefined, persist: boolean, readToken: unknown = remote): AutoCardsSwitch {
+  const save = useRpc(autoCardsSet), confirmed = useConfirmedValue(scope, remote, readToken, 'autoCards');
   const set = async (next: boolean) => {
     if (!persist) return false;
+    const ticket = confirmed.begin(); if (!ticket) return false;
     const reply = await save({ hostId, enabled: next });
     if (!reply?.ok) return false;
-    setLocal(reply.data.enabled);
-    return true;
+    confirmed.confirm(ticket, reply.data.enabled); return true;
   };
-  return [value, set];
+  return [confirmed.value ?? true, set];
 }
-
 /** D44: one workspace's switch, by the folder its lane shows. */
 export type WorkspaceAutoSwitch = { isOn: (cwd: string) => boolean; set: (cwd: string, next: boolean) => Promise<boolean> };
 /**
@@ -35,15 +32,19 @@ export type WorkspaceAutoSwitch = { isOn: (cwd: string) => boolean; set: (cwd: s
  * (`normalizeCwd`) and never folded here — two Windows folders differing only in case may be two folders with two switches;
  * the server's one judgement (`folderSwitch`) already folded what is one folder.
  */
-export function useWorkspaceAutoCards(scope: string, remoteOff: readonly string[] | undefined, persist: boolean): WorkspaceAutoSwitch {
-  const save = useRpc(autoCardsWorkspaceSet);
-  const [local, setLocal] = useSessionValue<Record<string, boolean>>(scope, 'autoCardsWorkspaces', {});
-  const isOn = (cwd: string) => { const key = normalizeCwd(cwd); return local[key] ?? !(remoteOff ?? []).map(normalizeCwd).includes(key); };
+export function useWorkspaceAutoCards(scope: string, remoteOff: readonly string[] | undefined, persist: boolean,
+  readToken: unknown = remoteOff): WorkspaceAutoSwitch {
+  const save = useRpc(autoCardsWorkspaceSet), confirmed = useConfirmedValue(scope, remoteOff, readToken, 'autoCardsWorkspaces');
+  const isOn = (cwd: string) => !(confirmed.value ?? []).map(normalizeCwd).includes(normalizeCwd(cwd));
   const set = async (cwd: string, next: boolean) => {
     if (!persist) return false;
+    const key = normalizeCwd(cwd), ticket = confirmed.begin(key); if (!ticket) return false;
     const reply = await save({ cwd, enabled: next });
     if (!reply?.ok) return false;
-    setLocal(previous => ({ ...previous, [normalizeCwd(cwd)]: reply.data.enabled }));
+    confirmed.confirm(ticket, previous => {
+      const off = (previous ?? []).map(normalizeCwd);
+      return reply.data.enabled ? off.filter(value => value !== key) : [...new Set([...off, key])];
+    });
     return true;
   };
   return { isOn, set };

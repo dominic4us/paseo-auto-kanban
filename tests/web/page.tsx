@@ -1,6 +1,8 @@
 // REQ-79~81 headless page: the real Kanban screen (client/overview.tsx) under react-native-web, against a fake server
 // that answers from the fixture run.mjs wrote (window.__FIXTURE__). Settings writes are kept in window.__writes.
 import { createRoot } from 'react-dom/client';
+import { Platform } from 'react-native';
+import contribute from '../../index.client.js';
 import { OverviewScreen } from '../../client/overview.js';
 import { BoardScreen } from '../../client/board.js';
 import { SignalContext } from '../../client/signal-context.js';
@@ -14,9 +16,12 @@ type Fixture = Reads & { later?: Reads; ui: Record<string, unknown>; agents?: un
   models?: Record<string, unknown[]>;
   projects: unknown; workspaces: unknown; theme: { colors: Record<string, string> }; width: number; mobile: boolean;
   /** REQ-142: the workspace panel of this workspace instead of the overview (client/panel.tsx without the host's title). */
-  panel?: string };
+  panel?: string; explorer?: number;
+  /** REQ-158: the overview under a newer web host's left menu, so the settings offer where it opens. */
+  sidebarApi?: boolean;
+  entry?: { api: string; workspace: boolean; panelOpen: boolean; platform: 'web' | 'ios' | 'android'; problem?: string } };
 declare global { interface Window { __FIXTURE__: Fixture; __writes: unknown[]; __calls: string[]; __inputs: { name: string; input: unknown }[];
-  __remember: () => void; __failNext: 'failed' | 'lost' | null; __cards: Map<string, Snapshot>; __opened: [string, string][];
+  __settingsValues: () => { archiveDays: number; autoCards: boolean; autoRefresh: boolean; workspaceOff: string[] }; __settingsFailNext?: string | null; __settingsDelayNext?: number; __remember: () => void; __failNext: 'failed' | 'lost' | null; __cards: Map<string, Snapshot>; __opened: [string, string][];
   __busyOff: (cardId: string) => boolean;
   /** REQ-130: a busy mark turned on (the detail's memo, kanban.v1.busy.set) and a live agent event (the host's directory). */
   __busyOn: (cardId: string, mark: { text: string; since: string; by: string }) => void; __agentUpsert: (agent: Record<string, unknown>) => void;
@@ -30,6 +35,8 @@ let ui = structuredClone(fixture.ui) as { settings?: Record<string, unknown> };
 window.__writes = []; window.__calls = []; window.__inputs = [];
 /** D44: the workspace folders whose auto cards are off, as the server keeps them (the settings window's switches). */
 let autoOff: string[] = [];
+window.__settingsValues = () => ({ archiveDays: Number((reads.overview.autoArchive as { days?: number } | undefined)?.days ?? 7),
+  autoCards: reads.overview.autoCards !== false, autoRefresh: ui.settings?.autoRefresh !== false, workspaceOff: [...autoOff] });
 const respond = (value: unknown) => ({ ok: true, data: { ...(value as object), about: { version: 'harness' } }, committed: false, warnings: [] });
 // REQ-88: every card as `kanban.v1.card.get` answers it, changed by the writes below (a field's update, a move), each write
 // one revision later on its board. `window.__failNext` refuses the next write ('failed') or loses its reply after applying it ('lost').
@@ -87,6 +94,14 @@ const leadBase = new WeakMap<object, unknown>();
 window.__rpc = async (name, input) => {
   window.__calls.push(name); window.__inputs.push({ name, input });
   const value = input as Record<string, unknown>;
+  // REQ-151: refuse a setting before applying it, including a reply arriving after a tab switch.
+  if (window.__settingsFailNext === name) {
+    window.__settingsFailNext = null;
+    const delay = window.__settingsDelayNext ?? 0; window.__settingsDelayNext = 0;
+    if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+    return { ok: false, committed: false, error: { code: 'E_LOCK_TIMEOUT', message: 'Synthetic setting refusal.', target: '', nextAction: 'Retry.', details: null } };
+  }
+  if (name === 'kanban.v1.auto_cards.set') { reads.overview.autoCards = value.enabled === true; return respond({ enabled: value.enabled === true, changed: true }); }
   // REQ-90: the folder's reading only while the lab's badge is on, as the server says it.
   if (name === 'kanban.v1.overview.get') { const { mail, ...rest } = reads.overview as { mail?: unknown };
     return respond({ ...rest, ui, autoCardsOff: autoOff, ...(mail && (ui.settings as { labs?: { mail?: boolean } } | undefined)?.labs?.mail ? { mail } : {}) }); }
@@ -212,6 +227,10 @@ window.__rpc = async (name, input) => {
     if (fail === 'failed') return { ok: false, committed: false, error: { code: 'E_LOCK_TIMEOUT', message: 'Synthetic refusal.', target: String(value.boardId),
       nextAction: 'Retry.', details: null } };
     const own = [...cards.values()].filter(c => c.boardId === value.boardId);
+    // REQ-149 / J5: the live check-up fixture uses the same board-wide revision refusal as the store.
+    if ((fixture as { liveMoves?: boolean }).liveMoves && value.ifRevision && value.ifRevision !== own[0]?.revision)
+      return { ok: false, committed: false, error: { code: 'E_REVISION_CONFLICT', message: 'The board changed.', target: String(value.boardId),
+        nextAction: 'Read again.', details: null } };
     const revision = own.length ? next(own[0]!.revision) : 'harness:2';
     const added: string[] = [];
     for (const op of value.operations as { op: string; id: string; patch?: Record<string, unknown>; to?: string }[]) {
@@ -225,6 +244,29 @@ window.__rpc = async (name, input) => {
         at: new Date().toISOString(), revision, actor: { kind: 'user' } }]; snapshot.card = { ...snapshot.card, stageId: op.to }; }
     }
     for (const snapshot of own) snapshot.revision = revision;
+    // REQ-149: a fixture with `liveMoves` sees its moves and archives in the board reads too, one revision later (the check up
+    // reads the board back for its retry and its Undo); every other fixture keeps the reads as they were (REQ-76 above).
+    if ((fixture as { liveMoves?: boolean }).liveMoves) {
+      type LiveView = { summary: { id: string; revision: string; updatedAt?: string }; stages: { stageId: string; totalCount: number; cards: Record<string, unknown>[] }[] };
+      const at = new Date().toISOString();
+      const live = [...Object.values(reads.boards).map(b => b.board as LiveView), ...((reads.overview.boardViews ?? []) as LiveView[])].filter(v => v.summary.id === value.boardId);
+      const bumped = next(live[0]?.summary.revision ?? 'harness:1');
+      for (const entry of Object.values(reads.boards)) if ((entry.board as LiveView).summary.id === value.boardId) entry.revision = bumped;
+      for (const view of new Set(live)) {
+        view.summary.revision = bumped; view.summary.updatedAt = at;
+        for (const op of value.operations as { op: string; id: string; to?: string }[]) {
+          const from = view.stages.find(s => s.cards.some(c => c.id === op.id));
+          if (!from || (op.op !== 'move' && op.op !== 'archive')) continue;
+          const moved = from.cards.find(c => c.id === op.id)!;
+          from.cards = from.cards.filter(c => c !== moved); from.totalCount--;
+          const to = op.op === 'move' ? view.stages.find(s => s.stageId === op.to) : undefined;
+          if (to) { to.cards.push({ ...moved, stageId: to.stageId, updatedAt: at, stageEnteredAt: at }); to.totalCount++; }
+        }
+      }
+      if (fail === 'lost') throw new Error('Synthetic lost reply');
+      return { ok: true, committed: true, warnings: [], data: { boardId: value.boardId, revision: bumped, currentRevision: bumped, requestId: value.requestId,
+        cardIds: added, changed: true, replayed: false } };
+    }
     if (fail === 'lost') throw new Error('Synthetic lost reply');
     return { ok: true, committed: true, warnings: [], data: { boardId: value.boardId,
       revision, currentRevision: revision, requestId: value.requestId, cardIds: added, changed: true, replayed: false } };
@@ -274,7 +316,12 @@ window.__sdk = {
 };
 // REQ-96: the host's navigation, as Paseo hands it to a surface; what was opened is kept in window.__opened.
 window.__opened = [];
-const navigation = { openAgent: (input: { agentId: string }) => window.__opened.push(['agent', input.agentId]),
+const navigation = { openAgent: (input: { agentId: string }) => {
+  window.__opened.push(['agent', input.agentId]);
+  // Host mock only: Paseo owns navigation and the main content, while the Explorer remains mounted.
+  const main = document.querySelector('[data-testid=host-main]');
+  if (main) main.textContent = 'Agent · ' + input.agentId;
+},
   openWorkspace: (input: { workspaceId: string }) => window.__opened.push(['workspace', input.workspaceId]) };
 const props = { theme: fixture.theme, host: { id: 'host_example', label: 'Example host' },
   layout: { platform: 'web', compact: fixture.mobile }, navigation } as never;
@@ -284,8 +331,81 @@ function Panel(surface: Record<string, unknown> & { host: { id: string } }) {
   const signals = useLiveSignals(surface.host.id, true);
   return <SignalContext.Provider value={signals}><BoardScreen {...(surface as never)} panel selector={{ workspaceId: fixture.panel! }} /></SignalContext.Provider>;
 }
-const draw = (theme: unknown) => root.render(fixture.panel ? <Panel key={mounted} {...(props as object as { host: { id: string } })} theme={theme} />
+// Exercise the real registration function; render its Explorer Component instead of a test copy.
+const panels: { id: string; Component: typeof OverviewScreen; [key: string]: unknown }[] = [];
+const registrations: Record<string, unknown>[] = [];
+const register = (kind: string, value: Record<string, unknown>) => { registrations.push({ kind, ...value }); return () => {}; };
+const entryCalls: { kind: string; id: string; options?: unknown }[] = [];
+let entryState = { panelOpen: !!fixture.entry?.panelOpen, overview: false, sidebarOpen: fixture.mobile };
+const entryScreenCalls: unknown[] = [];
+let redrawEntry = () => {};
+const openEntrySurface = (id: string) => { entryCalls.push({ kind: 'surface', id }); entryState = { ...entryState, overview: true }; redrawEntry(); };
+const openEntryPanel = (id: string, options: unknown) => {
+  entryCalls.push({ kind: 'panel', id, options });
+  if (fixture.entry?.problem === 'throw' || fixture.entry?.problem === 'missing') throw new Error('Explorer is unavailable');
+  entryState = { ...entryState, panelOpen: true }; redrawEntry();
+};
+// Installed SDK handles start empty; the host's workspace validation belongs to openPanel.
+const openEntryScreen = (input: { screenId: string }) => {
+  entryScreenCalls.push(input); entryState = { ...entryState, sidebarOpen: false }; openEntrySurface(input.screenId);
+};
+const entryClient = { paseo: { workspaces: { ref: (_id: string) => ({ current: () => null }) } },
+  openSurface: openEntrySurface, openPanel: openEntryPanel,
+  addSurface: (id: string, Component: unknown) => register('surface', { id, Component }),
+  addSidebarItem: (value: Record<string, unknown>) => register('sidebar', value),
+  addWorkspacePanel: (value: typeof panels[number]) => { panels.push(value); return register('panel', value); },
+  addCommandCenterItem: (value: Record<string, unknown>) => register('command', value),
+  ...(fixture.sidebarApi ? { addSidebarHeaderItem: (value: Record<string, unknown>) => register('sidebar-header', value) } : {}),
+  ...(fixture.entry?.api === 'new' || fixture.entry?.api === 'footer' ? {
+    ...(fixture.entry.api === 'new' ? { addSidebarHeaderItem: (value: Record<string, unknown>) => register('sidebar-header', value) } : {}),
+    addSidebarFooterItem: (value: Record<string, unknown>) => register('sidebar-footer', value),
+  } : {}),
+};
+const savedPlatform = Platform.OS;
+try {
+  if (fixture.entry) (Platform as { OS: string }).OS = fixture.entry.platform;
+  contribute(entryClient as never);
+} finally { (Platform as { OS: string }).OS = savedPlatform; }
+(window as unknown as { __registrations: unknown }).__registrations = registrations.map(({ Component, onSelect, ...value }) => value);
+const explorer = panels.find(panel => Array.isArray(panel.locations) && panel.locations.includes('explorer'))?.Component;
+function EntryHost() {
+  const sidebar = registrations.filter(r => String(r.kind).startsWith('sidebar'));
+  const commands = registrations.filter(r => r.kind === 'command' && (r.context === 'global' || fixture.entry?.workspace));
+  return <div style={{ display: 'flex', flexDirection: 'column', padding: 12, gap: 12, backgroundColor: fixture.theme.colors.surface0, color: fixture.theme.colors.foreground }}>
+    <nav data-testid="host-sidebar" data-open={entryState.sidebarOpen} style={{ display: !fixture.mobile || entryState.sidebarOpen ? 'block' : 'none' }}>{sidebar.map(row => {
+      const Component = row.Component as typeof OverviewScreen | undefined;
+      return Component ? <Component key={String(row.kind)} {...props} openScreen={openEntryScreen} currentScreen={entryState.overview ? { screenId: 'overview' } : null} />
+        : <button key={String(row.id)} data-testid="kanban-sidebar" onClick={() => openEntryScreen({ screenId: String(row.surface) })}>{String(row.title)}</button>;
+    })}</nav>
+    <div data-testid="host-commands">{commands.map(command => <button key={String(command.id)} data-testid={'host-command-' + command.id}
+      onClick={() => (command.onSelect as (context: unknown) => void)({ context: command.context, openSurface: openEntrySurface,
+        openPanel: (id: string, options: object) => openEntryPanel(id, { workspaceId: 'wks_example01', ...options }) })}>{String(command.title)}</button>)}</div>
+    <main data-testid="host-entry-main">{entryState.overview ? 'Kanban overview' : 'Agent conversation'}</main>
+    <aside data-testid="host-entry-panel" data-open={entryState.panelOpen}>{entryState.panelOpen ? 'Kanban Explorer' : 'Explorer closed'}</aside>
+  </div>;
+}
+(window as unknown as { __entryCalls: unknown; __resetEntry: () => void }).__entryCalls = entryCalls;
+(window as unknown as { __entryScreenCalls: unknown[] }).__entryScreenCalls = entryScreenCalls;
+(window as unknown as { __resetEntry: (alreadyOpen?: boolean) => void }).__resetEntry = (alreadyOpen = false) => {
+  entryCalls.length = 0; entryScreenCalls.length = 0; entryState = { panelOpen: !!fixture.entry?.panelOpen, overview: alreadyOpen, sidebarOpen: fixture.mobile }; redrawEntry();
+};
+function Explorer({ theme }: { theme: unknown }) {
+  if (!explorer) throw new Error('No Explorer panel registered');
+  const Component = explorer;
+  return <div style={{ display: 'flex', flex: 1, minWidth: 0, background: fixture.theme.colors.surface0, color: fixture.theme.colors.foreground }}>
+    <main data-testid="host-main" style={{ flex: 1, minWidth: 0, padding: 24 }}>Paseo · Agent conversation (host mock)</main>
+    <aside data-testid="host-explorer" style={{ display: 'flex', flexDirection: 'column', width: fixture.explorer, minWidth: 0, borderLeft: '1px solid #888', boxSizing: 'content-box' }}>
+      <div style={{ padding: 12 }}>Files　Changes　Kanban</div>
+      <Component {...(props as object)} theme={theme} context="workspace" workspaceId="wks_example01" />
+    </aside>
+  </div>;
+}
+(window as unknown as { __panelWidth: (width: number) => void }).__panelWidth = width => {
+  (document.querySelector('[data-testid=host-explorer]') as HTMLElement).style.width = width + 'px';
+};
+const draw = (theme: unknown) => root.render(fixture.entry ? <EntryHost /> : fixture.explorer ? <Explorer theme={theme} /> : fixture.panel ? <Panel key={mounted} {...(props as object as { host: { id: string } })} theme={theme} />
   : <OverviewScreen key={mounted} {...(props as object)} theme={theme} />);
+redrawEntry = () => draw(fixture.theme);
 draw(fixture.theme);
 /** D48: the host handing over its other theme — `remount` as Paseo does, drawing the surface anew (its React state gone). */
 (window as unknown as { __hostTheme: (theme: unknown, remount: boolean) => void }).__hostTheme = (theme, remount) => { if (remount) mounted++; draw(theme); };

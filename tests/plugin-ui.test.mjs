@@ -3093,7 +3093,9 @@ test('REQ-66 ① ⚙ opens the settings window: 720 wide, centred on the plugin 
   await act(async () => sheetButton(root, 'settings-tab-automation').props.onPress());
   assert.deepEqual(selected(), ['automation']);
   assert.equal(hosts(root, 'setting-board-align').length, 0);
-  assert.equal(hosts(root, 'setting-auto-cards').length, 1); assert.equal(hosts(root, 'setting-auto-refresh').length, 1);
+  assert.equal(hosts(root, 'setting-auto-cards').length, 1); assert.equal(hosts(root, 'setting-auto-refresh').length, 0);
+  await act(async () => sheetButton(root, 'automation-tab-status').props.onPress());
+  assert.equal(hosts(root, 'setting-auto-refresh').length, 1);
   await act(async () => sheetButton(root, 'settings-tab-about').props.onPress());
   assert.equal(sheetButton(root, 'settings-version').props.children, 'Version 0.1.2 · Development build', 'the line the ⋯ footer had');
   // Close button, then Escape (the RN modal's request to close), then the backdrop.
@@ -3132,6 +3134,56 @@ test('REQ-66 ① a narrower area shrinks the window; below 760px and on phones i
   await openSettings(phone);
   assert.equal(hosts(phone, 'settings-sheet').length, 1); assert.equal(phone.root.findAllByType('Modal').length, 0);
   assert.equal(hosts(phone, 'settings-category-list').length, 1);
+});
+test('D67 phone settings: Automation keeps a full-height sheet whose list scrolls, and its three tabs switch inside the sheet without closing it', async t => {
+  for (const platform of ['android', 'ios']) {
+    const h = harness({ mobile: true, platform }), root = await render(t, h.load('client/overview.tsx').OverviewScreen, h.props);
+    await openSettings(root, 'automation');
+    const sheet = () => flatStyle(sheetButton(root, 'settings-sheet').props.style);
+    // The tabs' list scrolls by itself (`scroll={false}`), so the sheet needs its own height: Yoga lays a `flex: 1` body of
+    // a content-sized sheet out at 0, the sheet dropped to its head (research/479).
+    assert.equal(sheet().height, sheet().maxHeight, platform + ': the sheet is as tall as it may be (90% of the window)');
+    assert.equal(sheet().height, 844 * .9);
+    const height = sheet().height;
+    for (const tab of ['archive', 'status', 'cards', 'archive']) {
+      await act(async () => sheetButton(root, 'automation-tab-' + tab).props.onPress());
+      assert.equal(hosts(root, 'settings-sheet').length, 1, platform + ' ' + tab + ': the sheet is still open');
+      assert.equal(modalOf(root, 'settings-sheet').props.visible, true, platform + ' ' + tab);
+      assert.equal(sheetButton(root, 'automation-tab-' + tab).props['aria-selected'], true, platform + ' ' + tab + ': the tab changed inside the sheet');
+      assert.equal(hosts(root, 'automation-panel-' + tab).length, 1, platform + ' ' + tab);
+      assert.equal(sheet().height, height, platform + ' ' + tab + ': the sheet keeps its height across tabs');
+      assert.equal(flatStyle(sheetButton(root, 'automation-scroll').props.style).flex, 1, platform + ' ' + tab + ': the list fills the sheet below the tabs');
+      // 480 F1: the body grows by its long-hand parts, never the `flex` shorthand — a web host drops the shorthand's
+      // long-hands with it when the next category takes it away, and the body stopped shrinking (no scroll in Display).
+      const body = flatStyle(sheetButton(root, 'sheet-content').props.style);
+      assert.deepEqual([body.flex, body.flexGrow, body.flexShrink, body.flexBasis], [undefined, 1, 1, 0], platform + ' ' + tab + ': the body fills the sheet');
+    }
+    // Back to the list: the other categories scroll with the sheet and size to their rows again.
+    await act(async () => sheetButton(root, 'settings-back').props.onPress());
+    assert.equal(sheet().height, undefined, platform + ': the category list is as tall as its rows');
+    for (const category of ['display', 'about']) {
+      await act(async () => sheetButton(root, 'settings-open-' + category).props.onPress());
+      const body = flatStyle(sheetButton(root, 'sheet-content').props.style);
+      assert.equal(sheet().height, undefined, platform + ' ' + category + ': as tall as its rows, up to 90%');
+      assert.deepEqual([body.flex, body.flexGrow, body.flexShrink], [undefined, undefined, 1], platform + ' ' + category + ': the body shrinks so the sheet scrolls');
+      await act(async () => sheetButton(root, 'settings-back').props.onPress());
+    }
+    assert.equal(h.ui.writes.length + h.auto.writes.length, 0, 'switching tabs writes nothing');
+  }
+});
+test('D67 (480 J1) the check up keeps its own size: an empty phone sheet and the wide window are as tall as what they hold', async t => {
+  const h = harness({ mobile: true, platform: 'android' }), root = await render(t, h.load('client/overview.tsx').OverviewScreen, h.props);
+  await openSettings(root);
+  await act(async () => sheetButton(root, 'settings-checkup').props.onPress());
+  assert.equal(hosts(root, 'checkup-sheet').length, 1);
+  const phone = flatStyle(sheetButton(root, 'checkup-sheet').props.style), phoneBody = flatStyle(sheetButton(root, 'sheet-content').props.style);
+  assert.equal(phone.height, undefined, 'the empty phone check up is as tall as its message, not 90%');
+  assert.equal(phoneBody.flexGrow, undefined, 'and its body does not grow');
+  const w = harness({ width: 1400 }), wide = await render(t, w.load('client/overview.tsx').OverviewScreen, w.props);
+  await act(async () => sheetButton(wide, 'checkup-button').props.onPress());
+  assert.equal(hosts(wide, 'checkup-sheet').length, 1);
+  assert.equal(flatStyle(sheetButton(wide, 'checkup-sheet').props.style).height, undefined, 'the wide window is as tall as its content, up to 85%');
+  assert.equal(flatStyle(sheetButton(wide, 'sheet-content').props.style).flexGrow, undefined);
 });
 test('REQ-66 ② board position moves the title, filter and board together (centre by default), is saved per row and comes back', async t => {
   const h = harness({ width: 1600 }), { OverviewScreen } = h.load('client/overview.tsx');
@@ -3194,7 +3246,10 @@ test('REQ-66 ③ a refused or lost save keeps the previous value, says so on the
   await act(async () => sheetButton(root, 'auto-cards-toggle').props.onPress());
   assert.equal(sheetButton(root, 'auto-cards-toggle').props.accessibilityState.checked, true, 'still on, as the server has it');
   assert.equal(inRow(root, 'setting-auto-cards', 'setting-error').length, 1, 'the error sits on its own row');
+  await act(async () => sheetButton(root, 'automation-tab-status').props.onPress());
   assert.equal(inRow(root, 'setting-auto-refresh', 'setting-error').length, 0);
+  assert.equal(sheetButton(root, 'automation-tab-cards').props.accessibilityLabel, 'Cards · Needs attention');
+  await act(async () => sheetButton(root, 'automation-tab-cards').props.onPress());
   await act(async () => inRow(root, 'setting-auto-cards', 'setting-retry')[0].props.onPress());
   assert.equal(sheetButton(root, 'auto-cards-toggle').props.accessibilityState.checked, false);
   assert.deepEqual(h.auto.writes.map(w => w.enabled), [false, false]);
@@ -3211,6 +3266,7 @@ test('REQ-66 ③④ auto refresh: the status says live, paused since HH:MM, or o
   await act(async () => { surface.props.onTouchStart(); await pause(5); });
   assert.equal(status(), 'Auto refresh on', 'a touch resumes it');
   await openSettings(root, 'automation');
+  await act(async () => sheetButton(root, 'automation-tab-status').props.onPress());
   assert.equal(sheetButton(root, 'auto-refresh-toggle').props.accessibilityState.checked, true, 'on by default');
   await act(async () => sheetButton(root, 'auto-refresh-toggle').props.onPress());
   assert.deepEqual(h.ui.writes.at(-1), { hostId: h.props.host.id, settings: { autoRefresh: false } });
@@ -3223,6 +3279,7 @@ test('REQ-66 ③④ auto refresh: the status says live, paused since HH:MM, or o
   await act(async () => labelled(root, 'Refresh').props.onPress());
   assert.equal(countOf(h, 'kanban.v1.overview.get'), reads + 1, 'the refresh button still reads');
   await openSettings(root, 'automation');
+  await act(async () => sheetButton(root, 'automation-tab-status').props.onPress());
   await act(async () => sheetButton(root, 'auto-refresh-toggle').props.onPress());
   assert.equal(refresh.activePollers(), 1, 'on again');
   assert.equal(status(), 'Auto refresh on');
@@ -3234,6 +3291,9 @@ test('REQ-66 ③④ auto refresh: the status says live, paused since HH:MM, or o
   const { copy } = h.load('client/i18n.ts');
   assert.equal(copy('ko').refreshLive, '자동 갱신 중');
   assert.equal(copy('ko').refreshPaused('14:05'), '일시 정지 · 마지막 확인 14:05');
+  // D62: the phone header's short form says the same in both languages.
+  assert.equal(copy('ko').refreshPausedShort('14:05'), '일시 정지 · 14:05');
+  assert.equal(copy('en').refreshPausedShort('14:05'), 'Paused · 14:05');
   assert.equal(copy('ko').openSettings, '칸반 설정…');
 });
 test('REQ-66 ③ auto refresh saved off reaches the list, the 390px board and a workspace panel opened first', async t => {
@@ -3479,7 +3539,8 @@ test('REQ-68 ① the wide Kanban and list screens end their top row with refresh
   assert.equal(labelled(root, 'More'), undefined, 'no ⋯ on the Kanban screen');
   // REQ-81: "group by project" and the card order sit right before the view switch.
   // REQ-85 ⑦: and "fold all workspaces" beside the card order.
-  assert.deepEqual(rowControls(nativeNode(root, 'swimlane-title-row')).slice(-7), ['Refresh', 'Create draft', 'Group by project',
+  // REQ-149: the check up right after refresh (nothing found here: no number).
+  assert.deepEqual(rowControls(nativeNode(root, 'swimlane-title-row')).slice(-8), ['Refresh', 'Check up: no cards to look at', 'Create draft', 'Group by project',
     'Sort cards: Default (priority, then oldest)', 'Collapse all workspaces', 'view-switch', 'Kanban settings']);
   const glyphs = () => ['view-swimlane', 'view-list'].map(id => sheetButton(root, id));
   assert.deepEqual(glyphs().map(g => [g.props.accessibilityLabel, g.props.accessibilityState.checked]),
@@ -3937,7 +3998,7 @@ function unreadable(sheet, page) {
   return bad;
 }
 /** The one Kanban window open: a sheet or menu (KanbanSheet) or a wide window. There is never a host sheet. */
-const WINDOWS = ['menu-sheet', 'editor-sheet', 'settings-sheet', 'settings-window', 'desktop-detail-dialog'];
+const WINDOWS = ['menu-sheet', 'editor-sheet', 'settings-sheet', 'settings-window', 'desktop-detail-dialog', 'checkup-sheet'];
 function kanbanWindow(root) {
   assert.equal(root.root.findAllByType('Modal').length, 0, 'no host sheet');
   const open = WINDOWS.flatMap(id => hosts(root, id));
@@ -3960,6 +4021,14 @@ function oneSet(root, combo, what, sheet = true) {
     fieldLine(combo.chosen, v)])]);
   const style = flatStyle(win.props.style);
   assert.equal(style.backgroundColor, page, combo.label + ' · ' + what + ': the window background is the chosen page');
+  // D67: a body that grows to fill the sheet (its own scroll) needs a sheet with a height of its own, or Yoga lays it out
+  // at 0 on the phone. 480 F1: and it grows by long-hands only — a web host takes a dropped `flex` shorthand's long-hands with it.
+  const content = win.findAll(n => n.props?.testID === 'sheet-content' && typeof n.type === 'string')[0];
+  if (content) {
+    const body = flatStyle(content.props.style);
+    assert.equal(body.flex, undefined, combo.label + ' · ' + what + ': no flex shorthand on the sheet body');
+    if (body.flexGrow) assert.equal(typeof style.height, 'number', combo.label + ' · ' + what + ': a sheet whose body grows has a height');
+  }
   assert.equal(hosts(root, 'sheet-handle').length, sheet ? 1 : 0, combo.label + ' · ' + what + (sheet ? ': a grab handle' : ': no handle'));
   assert.deepEqual(unreadable(win, page), [], combo.label + ' · ' + what);
   const painted = win.findAll(n => typeof n.type === 'string').flatMap(n => { const s = flatStyle(n.props.style);
@@ -3981,6 +4050,9 @@ test('REQ-72 ① on a phone every window — settings, filters, order ⋯, creat
       oneSet(root, label, 'settings ' + category);
       await act(async () => sheetButton(root, 'settings-back').props.onPress());
     }
+    // REQ-149: the settings sheet's first row opens the check up in its place — a Kanban sheet of the chosen set too.
+    await act(async () => sheetButton(root, 'settings-checkup').props.onPress());
+    oneSet(root, label, 'check up');
     await closeWindow(root);
     for (const [what, open] of [['filters', () => sheetButton(root, 'open-filters')], ['order ⋯', () => sheetButton(root, 'lane-order-menu')],
       ['create', () => labelled(root, 'Create draft')],
@@ -8809,4 +8881,52 @@ test('REQ-139 ③ the workspace panel and the phone draw at the host\'s size; th
   assert.ok(hosts(panel, 'mobile-control-row').length, 'the panel drew');
   assert.equal(p.load('client/ui-scale.ts').uiScaleFactor(), 1.3, 'the panel\'s root set its host\'s size');
   assert.ok(Math.abs(hosts(panel, 'mobile-control-divider')[0].props.style.height - 26) < 1e-9, '(36 − 16) at 130%');
+});
+
+// REQ-158: where Paseo's left-menu Kanban opens — the main screen by default, or the right panel. Offered only while a newer
+// web host registered the menu (client/sidebar.tsx); kept on this device (tests/req158.test.mjs drives the menu itself).
+const sidebarHost = () => ({ addSidebarItem: () => () => {}, addSidebarHeaderItem: () => () => {}, addSidebarFooterItem: () => () => {} });
+const openInChoices = root => ['main', 'panel'].map(id => [id, sheetButton(root, 'open-in-' + id)?.props.accessibilityState?.checked]);
+test('REQ-158 ① the Display row "Sidebar link opens in": Main view until Right panel is chosen, kept on this device', async t => {
+  const h = harness({ width: 1400 }), { OverviewScreen } = h.load('client/overview.tsx');
+  const stop = h.load('client/sidebar.tsx').registerKanbanSidebar(sidebarHost());
+  t.after(stop);
+  const root = await render(t, OverviewScreen, h.props);
+  await openSettings(root, 'display');
+  const row = hosts(root, 'setting-open-in')[0];
+  assert.deepEqual(row.findAllByType('Text').slice(0, 2).map(n => n.props.children), ['Sidebar link opens in',
+    'Choose where Kanban opens when you click it in Paseo\'s sidebar. The right panel is used only when a workspace is open and the window is wide enough; otherwise Kanban opens in the main view. Saved on this device only.']);
+  assert.deepEqual(row.findAllByType('Text').slice(2).map(n => n.props.children), ['Main view', 'Right panel']);
+  assert.deepEqual(openInChoices(root), [['main', true], ['panel', false]], 'the main screen by default');
+  const order = hosts(root, 'settings-category-display')[0].findAll(n => typeof n.props.testID === 'string' && n.props.testID.startsWith('setting-') && typeof n.type === 'string')
+    .map(n => n.props.testID).filter((id, index, all) => all.indexOf(id) === index);
+  assert.deepEqual(order.slice(0, 4), ['setting-theme', 'setting-ui-scale', 'setting-board-align', 'setting-open-in'], 'after the board alignment');
+  await act(async () => sheetButton(root, 'open-in-panel').props.onPress());
+  assert.deepEqual(openInChoices(root), [['main', false], ['panel', true]]);
+  assert.equal(h.load('client/open-location.ts').readOpenLocation('host_example'), 'panel');
+  assert.equal(h.ui.writes.length, 0, 'a device choice: nothing is written to the server');
+  await closeSettings(root);
+  await openSettings(root, 'display');
+  assert.deepEqual(openInChoices(root), [['main', false], ['panel', true]], 'shown again as chosen');
+  await act(async () => sheetButton(root, 'open-in-main').props.onPress());
+  assert.equal(h.load('client/open-location.ts').readOpenLocation('host_example'), 'main');
+});
+test('REQ-158 ② Korean copy; no row on an older host, on a phone app, or before the menu is registered', async t => {
+  const ko = harness({ width: 1400, locale: 'ko' }), { OverviewScreen } = ko.load('client/overview.tsx');
+  t.after(ko.load('client/sidebar.tsx').registerKanbanSidebar(sidebarHost()));
+  let root = await render(t, OverviewScreen, ko.props);
+  await openSettings(root, 'display');
+  assert.deepEqual(hosts(root, 'setting-open-in')[0].findAllByType('Text').map(n => n.props.children), ['왼쪽 메뉴에서 열 위치',
+    'Paseo 왼쪽 메뉴에서 Kanban을 누르면 열리는 곳입니다. 오른쪽 패널은 워크스페이스가 열려 있고 창이 넓을 때 채팅 옆에 열리고, 그 밖에는 메인 화면으로 열립니다. 이 기기에만 저장됩니다.',
+    '메인 화면', '오른쪽 패널']);
+  for (const [name, h, register] of [['an older host', harness({ width: 1400 }), true], ['not registered', harness({ width: 1400 }), false],
+    ['a phone app', harness({ mobile: true, platform: 'ios' }), true]]) {
+    if (register) t.after(h.load('client/sidebar.tsx').registerKanbanSidebar(name === 'an older host' ? { addSidebarItem: () => () => {} } : sidebarHost()));
+    root = await render(t, h.load('client/overview.tsx').OverviewScreen, h.props);
+    await openSettings(root);
+    if (hosts(root, 'settings-open-display').length) await act(async () => sheetButton(root, 'settings-open-display').props.onPress());
+    else await act(async () => hosts(root, 'settings-tab-display')[0].props.onPress());
+    assert.equal(hosts(root, 'setting-board-align').length, 1, name + ': the Display rows drew');
+    assert.equal(hosts(root, 'setting-open-in').length, 0, name);
+  }
 });
