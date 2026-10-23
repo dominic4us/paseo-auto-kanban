@@ -259,12 +259,12 @@ test('REQ-74 F2 a resume that comes in while a signal for the card is being writ
   const card = await s.cardOf(a.id);
   await moveByPerson(s, card.id, 'todo');
   assert.equal(await s.auto.signal(a, 'turn_ended'), 'paused');
-  // Hold the ledger write of the next signal (a permission flag, written even while paused).
-  const original = s.store.mutateBoard;
+  // Hold the ledger write of the next signal (a permission flag, written even while paused) — D66: the engine's own entry point.
+  const original = s.store.autoMutate;
   let release;
   const held = new Promise(resolve => { release = resolve; });
-  s.store.mutateBoard = async (...args) => { await held; return original.apply(s.store, args); };
-  t.after(() => { s.store.mutateBoard = original; });
+  s.store.autoMutate = async (...args) => { await held; return original.apply(s.store, args); };
+  t.after(() => { s.store.autoMutate = original; });
   const signal = s.auto.signal(a, 'permission_requested');
   await new Promise(resolve => setTimeout(resolve, 50));
   const resume = s.auto.resume(s.id, card.id);
@@ -272,7 +272,7 @@ test('REQ-74 F2 a resume that comes in while a signal for the card is being writ
   release();
   assert.equal(await signal, 'updated');
   assert.deepEqual(await resume, { resumed: 1 });
-  s.store.mutateBoard = original;
+  s.store.autoMutate = original;
   const entry = (await readAutoState(s.store.dataDir)).agents[a.id];
   assert.deepEqual([entry.pausedAt, !!entry.resumedAt, entry.bucket], [null, true, null]);
   assert.equal((await s.detail(card.id)).tracking.state, 'on');

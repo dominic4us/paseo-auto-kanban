@@ -5,6 +5,7 @@ import { overviewGet } from '../shared/rpc.js';
 import { useRead, useDirectory } from './data.js';
 import { createDemoData } from './demo.js';
 import { knownRevisions, useAutoRefresh } from './auto-refresh.js';
+import { updateCheckKey } from '../shared/update-check.js';
 import { answeredSettings, noteRefreshRead, useKanbanSettings } from './settings.js';
 import { placedBoards } from './presentation.js';
 import { useScreenLocale } from './locale-hint.js';
@@ -24,7 +25,7 @@ export function useBoardSource(hostId: string, preview: boolean) {
   // REQ-90: with the lab's badge on, each look also asks for the message folder's fingerprint (never in the demo).
   const mailOn = !preview && !!settings.labs.mail;
   const refreshStatus = useAutoRefresh({ enabled: !preview && settings.autoRefresh, known, scope: 'all', busy: read.loading, revalidate: read.revalidate, groups: true,
-    mail: mailOn ? { hostId, key: read.data?.mail?.key } : undefined });
+    mail: mailOn ? { hostId, key: read.data?.mail?.key } : undefined, updates: preview ? undefined : updateCheckKey(read.data?.updateCheck) });
   const demo = useMemo(() => createDemoData(locale, Date.now()), [locale]);
   // REQ-138: the empty boards of archived or gone workspaces stay out of every lane and list, unless shown again from the settings.
   const [reveal, setReveal] = useRevealHidden(hostId + ':surface');
@@ -51,6 +52,8 @@ export function useBoardSource(hostId: string, preview: boolean) {
     autoCardsOff: preview ? undefined : read.data?.autoCardsOff,
     /** REQ-52: the automatic archive's days for the whole plugin. */
     autoArchive: preview ? undefined : read.data?.autoArchive,
+    /** REQ-156: the new-version notice (the server's reading); none in the demo. */
+    updateCheck: preview ? undefined : read.data?.updateCheck,
     /** REQ-90: what the message folder holds for the lanes, while the lab's badge is on; the rule that names each lane. */
     mail: mailOn ? read.data?.mail : undefined, mailAlias: settings.labs.mailAlias ?? 'compact',
     settings, refreshStatus, settingsRead: read.readToken,

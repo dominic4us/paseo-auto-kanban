@@ -4,12 +4,13 @@ import type { PluginHandlerContext } from '@getpaseo/plugin/server';
 import { readWorkspaceLabels } from './workspace-labels.js';
 import { createKanbanError, isKanbanError, type Board, type Locale } from '../shared/core/domain.js';
 import { type Store } from './core/store.js';
-import { boardGet, busyClear, busySet, cardGet, normalizeCwd, overviewGet, revisionsGet, uiStateSet, workflowGet, workflowPickSet, workflowExport, mailListGet, mailThreadGet, workspaceOfEmptyBoard, type MailDTO, type ReadError, type UiSettingsDTO } from '../shared/rpc.js';
+import { autoCardsResume, boardGet, busyClear, busySet, cardGet, normalizeCwd, overviewGet, revisionsGet, uiStateSet, workflowGet, workflowPickSet, workflowExport, mailListGet, mailThreadGet, workspaceOfEmptyBoard, type MailDTO, type ReadError, type UiSettingsDTO } from '../shared/rpc.js';
 import { BUSY_BY_SCREEN, busyKey, busyOf, busyText, readBusyFile, setBusy, type BusyState, type ClearedState } from './busy.js';
 import { confirmGone, dispatchFloorOf, dispatchMode, emptyGoneBoards, emptyWorkspaces, enteredOf, heldOf, stageEntries, stageEntry, toBoardDTO, toEmptyBoardDTO, toOverview } from './read-model.js';
 import { listWorkspaces, type ActiveWorkspace } from './workspaces.js';
 import { emptyUiState, readUiState, writeUiState } from './ui-state.js';
-import { cardTracking, designatedLead, foldersOff, hostEnabled, leadRecord, readAutoState, type AutoHealth, type AutoState } from './auto-cards.js';
+import { cardSeen } from './core/auto-control.js';
+import { cardTracking, type AutoCards, designatedLead, foldersOff, hostEnabled, leadRecord, readAutoState, type AutoHealth, type AutoState } from './auto-cards.js';
 import type { LeadNow } from './dispatch.js';
 import { cardParents, groupsKey } from './card-parents.js';
 import { createMailReader, mailExcluded, type MailReader } from './mailbox.js';
@@ -22,6 +23,8 @@ import { builtinDefinition, builtinWorkflow, type BuiltinWorkflow, type Workflow
 import type { WorkflowDefinition } from '../shared/workflow.js';
 import { PACKAGE_VERSION, BUILD_RELEASE } from './version.js';
 import { readArchiveSettings } from './auto-archive.js';
+import { readUpdateCheck } from './update-check.js';
+import { updateCheckKey } from '../shared/update-check.js';
 import { z } from 'zod';
 
 // Paseo 0.8 evaluates a string with no plugin-root path; version/release are build metadata.
@@ -34,6 +37,25 @@ export function readError(error: unknown): ReadError {
     target: error.target, nextAction: error.nextAction, details: error.details };
   return { code: 'E_IO', message: 'Could not read the ledger.', target: '',
     nextAction: 'Check the data directory and retry.', details: null };
+}
+/**
+ * REQ-74 / D66 G2: `kanban.v1.auto_cards.resume`. Only by the token the detail showed: a request without it (an older
+ * screen) is refused like a stale one — read the card again and decide again — and the answer says whether this call
+ * committed the resume or found the same decision already saved.
+ */
+export function createResumeHandler(auto: Pick<AutoCards, 'resumeDecision'>) {
+  return async (input: z.input<typeof autoCardsResume.input>) => {
+    try {
+      const value = autoCardsResume.input.parse(input);
+      if (value.controlEpoch === undefined || value.generation === undefined || value.decisionId === undefined || value.card === undefined)
+        throw createKanbanError('E_AUTO_STALE', 'This screen is older than the server, so it can\'t turn tracking back on safely.', value.cardId,
+          'Reload the card and decide again.');
+      const answer = await auto.resumeDecision(value.boardId, value.cardId, { controlEpoch: value.controlEpoch, generation: value.generation, decisionId: value.decisionId, card: value.card });
+      const d = answer.decision;
+      return { ok: true as const, committed: false as const, warnings: [], data: { resumed: answer.resumed, committed: answer.committed, replayed: answer.replayed,
+        mode: d?.mode ?? null, token: d ? { controlEpoch: d.controlEpoch, generation: d.generation, decisionId: d.decisionId, card: value.card } : null } };
+    } catch (error) { return { ok: false as const, error: readError(error), committed: false as const }; }
+  };
 }
 /** The language a screen falls back to when the ledger's setting cannot be read — the same as core and the CLI. */
 export const FALLBACK_LOCALE: Locale = 'en';
@@ -109,6 +131,12 @@ export function createReadHandlers(store: Store, now = () => new Date().toISOStr
   const locale = () => readLocale(store);
   /** REQ-52: the automatic archive's days for the settings window; a file that cannot be read at all says nothing. */
   const autoArchive = async () => { try { return { autoArchive: await readArchiveSettings(store.dataDir) }; } catch { return {}; } };
+  /**
+   * REQ-156: the new-version notice as its files hold it — a read never asks the registry itself (index.server.ts `updates.wake`).
+   * Gate 486 F5: on this answer's clock, so a good answer older than seven days is not sent.
+   */
+  const readUpdates = () => { const at = Date.parse(now()); return readUpdateCheck(store.dataDir, PACKAGE_VERSION, Number.isFinite(at) ? at : Date.now()); };
+  const updateCheck = async () => { try { return { updateCheck: await readUpdates() }; } catch { return {}; } };
   /** REQ-76: the plugin's own file, for which card sits under which. Missing or damaged reads as "no groups". */
   const autoState = async (): Promise<AutoState | null> => { try { return await readAutoState(store.dataDir); } catch { return null; } };
   const parentsOf = (board: Board, state: AutoState | null) => state ? cardParents(board, state) : undefined;
@@ -239,7 +267,7 @@ export function createReadHandlers(store: Store, now = () => new Date().toISOStr
         about, ...autoHealth(),
         // D44/249-D3: of the boards this answer shows, the folders switched off, in the spelling their rows carry.
         ...(value.hostId !== undefined ? { ui, autoCards, autoCardsOff: auto ? foldersOff(auto, [...result.boards.map(b => b.cwd), ...empties.map(b => b.summary.cwd)]) : [],
-          ...await autoArchive() } : {}),
+          ...await autoArchive(), ...await updateCheck() } : {}),
         ...(value.includeBoards ? { ...(paseo ? { workspaceLabels: await labels({ api: async () =>
           ({ entries: (listing ?? await workspaces(paseo)).entries }) }) } : {}),
           boardViews: await withWorkflow([...await (async () => { const leads = await leadsOf(paseo, result.boards);
@@ -260,7 +288,7 @@ export function createReadHandlers(store: Store, now = () => new Date().toISOStr
       const auto = await autoState();
       if (value.hostId !== undefined) autoCards = auto ? hostEnabled(auto, value.hostId) : true;
       // D44/249-D3: this board's folder switched off or not, in the spelling its row carries.
-      const archive = value.hostId !== undefined ? await autoArchive() : {};
+      const archive = value.hostId !== undefined ? { ...await autoArchive(), ...await updateCheck() } : {};
       const extra = (cwd: string) => ({ ...(settings ? { settings } : {}),
         ...(value.hostId !== undefined ? { autoCards, autoCardsOff: auto ? foldersOff(auto, [cwd]) : [], ...archive } : {}), ...autoHealth() });
       let board: Board;
@@ -282,22 +310,40 @@ export function createReadHandlers(store: Store, now = () => new Date().toISOStr
     }),
     card: (input: z.input<typeof cardGet.input>) => respond(async () => {
       const value = cardGet.input.parse(input);
-      const board = await select(value);
-      const card = board.cards.find(c => c.id === value.cardId && c.archivedAt === null);
-      if (!card) throw createKanbanError('E_NOT_FOUND', 'Card not found.', value.cardId,
+      const selected = await select(value);
+      if (!selected.cards.some(c => c.id === value.cardId && c.archivedAt === null)) throw createKanbanError('E_NOT_FOUND', 'Card not found.', value.cardId,
         'Refresh the board and select an active card.');
       const language = await locale();
       // REQ-74: why the card is where it is, and whether its automatic moves are paused. A missing or
       // damaged auto-card file reads as empty: no tracking line, the reason still comes from the ledger.
       const autoFile = await autoState();
-      const auto = cardTracking(board, card, autoFile ?? await readAutoState(store.dataDir));
+      // D66: paused or not is the card's decision in the control file, the one the engine obeys (null: unreadable, held).
+      // G2 (gate 481): what the file does not hold yet — a board from before it, a card an older writer changed, a damaged
+      // file to set aside — is saved under the board's lock BEFORE a token is shown, or a resume by it would be stale.
+      let control = await store.readAutoControl(selected.id).catch(() => null);
+      if (control && !control.settled) {
+        await store.settleAutoControl(selected.id).catch(() => null);
+        control = await store.readAutoControl(selected.id).catch(() => null);
+      }
+      // Gate 495 F1: the card, its history and revision are the board the decision was judged with — one read — never the
+      // board selected before it (a completion committed in between would be left out while its decision's token is shown).
+      const board = control?.board ?? selected;
+      const card = board.cards.find(c => c.id === value.cardId && c.archivedAt === null);
+      if (!card) throw createKanbanError('E_NOT_FOUND', 'Card not found.', value.cardId,
+        'Refresh the board and select an active card.');
+      const usable = !!control?.controlEpoch && control.settled && (control.status === 'ok' || control.status === 'missing');
+      const decision = usable ? control!.cards[card.id] ?? null : null;
+      const auto = cardTracking(board, card, autoFile ?? await readAutoState(store.dataDir), decision);
+      // The token a "resume automatic tracking" of this card must carry (only while it is paused and the file is usable).
+      const trackingToken = auto.tracking?.state === 'paused' && decision
+        ? { controlEpoch: control!.controlEpoch!, generation: decision.generation, decisionId: decision.decisionId, card: cardSeen(board, card) } : undefined;
       // 253-D3: why its request waits, if it waits for another reason than "no agent there".
       const held = card.dispatch ? heldOf(card.dispatch, dispatchFloorOf(autoFile)).held : undefined;
       // 281 F2: the rule a sent request went by, from the mark as it was then (`dispatchMode`), as on the board card.
       const mode = card.dispatch ? dispatchMode(card.dispatch, leadRecord(autoFile, board.cwd)) : {};
       return { boardId: board.id, card, template: toBoardDTO(board, language).template,
         history: board.history.filter(h => h.cardId === card.id), revision: board.revision,
-        locale: language, observedAt: now(), reason: auto.reason, tracking: auto.tracking,
+        locale: language, observedAt: now(), reason: auto.reason, tracking: auto.tracking, ...(trackingToken ? { trackingToken } : {}),
         ...enteredOf(stageEntry(stageEntries(board), card)), busy: busyOf((await busyState())?.marks, board.id)?.get(card.id) ?? null,
         ...(held ? { dispatchHeld: held } : {}), ...(mode.marked || mode.modeUnknown ? { dispatchMode: mode } : {}) };
     }),
@@ -403,8 +449,12 @@ export function createReadHandlers(store: Store, now = () => new Date().toISOStr
       if (value.hostId !== undefined) {
         try { messages = await mailFor((await readUiState(store.dataDir, value.hostId)).settings); } catch { messages = undefined; }
       }
+      // Gate 486 F4: a finished check, another device's switch or the end of the seven days changes the update files, not a revision.
+      let updates: string | undefined;
+      try { updates = updateCheckKey(await readUpdates()); } catch { updates = undefined; }
       return { boards: result.boards.map(b => ({ id: b.id, revision: b.revision, state: 'ready' as const, ...groups(b), ...busy(b) })),
-        errors: result.errors, removedIds: result.removedIds, observedAt: now(), ...autoHealth(), ...(messages ? { mail: messages.key } : {}) };
+        errors: result.errors, removedIds: result.removedIds, observedAt: now(), ...autoHealth(), ...(messages ? { mail: messages.key } : {}),
+        ...(updates ? { updates } : {}) };
     }),
   };
 }

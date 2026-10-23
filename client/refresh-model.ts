@@ -111,6 +111,12 @@ export type Poller = ReturnType<typeof createPoller>;
  */
 export type MailWatch = { hostId: string; key: string | undefined };
 export const mailChanged = (watch: MailWatch | undefined, reported: string | undefined) => !!watch && (reported ?? '') !== (watch.key ?? '');
+/**
+ * Gate 486 F4: the new-version reading the screen shows (`updateCheckKey`) against the one the server would send now. Either missing
+ * (a screen without the reading, an older server) is no change.
+ */
+export const updatesChanged = (shown: string | undefined, reported: string | undefined) =>
+  shown !== undefined && reported !== undefined && shown !== reported;
 /** Board id → revision of the ledger boards a screen shows; a workspace without a board has none. */
 export function knownRevisions(summaries: readonly { id: string; revision: string; hasLedger?: boolean | undefined; groups?: string | undefined;
   busy?: string | undefined }[]) {

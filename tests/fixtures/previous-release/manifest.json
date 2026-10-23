@@ -1,0 +1,104 @@
+{
+  "releases": [
+    {
+      "release": "0.2.3",
+      "commit": "304e0499138a48ea8b725aaa04d5eb086b125e48",
+      "files": [
+        {
+          "path": "shared/core/domain.ts",
+          "sha256": "f8118ad2c267398553e34303c3fc897da642fef4240a7e0d3f926a9917ee9db0"
+        },
+        {
+          "path": "server/core/store.ts",
+          "sha256": "4f3b841f18598c976c14a2f067aff547d1443e8fd3d2d368bee419683eb80834"
+        },
+        {
+          "path": "server/core/durable.ts",
+          "sha256": "478da9ba4cbdd595f855e04a97914d1bbb147046f5cb9ff2e278cde230192c99"
+        },
+        {
+          "path": "server/core/auto-state.ts",
+          "sha256": "6fdc4394c1f382ff8970c7468658b57e3249a41a4d5b2ea1a073bdb4dfff7f9d"
+        },
+        {
+          "path": "server/auto-cards.ts",
+          "sha256": "4267de5e14686f15f64b2fb55e49d3c778ba2d65719cab0f5f46ffbb2d772a25"
+        },
+        {
+          "path": "server/serial.ts",
+          "sha256": "4235fbc738bee8617e2d78fdf5c6a4bae322e21cb12240db2048f83098576b15"
+        },
+        {
+          "path": "shared/rpc.ts",
+          "sha256": "18959ae14c57648ba9f590f696a91d188d6ac6fb89ef13d70aae7b1bc3551f2a"
+        },
+        {
+          "path": "shared/dispatch.ts",
+          "sha256": "845a82d9d4d89f9057f8e15a21444e67f4082652ff929cfeb961accf1a49df4d"
+        },
+        {
+          "path": "shared/mail-list.ts",
+          "sha256": "08aa13c2d1489df825d15f5656dcbc84be7647f3a8f449162e12868f0ccd4277"
+        },
+        {
+          "path": "shared/mailbox.ts",
+          "sha256": "29ef1bdd60aac7adab5257129a9b99852b4a36e1f34ad110a09b25e6d8e30135"
+        },
+        {
+          "path": "shared/workflow.ts",
+          "sha256": "3e93c1ee9cf50e7a9921ad87484c8dd633c421879a76db4f49aa262a0d3cf393"
+        }
+      ]
+    },
+    {
+      "release": "0.2.4",
+      "commit": "4a4325c82efad167c5c92d8938d15bee0e40b667",
+      "files": [
+        {
+          "path": "shared/core/domain.ts",
+          "sha256": "f8118ad2c267398553e34303c3fc897da642fef4240a7e0d3f926a9917ee9db0"
+        },
+        {
+          "path": "server/core/store.ts",
+          "sha256": "d873de4950afdb9c7eb9a80a2cd450e066e6fd886e904681147e4a0740e46784"
+        },
+        {
+          "path": "server/core/durable.ts",
+          "sha256": "478da9ba4cbdd595f855e04a97914d1bbb147046f5cb9ff2e278cde230192c99"
+        },
+        {
+          "path": "server/core/auto-state.ts",
+          "sha256": "6fdc4394c1f382ff8970c7468658b57e3249a41a4d5b2ea1a073bdb4dfff7f9d"
+        },
+        {
+          "path": "server/auto-cards.ts",
+          "sha256": "1031884f0aa8817fff0917841831c1ba40d58cdb077b3cd0aa307312fa1dea71"
+        },
+        {
+          "path": "server/serial.ts",
+          "sha256": "4235fbc738bee8617e2d78fdf5c6a4bae322e21cb12240db2048f83098576b15"
+        },
+        {
+          "path": "shared/rpc.ts",
+          "sha256": "ada2ea583430a22eec61262194a03752d0c69c22770c2244ffde6d7474a8e851"
+        },
+        {
+          "path": "shared/dispatch.ts",
+          "sha256": "845a82d9d4d89f9057f8e15a21444e67f4082652ff929cfeb961accf1a49df4d"
+        },
+        {
+          "path": "shared/mail-list.ts",
+          "sha256": "08aa13c2d1489df825d15f5656dcbc84be7647f3a8f449162e12868f0ccd4277"
+        },
+        {
+          "path": "shared/mailbox.ts",
+          "sha256": "29ef1bdd60aac7adab5257129a9b99852b4a36e1f34ad110a09b25e6d8e30135"
+        },
+        {
+          "path": "shared/workflow.ts",
+          "sha256": "3e93c1ee9cf50e7a9921ad87484c8dd633c421879a76db4f49aa262a0d3cf393"
+        }
+      ]
+    }
+  ]
+}

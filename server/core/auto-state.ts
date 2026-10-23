@@ -48,7 +48,12 @@ export type MoveCause = Signal | 'reconcile';
  */
 export interface AutoMove { cause: MoveCause; revision: string; at: string }
 export interface AppliedState { boardId: string; cardId: string; bucket: Bucket | null; awaiting: boolean; title: string | null; at: string;
-  moved?: AutoMove | null; pausedAt?: string | null; resumedAt?: string | null }
+  moved?: AutoMove | null; pausedAt?: string | null; resumedAt?: string | null;
+  /**
+   * D66 (gate 481/483 J1): the generation of the card's `managed` decision (`auto-control`) the bucket was applied under.
+   * A bucket kept under another one — a resume since, or a late write of an older judgement — is not taken as applied.
+   */
+  generation?: number | null }
 export type HostSetting = FolderSwitch;
 /** REQ-76: the parent an agent had when this feature first saw it (the direct parent; the top is found by following). */
 export interface ParentMemory { parentAgentId: string; at: string }
@@ -148,7 +153,8 @@ export function parseAutoState(raw: string): AutoState {
         state.agents[id] = { boardId: e.boardId, cardId: e.cardId,
           bucket: BUCKETS.includes(e.bucket as Bucket) ? e.bucket as Bucket : null,
           awaiting: e.awaiting === true, title: typeof e.title === 'string' ? e.title : null, at: e.at,
-          moved: readMove(e.moved), pausedAt: isTime(e.pausedAt) ? e.pausedAt : null, resumedAt: isTime(e.resumedAt) ? e.resumedAt : null };
+          moved: readMove(e.moved), pausedAt: isTime(e.pausedAt) ? e.pausedAt : null, resumedAt: isTime(e.resumedAt) ? e.resumedAt : null,
+          generation: typeof e.generation === 'number' && Number.isSafeInteger(e.generation) && e.generation >= 0 ? e.generation : null };
       }
     }
   } catch { return damagedState(); }

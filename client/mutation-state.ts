@@ -11,6 +11,12 @@ export interface MutationState {
 export const emptyMutation = (): MutationState => ({ phase: 'idle', pending: null, reply: null, checked: null, checkError: '' });
 export type MutationAction = { type: 'send'; request: WriteRequest } | { type: 'reply'; reply: WriteReply }
   | { type: 'checked'; board: BoardSnapshot } | { type: 'check-error'; message: string } | { type: 'reset' };
+/**
+ * D66 G2b: the save was refused because the cards' automatic-move decisions could not be read or written first
+ * (E_AUTO_CONTROL, nothing committed): the same change can be sent again once the plugin's data folder is writable.
+ */
+export const storageRefused = (state: Pick<MutationState, 'reply'>): boolean =>
+  !!state.reply && !state.reply.ok && state.reply.error.code === 'E_AUTO_CONTROL';
 export function mutationReducer(state: MutationState, action: MutationAction): MutationState {
   switch (action.type) {
     case 'send': return { ...emptyMutation(), phase: 'sending', pending: action.request };

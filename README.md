@@ -26,8 +26,10 @@ that stopped is not the same as work that is done. You decide when a card is don
 
 Lead agents can also manage cards themselves with the `kanban` command line tool: create cards with
 acceptance criteria, link the agents they delegate to, and record deliverables. Boards are stored in local
-files on the machine that runs Paseo. The plugin collects no telemetry and contacts no outside service of its
-own; board contents travel only the way Paseo already works — shown in the Paseo apps you connect, and sent to
+files on the machine that runs Paseo. The plugin collects no telemetry. Its one request of its own is a check of
+the npm registry for its latest version number, at most once a day — nothing about you or your boards
+is sent, and you can turn it off (see [What happens automatically](#what-happens-automatically)). Board contents
+travel only the way Paseo already works — shown in the Paseo apps you connect, and sent to
 an agent (and so to that agent's model provider) when you confirm sending a card to it.
 
 ## Why
@@ -89,7 +91,7 @@ not fill a board.
 **From Git** at a release tag instead of npm (the same plugin):
 
 ```sh
-paseo plugin install https://github.com/dominic4us/paseo-auto-kanban --ref v0.2.4
+paseo plugin install https://github.com/dominic4us/paseo-auto-kanban --ref v0.2.5
 ```
 
 The npm package is published from 0.2.1 on. 0.8.x installs plugins only from a folder or Git, not from npm.
@@ -110,6 +112,14 @@ npm install -g --prefix ~/.local paseo-auto-kanban@latest
 release, the first line says `up to date`. To go to a specific release: `--version <version>` for an npm install,
 `--ref <tag>` for a Git install; `install` again refuses an ID that is already installed.
 
+**From 0.2.5, going back or restoring a backup.** On its first look at a board, 0.2.5 decides once which cards
+the automatic cards may still move and writes a report beside them; cards it cannot prove safe show **Needs a check**
+on their detail and are turned back on one by one. 0.2.3 and 0.2.4 still read everything 0.2.5 writes. Before going
+back to them, or restoring files from a backup, stop every Paseo server and `kanban` CLI and switch **Agent auto
+cards** off; keep it off in the older version. See
+[Automatic-move records](docs/reference.md#automatic-move-records-auto-control) for the steps and what is not
+covered.
+
 **Requirements:** Paseo `>=0.8.0 <1.0.0` is what `paseo-plugin.json` declares (see [compatibility](#compatibility)
 for what has actually been checked); installing from npm needs 0.9.0 or newer. Paseo compiles the TypeScript
 sources itself, from either source — no build step is needed for the plugin. An npm install needs `npm` on the
@@ -127,6 +137,7 @@ The folder keeps the project's earlier name, `paseo-kanban`, so boards made befo
 | `PROCESS.md` (generated, optional) | the workspace's own folder — see below |
 | `.kanban/workflow.json` | the workspace's own folder, only when you press **Export** in the workflow view |
 | Display settings (theme, screen size, board position, filters) | `~/paseo-kanban-data/ui-state.json`, per connected host |
+| New version check: the switch (and its backup copy), the last attempt and the latest version number | `~/paseo-kanban-data/update-check.json`, `update-check.backup.json`, `update-check-cache.json` |
 | Last theme and language, to draw before the first read; where the sidebar link opens Kanban | the app's local storage, keys starting with `paseo-kanban:` |
 
 Treat the data folder and any `PROCESS.md` as private: they contain your card titles and notes.
@@ -134,9 +145,9 @@ Details of every file are in [docs/reference.md](docs/reference.md#data-folder).
 
 ## What happens automatically
 
-The plugin never contacts a network service and never deletes a card. These are the things it does without
-you pressing a button, and how to turn each off. Settings open from the gear button at the top right of the
-Kanban screen (on some phone screens, from the ⋯ menu) → **Kanban settings**.
+The plugin never deletes a card, and the new version check below is its only network request. These are the
+things it does without you pressing a button, and how to turn each off. Settings open from the gear button at the
+top right of the Kanban screen (on some phone screens, from the ⋯ menu) → **Kanban settings**.
 
 | What | Default | Turn off |
 |---|---|---|
@@ -145,6 +156,7 @@ Kanban screen (on some phone screens, from the ⋯ menu) → **Kanban settings**
 | **`PROCESS.md` in the workspace folder.** A board created with `kanban init`, or by adding the first card with **+** on an empty lane, writes `PROCESS.md` into the workspace folder and rewrites it after every change. It never overwrites a file it did not generate. Automatic boards do not get one until you run `kanban export`. | On | Set `"exportEnabled": false` in `~/paseo-kanban-data/config.json`. Existing files are kept. Consider adding `PROCESS.md` to your `.gitignore`. |
 | **Archiving finished cards.** Cards that have sat in Done for the set number of days are archived (not deleted). They still count in progress and can be restored from the workspace's ⋯ → **Archived cards**. | 7 days | Settings → Automation → **Archive finished cards** → Off (or 3, 14, 30 days). |
 | **Auto refresh.** While a Kanban screen is visible, it asks the server every 4 seconds which boards changed. It only reads (a check can also let the finished-card archive above run, at most every ten minutes) and pauses after 3 minutes without activity. | On | Settings → Automation → **Auto refresh**. |
+| **New version check.** At most once a day, when a Kanban screen reads or refreshes the boards, the server asks the npm registry (`https://registry.npmjs.org/paseo-auto-kanban/latest`) for this package's latest version number. Once a day holds across restarts, turning the check off and on, and several Paseo servers sharing the data folder: each attempt is recorded before it is made. The day is measured by the computer's clock: setting the clock back never brings the next check sooner; setting it forward can, except while a Linux machine keeps running and its boot clock can be read (if it cannot be read, the date alone decides, as on other systems; see the reference). The request carries no card, folder, name or other information about you; the registry sees the server's IP address. A newer version shows under Settings → About with the two update commands to copy, and as a dot on the gear, for up to seven days after the registry last answered. A failed check (offline, behind a firewall or proxy) is silent and tried again the next day; after seven days without an answer nothing is shown. With Paseo closed or no Kanban screen open, nothing is asked. | On | Settings → Automation → Status & refresh → **Check for new versions**. Off, no request is made from the moment the switch is saved. The switch is kept with a backup copy; if the setting cannot be read, no request is made until you set the switch again. |
 
 Sending a card to an agent is **never** automatic: when you move a draft card to In progress, a confirmation
 shows which chat will receive it, and only after you press **Send** does the server send the card to that
@@ -187,7 +199,7 @@ rm -f ~/.local/bin/kanban
 The package has no runtime dependencies and runs no install scripts. To build it from source instead:
 
 ```sh
-git clone https://github.com/dominic4us/paseo-auto-kanban --branch v0.2.4
+git clone https://github.com/dominic4us/paseo-auto-kanban --branch v0.2.5
 cd paseo-auto-kanban && npm ci --ignore-scripts && npm run build
 npm link            # or link dist/src/cli/main.js into a folder on your PATH yourself
 kanban --version

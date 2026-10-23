@@ -1,4 +1,5 @@
-import type { BoardCardDTO } from '../shared/rpc.js';
+import type { BoardCardDTO, BoardDTO } from '../shared/rpc.js';
+import { boardMark, linkStages, type AgentLinks } from './card-groups.js';
 
 /**
  * REQ-149 (research/423): "Check up" — the cards a person may want to finish or put away, found from what the screens
@@ -39,9 +40,12 @@ export interface CheckupSignals {
   ready: boolean;
 }
 export type CheckupCard = Pick<BoardCardDTO, 'id' | 'title' | 'stageId' | 'intent' | 'blocked' | 'awaiting' | 'agentIds'>
-  & Partial<Pick<BoardCardDTO, 'updatedAt' | 'createdAt' | 'stageEnteredAt' | 'dispatch' | 'busy' | 'busyEndedAt'>>;
+  & Partial<Pick<BoardCardDTO, 'updatedAt' | 'createdAt' | 'stageEnteredAt' | 'dispatch' | 'busy' | 'busyEndedAt' | 'parentCardId'>>;
 export interface CheckupStage { stageId: string; name: string; countsAsDone: boolean; cards: readonly CheckupCard[] }
-export interface CheckupBoard { summary: { id: string; revision: string; lead?: string | undefined }; stages: readonly CheckupStage[] }
+export interface CheckupBoard {
+  summary: { id: string; revision: string; lead?: string | undefined; leadNow?: BoardDTO['summary']['leadNow'] | undefined };
+  stages: readonly CheckupStage[];
+}
 export interface CheckupCandidate {
   /** `boardId` and `cardId` joined — the selection's and the skip list's key. */
   key: string;
@@ -59,6 +63,11 @@ export interface CheckupCandidate {
   agentId?: string;
   /** The board's first completion stage, where Done takes it; absent for a draft (the ledger keeps drafts out) or none. */
   doneStageId?: string;
+  /**
+   * REQ-157: the card the board puts this one under — the one its face names "↳ …" (`linkStages`: a topic lead's, else its
+   * parent's), when that card is among the cards read on the same board. Absent: the card stands on its own.
+   */
+  parent?: { cardId: string; title: string };
   revision: string; updatedAt: string;
 }
 
@@ -110,7 +119,7 @@ export function checkupRule(card: CheckupCard, stage: Pick<CheckupStage, 'counts
   return active && olderThan(active.at, now, limits.stalledDays) ? 'stalled' : null;
 }
 function candidateOf(board: CheckupBoard, stage: CheckupStage, card: CheckupCard, rule: CheckupRule, done: string | undefined,
-  signals: CheckupSignals, now: number): CheckupCandidate {
+  signals: CheckupSignals, now: number, parent: { cardId: string; title: string } | undefined): CheckupCandidate {
   const ids = distinct(card.agentIds), since = rule === 'draft' ? card.createdAt! : (card.stageEnteredAt ?? card.updatedAt)!;
   const live = ids.filter(id => !signals.archived(id)), active = rule !== 'draft' && live.length ? latestActivity(live, signals) : null;
   const doneStageId = card.intent === 'requested' ? done : undefined;
@@ -119,23 +128,44 @@ function candidateOf(board: CheckupBoard, stage: CheckupStage, card: CheckupCard
     stageId: stage.stageId, stageName: stage.name, since, days: wholeDays(since, now), agents: ids.length, archivedAgents: ids.length - live.length,
     ...(active ? { lastActive: { ...active, days: wholeDays(active.at, now) } } : {}),
     ...(ids.length === 1 && !live.length ? { agentId: ids[0]! } : {}),
-    ...(doneStageId ? { doneStageId } : {}), revision: board.summary.revision, updatedAt: card.updatedAt ?? '' };
+    ...(doneStageId ? { doneStageId } : {}), ...(parent ? { parent } : {}), revision: board.summary.revision, updatedAt: card.updatedAt ?? '' };
 }
-function boardCandidates(board: CheckupBoard, signals: CheckupSignals, now: number, limits: CheckupLimits, into: CheckupCandidate[]): void {
+/**
+ * REQ-157: each card's place on the board — the card its face names "↳ …", by the board's own judgement (`linkStages`, with the
+ * agents' labels for REQ-117's topic leads and the board's marked lead, as the screens draw it). It reads only the cards' ids,
+ * titles, stages, agents, creation times and parents, all of which a `CheckupCard` has.
+ */
+function parentsOf(board: CheckupBoard, agents: AgentLinks | undefined): Map<string, { cardId: string; title: string }> {
+  const out = new Map<string, { cardId: string; title: string }>();
+  const linked = linkStages(board.stages as unknown as Parameters<typeof linkStages>[0], agents, boardMark(board.summary));
+  for (const stage of linked) for (const card of stage.cards) {
+    const up = card.subParent ?? card.parent;
+    if (up) out.set(card.id, { cardId: up.id, title: up.title });
+  }
+  return out;
+}
+function boardCandidates(board: CheckupBoard, signals: CheckupSignals, now: number, limits: CheckupLimits, into: CheckupCandidate[],
+  agents: AgentLinks | undefined): void {
   const first = board.stages[0]?.stageId, done = board.stages.find(s => s.countsAsDone)?.stageId;
+  let parents: Map<string, { cardId: string; title: string }> | null = null;
   for (const stage of board.stages) {
     if (stage.countsAsDone) continue;
     for (const card of stage.cards) {
       const rule = checkupRule(card, stage, stage.stageId === first, board.summary.lead, signals, now, limits);
-      if (rule) into.push(candidateOf(board, stage, card, rule, done, signals, now));
+      if (!rule) continue;
+      parents ??= parentsOf(board, agents);
+      into.push(candidateOf(board, stage, card, rule, done, signals, now, parents.get(card.id)));
     }
   }
 }
-/** Every candidate of `boards`, by rule (R1 → R4), then the longest waiting first, then by title. */
+/**
+ * Every candidate of `boards`, by rule (R1 → R4), then the longest waiting first, then by title. REQ-157: `agents` (the agents'
+ * labels, `useAgentLinks`) lets a topic lead's sub-card name it as its parent, as on the board; the order never depends on parents.
+ */
 export function checkupCandidates(boards: readonly CheckupBoard[], signals: CheckupSignals, now: number,
-  limits: CheckupLimits = CHECKUP_LIMITS): CheckupCandidate[] {
+  limits: CheckupLimits = CHECKUP_LIMITS, agents?: AgentLinks): CheckupCandidate[] {
   const out: CheckupCandidate[] = [];
-  for (const board of boards) boardCandidates(board, signals, now, limits, out);
+  for (const board of boards) boardCandidates(board, signals, now, limits, out, agents);
   return out.sort((a, b) => CHECKUP_RULES.indexOf(a.rule) - CHECKUP_RULES.indexOf(b.rule) ||
     Date.parse(a.since) - Date.parse(b.since) || a.title.localeCompare(b.title) || a.key.localeCompare(b.key));
 }
@@ -211,6 +241,51 @@ export function homeOperations(cards: CheckupPlanBoard['cards']): CheckupOperati
 /** The candidates by rule, in the list's order, leaving out the rules with none. */
 export function checkupGroups(list: readonly CheckupCandidate[]): { rule: CheckupRule; cards: CheckupCandidate[] }[] {
   return CHECKUP_RULES.map(rule => ({ rule, cards: list.filter(c => c.rule === rule) })).filter(group => group.cards.length > 0);
+}
+/**
+ * REQ-157: one group's rows as the list draws them — a card at its depth (0: on its own or a family's head, 1: under a lead,
+ * 2: under a topic lead under a lead), or a lead's heading (`lead`): the card a group's cards sit under when that card is not a
+ * candidate in this group, with the keys of every card under it (what its tick takes).
+ */
+export type CheckupItem = { kind: 'card'; card: CheckupCandidate; depth: number }
+  | { kind: 'lead'; key: string; boardId: string; cardId: string; title: string; keys: string[] };
+/**
+ * REQ-157: a group's cards with each family together — a card under its parent when the parent is in the group, else under its
+ * parent's heading; a card whose parent is not read stays where it is. A family stands where its first card in the list's order
+ * (the longest waiting first) stood; inside it, the list's order. The list itself (selection, plan, counts) keeps its order.
+ */
+export function checkupTree(cards: readonly CheckupCandidate[]): CheckupItem[] {
+  const inGroup = new Map(cards.map(c => [c.key, c]));
+  const upOf = (c: CheckupCandidate) => c.parent ? c.boardId + '\u0000' + c.parent.cardId : null;
+  const children = new Map<string, CheckupCandidate[]>();
+  for (const c of cards) {
+    const up = upOf(c);
+    if (!up || up === c.key) continue;
+    const list = children.get(up); if (list) list.push(c); else children.set(up, [c]);
+  }
+  const out: CheckupItem[] = [], placed = new Set<string>();
+  const place = (c: CheckupCandidate, depth: number, keys?: string[]) => {
+    if (placed.has(c.key)) return;
+    placed.add(c.key); keys?.push(c.key);
+    out.push({ kind: 'card', card: c, depth });
+    for (const kid of children.get(c.key) ?? []) place(kid, Math.min(depth + 1, 2), keys);
+  };
+  for (const c of cards) {
+    if (placed.has(c.key)) continue;
+    // The family's head: up through parents in the group (a loop is cut where it closes).
+    let top = c;
+    for (const seen = new Set([c.key]); ;) {
+      const up = upOf(top), next = up ? inGroup.get(up) : undefined;
+      if (!next || seen.has(next.key) || placed.has(next.key)) break;
+      seen.add(next.key); top = next;
+    }
+    const up = upOf(top);
+    if (!up || up === top.key || inGroup.has(up)) { place(top, 0); continue; }
+    const heading = { kind: 'lead' as const, key: up, boardId: top.boardId, cardId: top.parent!.cardId, title: top.parent!.title, keys: [] as string[] };
+    out.push(heading);
+    for (const kid of children.get(up) ?? []) place(kid, 1, heading.keys);
+  }
+  return out;
 }
 /** The words a candidate's line is made of (client/i18n.ts). */
 export interface CheckupLineCopy {

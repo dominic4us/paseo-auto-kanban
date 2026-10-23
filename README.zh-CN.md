@@ -25,8 +25,8 @@ paseo plugin install npm:paseo-auto-kanban
 在 Paseo 中创建智能体后，该工作区的看板上会出现一张卡片（Card）。智能体工作时卡片会移动，
 请求权限时会显示为需要您回应（Needs you），停止后则在待审核（Review）列中等待。智能体停止并不意味着工作已经完成，
 因此是否完成由您决定。主导智能体也可以通过 `kanban` 命令创建卡片并关联负责的
-智能体。看板保存在运行 Paseo 服务器的设备上的本地文件中。插件本身不收集使用数据，
-也不连接外部服务。不过，按照 Paseo 原有的工作方式，看板会显示在您连接的 Paseo 应用中；
+智能体。看板保存在运行 Paseo 服务器的设备上的本地文件中。插件本身不收集使用数据。
+插件自行发起的外部连接只有新版本检查：每天最多一次向 npm 注册表查询最新版本号（不发送看板、卡片内容或用户信息），可在设置中关闭。不过，按照 Paseo 原有的工作方式，看板会显示在您连接的 Paseo 应用中；
 当您确认将卡片发送给智能体时，卡片内容会传递给该智能体（以及其模型提供商）。
 
 ## 为什么需要它
@@ -70,7 +70,7 @@ Node.js **22 或更高版本**。
    或者，通过 Git 指定发布标签安装：
 
    ```sh
-   paseo plugin install https://github.com/dominic4us/paseo-auto-kanban --ref v0.2.4
+   paseo plugin install https://github.com/dominic4us/paseo-auto-kanban --ref v0.2.5
    ```
 
    两种方式安装的是同一个插件。npm 包从 0.2.1 起发布，Paseo 安装时不会执行包脚本。
@@ -105,6 +105,8 @@ npm install -g --prefix ~/.local paseo-auto-kanban@latest
 只有通过这种方式安装了 `kanban` 命令，才需要执行第二行。如果没有更新版本，第一行会显示 `up to date`。
 指定版本时，npm 安装使用 `--version <version>`，Git 安装使用 `--ref <tag>`。对已安装的 ID 再次执行 `install` 会被拒绝。
 声明支持的 Paseo 范围为 `>=0.8.0 <1.0.0`（实际验证过的组合见英文 README 的兼容性表）。
+
+**从 0.2.5 退回旧版本或恢复备份时。** 0.2.5 首次读取看板时，会一次性确定哪些卡片仍可由自动卡片移动，并在旁边写入一份报告；无法确认安全的卡片会在详情中显示 **Needs a check**（需要检查），需逐张重新开启。0.2.3 和 0.2.4 仍能读取 0.2.5 写入的全部内容。退回旧版本或从备份恢复文件之前，请停止所有 Paseo 服务器和 `kanban` CLI，并关闭 **Agent auto cards**；在旧版本中也保持关闭。具体步骤及不在保证范围内的情况见 [Automatic-move records](docs/reference.md#automatic-move-records-auto-control)（英文）。
 
 ## `kanban` 命令（可选）
 
@@ -173,6 +175,7 @@ kanban --version
 | 工作区文件夹中的 `PROCESS.md`（仅限通过 `kanban init` 或空泳道的 **+** 创建的看板） | 开启 | 在 `~/paseo-kanban-data/config.json` 中设置 `"exportEnabled": false` |
 | 自动归档已完成卡片（Archive finished cards：不是删除，可以恢复） | 7 天 | 设置 → Automation → Archive finished cards → Off |
 | 自动刷新（Auto refresh：界面可见时每 4 秒只读查询一次） | 开启 | 设置 → Automation → Auto refresh |
+| 新版本检查（Check for new versions：Kanban 界面读取或刷新看板时每天最多一次，只向 npm 注册表查询最新版本号；重启、先关后开、多个服务器共用同一数据文件夹时合计也是每天一次——查询前先记录这次尝试；“一天”按电脑时钟计算：把时钟往回调不会提前查询，往前调则可能提前（Linux 机器持续运行且能读取开机时钟期间除外——读不到开机时钟时，与其他系统一样只按日期判断）；有新版本时，自最后一次应答起 7 天内在设置 → About 和齿轮按钮上的圆点显示；失败时不提示，第二天再试，7 天没有应答则不再显示） | 开启 | 设置 → Automation → Status & refresh → Check for new versions。关闭保存后不再发出任何请求。设置连同备份副本一起保存；设置无法读取时，在重新设置开关之前不发出请求 |
 
 只有在确认窗口中点击**发送（Send）**，才会将草稿卡片发送给智能体。
 
@@ -181,6 +184,7 @@ kanban --version
 请将数据目录和 `PROCESS.md` 视为私密内容：其中包含卡片标题和备注。
 
 - 数据目录：`~/paseo-kanban-data`（沿用旧名称，以继续使用已有看板）。
+- 新版本检查的开关（及其备份）、最近一次尝试和最新版本号保存在数据目录的 `update-check.json`、`update-check.backup.json`、`update-check-cache.json` 中；最近使用的主题和语言，以及侧边栏 Kanban 链接的打开位置，保存在应用的本地存储中（以 `paseo-kanban:` 开头的键）。
 - 新安装的界面默认使用英语。若要使用韩语，请在 `config.json` 中设置 `"locale": "ko"`。
   旧版本已有的设置会保留韩语。
 - 第一个阶段的名称因位置而异。存储名称为 *Waiting*，因此 `kanban ls` 显示为 `todo (Waiting)`，而英文界面

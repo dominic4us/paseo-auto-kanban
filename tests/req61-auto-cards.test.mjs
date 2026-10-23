@@ -157,7 +157,8 @@ test('REQ-61 ⑤ a failing ledger never escapes a hook: logged, other signals an
   const f = await fixture(t);
   let broken = true;
   const store = new Proxy(f.store, { get(target, key) {
-    if (key === 'mutateBoard') return async (...args) => { if (broken) throw new Error('Synthetic disk failure'); return target.mutateBoard(...args); };
+    // D66: the engine's own entry point (`autoMutate`) fails the same way.
+    if (key === 'mutateBoard' || key === 'autoMutate') return async (...args) => { if (broken) throw new Error('Synthetic disk failure'); return target[key](...args); };
     const value = Reflect.get(target, key); return typeof value === 'function' ? value.bind(target) : value;
   } });
   const s = await setup(t, { store });

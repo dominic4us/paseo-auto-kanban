@@ -173,6 +173,18 @@ function unsized(): Record<string, () => unknown> {
         skipped: checkupModel.withoutSkipped(list, skips, NOW).length, read: checkupModel.readSkips({ ok: skips[list[0]!.key], bad: 1 }),
         lines: (['ko', 'en'] as const).map(locale => list.map(c => checkupModel.checkupLine(c, 'paseo-kanban', id => 'Agent ' + id, i18n.copy(locale)))) };
     },
+    // REQ-157: the check up's families — a lead not a candidate heads its two sub-cards, a lead that is one has its sub-card under
+    // it, and a card whose parent is not read stays flat.
+    checkupTree: () => {
+      const day = checkupModel.DAY_MS, ago = (days: number) => new Date(NOW - days * day).toISOString();
+      const still = (id: string, days: number, extra: Record<string, unknown> = {}) => statusCard(id, { stageId: 'doing', updatedAt: ago(days), stageEnteredAt: ago(days), ...extra });
+      const cards = [still('lead', 0), still('s1', 12, { parentCardId: 'lead' }), still('s2', 20, { parentCardId: 'lead' }), still('stray', 9, { parentCardId: 'gone' }),
+        still('l2', 15), still('k2', 8, { parentCardId: 'l2' })];
+      const board = { summary: { id: 'board-1', revision: 'rev:1' }, stages: stages.map(stage => ({ ...stage, cards: cards.filter(card => card.stageId === stage.stageId) })) };
+      const list = checkupModel.checkupCandidates([board], { archived: () => false, ready: true }, NOW);
+      return checkupModel.checkupGroups(list).map(g => checkupModel.checkupTree(g.cards).map(item => item.kind === 'lead'
+        ? ['lead', item.cardId, item.keys.length] : ['card', item.card.cardId, item.depth, item.card.parent?.cardId ?? null]));
+    },
   };
 }
 function run(group: Record<string, () => unknown>): Json {

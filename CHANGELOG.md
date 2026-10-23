@@ -3,6 +3,19 @@
 All notable changes, newest first. Versions before 0.2.0 were private test builds published under the plugin
 ID `paseo-kanban`; this summary groups them by theme.
 
+## 0.2.5 — 2026-10-19
+
+- **New version check — the plugin's first network request.** At most once a day, while a Kanban screen is open, the server asks the npm registry for this package's latest version number only (no board content or identifiers are sent); a newer version shows under Settings → About with the update commands to copy, and as a dot on the gear, for up to seven days after the last answer. On by default; turn it off under Settings → Automation → Status & refresh → **Check for new versions**, after which no request is made. Once a day holds across restarts, switching off and on, and servers sharing one data folder, by the computer's clock — setting the clock back never brings a check sooner; a lost or unreadable setting means no request. README and SECURITY.md no longer say the plugin makes no network connections.
+
+- **A person's move always wins over automatic moves.** Each board now keeps an automatic-move record beside it (`auto-control/`) saying, card by card, whether the automatic cards may still move it. A person's move is saved there before the board; if it can't be saved, the move is refused and nothing is written. A card whose stage may have been someone's choice shows **Needs a check** on its detail, and **On hold** while the record can't be read; neither moves by itself until you press **Resume automatic tracking**. The first time 0.2.5 opens a board from 0.2.3 or 0.2.4 it sorts the cards once and writes a report beside the record; 0.2.3 and 0.2.4 still read everything 0.2.5 writes. Before going back to them or restoring a backup, switch **Agent auto cards** off — see the README and *Automatic-move records* in the reference.
+  - **Known limitation:** running an older version with its automatic cards on, or older and newer servers writing the same data folder at once, isn't covered: 0.2.5 shows the cards that were changed as needing a check (or still paused) but doesn't undo the change.
+
+- **Check up shows the hierarchy.** Cards are listed under their lead the same way as on the board; a lead that isn't itself in the list gets a small heading with a tick that selects only that lead's cards. What each action does, and the order it acts in, is unchanged.
+
+- Restore each layout's scroll position when the Kanban overview crosses the 760px breakpoint, keeping the viewed workspace in place where possible.
+
+- Development-only dependency shell-quote updated to fix a security advisory; the installed plugin is unaffected.
+
 ## 0.2.4 — 2026-10-18
 
 - **Automation settings follow the server:** fresh reads replace confirmed local values; replies from older requests or screen instances cannot restore pending choices.

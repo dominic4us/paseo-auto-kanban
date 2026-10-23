@@ -1,0 +1,1253 @@
+{
+  "schemaVersion": 1,
+  "id": "board_98a296c7bded134675a04ea738200c1e065a27c38f60c3dea442d4ead69a2942",
+  "workspaceId": "wks_example01",
+  "cwd": "/tmp/kanban-previous-fixture/0.2.4/project",
+  "workspaceStatus": "active",
+  "cards": [
+    {
+      "acceptanceCriteria": "The agent finishes its work and a person reviews the result.",
+      "agents": [
+        {
+          "agentId": "edab3e9d-bf25-4aab-8718-ae939ed416a9",
+          "label": "",
+          "linkedAt": "2026-10-12T00:00:05.000Z",
+          "role": "worker"
+        }
+      ],
+      "archivedAt": null,
+      "awaiting": null,
+      "blockedReason": null,
+      "createdAt": "2026-10-12T00:00:03.000Z",
+      "createdBy": {
+        "agentId": "edab3e9d-bf25-4aab-8718-ae939ed416a9",
+        "kind": "agent"
+      },
+      "deliverables": [],
+      "id": "card_ac4aa5c2-530b-42ae-8174-dd4e0b0b826d",
+      "intent": "requested",
+      "nextAction": "",
+      "notes": "Created automatically when the Paseo agent started. The stage follows the agent's status until a person moves the card; completion is a person's call.",
+      "priority": "normal",
+      "stageEnteredAt": "2026-10-12T00:00:08.000Z",
+      "stageId": "doing",
+      "title": "Adopt doing",
+      "updatedAt": "2026-10-12T00:00:08.000Z"
+    },
+    {
+      "acceptanceCriteria": "The agent finishes its work and a person reviews the result.",
+      "agents": [
+        {
+          "agentId": "e768e603-c11b-4e14-845a-4be9731d79a9",
+          "label": "",
+          "linkedAt": "2026-10-12T00:00:13.000Z",
+          "role": "worker"
+        }
+      ],
+      "archivedAt": null,
+      "awaiting": null,
+      "blockedReason": null,
+      "createdAt": "2026-10-12T00:00:11.000Z",
+      "createdBy": {
+        "agentId": "e768e603-c11b-4e14-845a-4be9731d79a9",
+        "kind": "agent"
+      },
+      "deliverables": [],
+      "id": "card_e24ffaf8-6449-4c2c-8ca2-e8b88ae84197",
+      "intent": "requested",
+      "nextAction": "",
+      "notes": "Created automatically when the Paseo agent started. The stage follows the agent's status until a person moves the card; completion is a person's call.",
+      "priority": "normal",
+      "stageEnteredAt": "2026-10-12T00:00:20.000Z",
+      "stageId": "review",
+      "title": "Adopt review",
+      "updatedAt": "2026-10-12T00:00:20.000Z"
+    },
+    {
+      "acceptanceCriteria": "The agent finishes its work and a person reviews the result.",
+      "agents": [
+        {
+          "agentId": "d9bf7dee-d62d-432f-8eaf-5af230b46121",
+          "label": "",
+          "linkedAt": "2026-10-12T00:00:25.000Z",
+          "role": "worker"
+        }
+      ],
+      "archivedAt": null,
+      "awaiting": null,
+      "blockedReason": null,
+      "createdAt": "2026-10-12T00:00:23.000Z",
+      "createdBy": {
+        "agentId": "d9bf7dee-d62d-432f-8eaf-5af230b46121",
+        "kind": "agent"
+      },
+      "deliverables": [],
+      "id": "card_9cc64b98-33cb-40b0-8fe8-8b3863ec479f",
+      "intent": "requested",
+      "nextAction": "",
+      "notes": "Created automatically when the Paseo agent started. The stage follows the agent's status until a person moves the card; completion is a person's call.",
+      "priority": "normal",
+      "stageEnteredAt": "2026-10-12T00:00:31.000Z",
+      "stageId": "done",
+      "title": "Done by a person",
+      "updatedAt": "2026-10-12T00:00:31.000Z"
+    },
+    {
+      "acceptanceCriteria": "The agent finishes its work and a person reviews the result.",
+      "agents": [
+        {
+          "agentId": "a488ade5-6841-4f75-8fa0-ca2a24fc1140",
+          "label": "",
+          "linkedAt": "2026-10-12T00:00:35.000Z",
+          "role": "worker"
+        }
+      ],
+      "archivedAt": null,
+      "awaiting": null,
+      "blockedReason": null,
+      "createdAt": "2026-10-12T00:00:33.000Z",
+      "createdBy": {
+        "agentId": "a488ade5-6841-4f75-8fa0-ca2a24fc1140",
+        "kind": "agent"
+      },
+      "deliverables": [],
+      "id": "card_741bd4e2-9bec-447a-808a-530a552b80ea",
+      "intent": "requested",
+      "nextAction": "",
+      "notes": "Created automatically when the Paseo agent started. The stage follows the agent's status until a person moves the card; completion is a person's call.",
+      "priority": "normal",
+      "stageEnteredAt": "2026-10-12T00:00:41.000Z",
+      "stageId": "todo",
+      "title": "Paused by a person",
+      "updatedAt": "2026-10-12T00:00:41.000Z"
+    },
+    {
+      "acceptanceCriteria": "The agent finishes its work and a person reviews the result.",
+      "agents": [
+        {
+          "agentId": "2f8bc443-7aee-4d60-808a-0e2ed7ac9e73",
+          "label": "",
+          "linkedAt": "2026-10-12T00:00:45.000Z",
+          "role": "worker"
+        }
+      ],
+      "archivedAt": null,
+      "awaiting": null,
+      "blockedReason": null,
+      "createdAt": "2026-10-12T00:00:43.000Z",
+      "createdBy": {
+        "agentId": "2f8bc443-7aee-4d60-808a-0e2ed7ac9e73",
+        "kind": "agent"
+      },
+      "deliverables": [],
+      "id": "card_cf28d936-4bb0-4dc7-8d26-1654273da52e",
+      "intent": "requested",
+      "nextAction": "",
+      "notes": "Created automatically when the Paseo agent started. The stage follows the agent's status until a person moves the card; completion is a person's call.",
+      "priority": "normal",
+      "stageEnteredAt": "2026-10-12T00:00:51.000Z",
+      "stageId": "review",
+      "title": "Moved, not seen",
+      "updatedAt": "2026-10-12T00:00:51.000Z"
+    },
+    {
+      "acceptanceCriteria": "The agent finishes its work and a person reviews the result.",
+      "agents": [
+        {
+          "agentId": "3001131e-7219-482d-84ff-01977088e32e",
+          "label": "",
+          "linkedAt": "2026-10-12T00:00:54.000Z",
+          "role": "worker"
+        }
+      ],
+      "archivedAt": null,
+      "awaiting": null,
+      "blockedReason": null,
+      "createdAt": "2026-10-12T00:00:52.000Z",
+      "createdBy": {
+        "agentId": "3001131e-7219-482d-84ff-01977088e32e",
+        "kind": "agent"
+      },
+      "deliverables": [],
+      "id": "card_5912c202-8da1-4d80-8d9b-fc89a3723b28",
+      "intent": "requested",
+      "nextAction": "",
+      "notes": "Created automatically when the Paseo agent started. The stage follows the agent's status until a person moves the card; completion is a person's call.",
+      "priority": "normal",
+      "stageEnteredAt": "2026-10-12T00:01:00.000Z",
+      "stageId": "todo",
+      "title": "Resumed, not moved",
+      "updatedAt": "2026-10-12T00:01:00.000Z"
+    },
+    {
+      "acceptanceCriteria": "The agent finishes its work and a person reviews the result.",
+      "agents": [
+        {
+          "agentId": "6ae874ea-be10-4a27-86fe-463072c5796f",
+          "label": "",
+          "linkedAt": "2026-10-12T00:01:05.000Z",
+          "role": "worker"
+        }
+      ],
+      "archivedAt": null,
+      "awaiting": null,
+      "blockedReason": null,
+      "createdAt": "2026-10-12T00:01:03.000Z",
+      "createdBy": {
+        "agentId": "6ae874ea-be10-4a27-86fe-463072c5796f",
+        "kind": "agent"
+      },
+      "deliverables": [],
+      "id": "card_f1e9b7f1-4675-4d84-8d01-570384bf773f",
+      "intent": "requested",
+      "nextAction": "",
+      "notes": "Created automatically when the Paseo agent started. The stage follows the agent's status until a person moves the card; completion is a person's call.",
+      "priority": "normal",
+      "stageEnteredAt": "2026-10-12T00:01:15.000Z",
+      "stageId": "doing",
+      "title": "Resumed and moved",
+      "updatedAt": "2026-10-12T00:01:15.000Z"
+    },
+    {
+      "acceptanceCriteria": "A reviewable result exists.",
+      "agents": [
+        {
+          "agentId": "278d5176-80df-498d-85d4-c1b91700a720",
+          "label": "",
+          "linkedAt": "2026-10-12T00:01:19.000Z",
+          "role": "worker"
+        }
+      ],
+      "archivedAt": null,
+      "awaiting": null,
+      "blockedReason": null,
+      "createdAt": "2026-10-12T00:01:18.000Z",
+      "createdBy": {
+        "kind": "user"
+      },
+      "deliverables": [],
+      "id": "card_08629688-ae3b-4432-803a-31a821f2acb2",
+      "intent": "requested",
+      "nextAction": "",
+      "notes": "",
+      "priority": "normal",
+      "stageEnteredAt": "2026-10-12T00:01:18.000Z",
+      "stageId": "todo",
+      "title": "Linked by an orchestrator",
+      "updatedAt": "2026-10-12T00:01:19.000Z"
+    },
+    {
+      "acceptanceCriteria": "A reviewable result exists.",
+      "agents": [
+        {
+          "agentId": "f3317ec0-55a2-4609-8585-ca2fa01dd1a6",
+          "label": "",
+          "linkedAt": "2026-10-12T00:01:22.000Z",
+          "role": "worker"
+        }
+      ],
+      "archivedAt": null,
+      "awaiting": null,
+      "blockedReason": null,
+      "createdAt": "2026-10-12T00:01:20.000Z",
+      "createdBy": {
+        "kind": "user"
+      },
+      "deliverables": [],
+      "id": "card_9fd7cd67-fca7-4824-887f-ea61cc907b6d",
+      "intent": "requested",
+      "nextAction": "",
+      "notes": "",
+      "priority": "normal",
+      "stageEnteredAt": "2026-10-12T00:01:21.000Z",
+      "stageId": "review",
+      "title": "Arranged then linked",
+      "updatedAt": "2026-10-12T00:01:22.000Z"
+    },
+    {
+      "acceptanceCriteria": "The agent finishes its work and a person reviews the result.",
+      "agents": [
+        {
+          "agentId": "70c7bfe8-bc27-4b2e-8509-4d18105f7670",
+          "label": "",
+          "linkedAt": "2026-10-12T00:01:25.000Z",
+          "role": "worker"
+        }
+      ],
+      "archivedAt": null,
+      "awaiting": null,
+      "blockedReason": null,
+      "createdAt": "2026-10-12T00:01:23.000Z",
+      "createdBy": {
+        "agentId": "70c7bfe8-bc27-4b2e-8509-4d18105f7670",
+        "kind": "agent"
+      },
+      "deliverables": [],
+      "id": "card_1b17deb6-be8e-4460-845b-744a00aa3945",
+      "intent": "requested",
+      "nextAction": "",
+      "notes": "Created automatically when the Paseo agent started. The stage follows the agent's status until a person moves the card; completion is a person's call.",
+      "priority": "normal",
+      "stageEnteredAt": "2026-10-12T00:01:31.000Z",
+      "stageId": "review",
+      "title": "Own CLI move",
+      "updatedAt": "2026-10-12T00:01:31.000Z"
+    },
+    {
+      "acceptanceCriteria": "A reviewable result exists.",
+      "agents": [],
+      "archivedAt": null,
+      "awaiting": null,
+      "blockedReason": null,
+      "createdAt": "2026-10-12T00:01:32.000Z",
+      "createdBy": {
+        "kind": "user"
+      },
+      "deliverables": [],
+      "id": "card_c1ffafd7-e4fd-4946-8700-b354e26492ad",
+      "intent": "requested",
+      "nextAction": "",
+      "notes": "",
+      "priority": "normal",
+      "stageEnteredAt": "2026-10-12T00:01:32.000Z",
+      "stageId": "todo",
+      "title": "Free card",
+      "updatedAt": "2026-10-12T00:01:32.000Z"
+    },
+    {
+      "acceptanceCriteria": "A reviewable result exists.",
+      "agents": [],
+      "archivedAt": null,
+      "awaiting": null,
+      "blockedReason": null,
+      "createdAt": "2026-10-12T00:01:33.000Z",
+      "createdBy": {
+        "kind": "user"
+      },
+      "deliverables": [],
+      "id": "card_929dfbed-1a70-466d-80ee-b629d7028108",
+      "intent": "requested",
+      "nextAction": "",
+      "notes": "",
+      "priority": "normal",
+      "stageEnteredAt": "2026-10-12T00:01:34.000Z",
+      "stageId": "review",
+      "title": "Arranged card",
+      "updatedAt": "2026-10-12T00:01:34.000Z"
+    },
+    {
+      "acceptanceCriteria": "A reviewable result exists.",
+      "agents": [],
+      "archivedAt": null,
+      "awaiting": null,
+      "blockedReason": null,
+      "createdAt": "2026-10-12T00:01:35.000Z",
+      "createdBy": {
+        "kind": "user"
+      },
+      "deliverables": [],
+      "id": "card_4968ca05-ffd8-4577-84d2-3cfc2b8ab304",
+      "intent": "requested",
+      "nextAction": "",
+      "notes": "",
+      "priority": "normal",
+      "stageEnteredAt": "2026-10-12T00:01:36.000Z",
+      "stageId": "done",
+      "title": "Done by hand",
+      "updatedAt": "2026-10-12T00:01:36.000Z"
+    },
+    {
+      "acceptanceCriteria": "The agent finishes its work and a person reviews the result.",
+      "agents": [
+        {
+          "agentId": "680ac7f6-4922-4775-8c83-836cae9ba165",
+          "label": "",
+          "linkedAt": "2026-10-12T00:01:39.000Z",
+          "role": "worker"
+        }
+      ],
+      "archivedAt": "2026-10-12T00:01:47.000Z",
+      "awaiting": null,
+      "blockedReason": null,
+      "createdAt": "2026-10-12T00:01:37.000Z",
+      "createdBy": {
+        "agentId": "680ac7f6-4922-4775-8c83-836cae9ba165",
+        "kind": "agent"
+      },
+      "deliverables": [],
+      "id": "card_598560aa-6276-487d-8466-b3856b59876c",
+      "intent": "requested",
+      "nextAction": "",
+      "notes": "Created automatically when the Paseo agent started. The stage follows the agent's status until a person moves the card; completion is a person's call.",
+      "priority": "normal",
+      "stageEnteredAt": "2026-10-12T00:01:45.000Z",
+      "stageId": "done",
+      "title": "Archived done",
+      "updatedAt": "2026-10-12T00:01:47.000Z"
+    },
+    {
+      "acceptanceCriteria": "The agent finishes its work and a person reviews the result.",
+      "agents": [],
+      "archivedAt": null,
+      "awaiting": null,
+      "blockedReason": null,
+      "createdAt": "2026-10-12T00:01:48.000Z",
+      "createdBy": {
+        "agentId": "564a8f16-4cf6-45a4-8f4d-f598f518cf65",
+        "kind": "agent"
+      },
+      "deliverables": [],
+      "id": "card_0377a569-1cde-486a-8c08-73988b0d8696",
+      "intent": "requested",
+      "nextAction": "",
+      "notes": "Created automatically when the Paseo agent started. The stage follows the agent's status until a person moves the card; completion is a person's call.",
+      "priority": "normal",
+      "stageEnteredAt": "2026-10-12T00:01:53.000Z",
+      "stageId": "doing",
+      "title": "Unlinked",
+      "updatedAt": "2026-10-12T00:01:56.000Z"
+    }
+  ],
+  "createdAt": "2026-10-12T00:00:01.000Z",
+  "history": [
+    {
+      "actor": {
+        "agentId": "edab3e9d-bf25-4aab-8718-ae939ed416a9",
+        "kind": "agent"
+      },
+      "at": "2026-10-12T00:00:03.000Z",
+      "cardId": "card_ac4aa5c2-530b-42ae-8174-dd4e0b0b826d",
+      "from": null,
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:2",
+      "to": "todo"
+    },
+    {
+      "actor": {
+        "agentId": "edab3e9d-bf25-4aab-8718-ae939ed416a9",
+        "kind": "agent"
+      },
+      "at": "2026-10-12T00:00:08.000Z",
+      "cardId": "card_ac4aa5c2-530b-42ae-8174-dd4e0b0b826d",
+      "from": "todo",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:4",
+      "to": "doing"
+    },
+    {
+      "actor": {
+        "agentId": "e768e603-c11b-4e14-845a-4be9731d79a9",
+        "kind": "agent"
+      },
+      "at": "2026-10-12T00:00:11.000Z",
+      "cardId": "card_e24ffaf8-6449-4c2c-8ca2-e8b88ae84197",
+      "from": null,
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:5",
+      "to": "todo"
+    },
+    {
+      "actor": {
+        "agentId": "e768e603-c11b-4e14-845a-4be9731d79a9",
+        "kind": "agent"
+      },
+      "at": "2026-10-12T00:00:16.000Z",
+      "cardId": "card_e24ffaf8-6449-4c2c-8ca2-e8b88ae84197",
+      "from": "todo",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:7",
+      "to": "doing"
+    },
+    {
+      "actor": {
+        "agentId": "e768e603-c11b-4e14-845a-4be9731d79a9",
+        "kind": "agent"
+      },
+      "at": "2026-10-12T00:00:20.000Z",
+      "cardId": "card_e24ffaf8-6449-4c2c-8ca2-e8b88ae84197",
+      "from": "doing",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:8",
+      "to": "review"
+    },
+    {
+      "actor": {
+        "agentId": "d9bf7dee-d62d-432f-8eaf-5af230b46121",
+        "kind": "agent"
+      },
+      "at": "2026-10-12T00:00:23.000Z",
+      "cardId": "card_9cc64b98-33cb-40b0-8fe8-8b3863ec479f",
+      "from": null,
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:9",
+      "to": "todo"
+    },
+    {
+      "actor": {
+        "agentId": "d9bf7dee-d62d-432f-8eaf-5af230b46121",
+        "kind": "agent"
+      },
+      "at": "2026-10-12T00:00:28.000Z",
+      "cardId": "card_9cc64b98-33cb-40b0-8fe8-8b3863ec479f",
+      "from": "todo",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:11",
+      "to": "doing"
+    },
+    {
+      "actor": {
+        "kind": "user"
+      },
+      "at": "2026-10-12T00:00:31.000Z",
+      "cardId": "card_9cc64b98-33cb-40b0-8fe8-8b3863ec479f",
+      "from": "doing",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:12",
+      "to": "done"
+    },
+    {
+      "actor": {
+        "agentId": "a488ade5-6841-4f75-8fa0-ca2a24fc1140",
+        "kind": "agent"
+      },
+      "at": "2026-10-12T00:00:33.000Z",
+      "cardId": "card_741bd4e2-9bec-447a-808a-530a552b80ea",
+      "from": null,
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:13",
+      "to": "todo"
+    },
+    {
+      "actor": {
+        "agentId": "a488ade5-6841-4f75-8fa0-ca2a24fc1140",
+        "kind": "agent"
+      },
+      "at": "2026-10-12T00:00:38.000Z",
+      "cardId": "card_741bd4e2-9bec-447a-808a-530a552b80ea",
+      "from": "todo",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:15",
+      "to": "doing"
+    },
+    {
+      "actor": {
+        "kind": "user"
+      },
+      "at": "2026-10-12T00:00:41.000Z",
+      "cardId": "card_741bd4e2-9bec-447a-808a-530a552b80ea",
+      "from": "doing",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:16",
+      "to": "todo"
+    },
+    {
+      "actor": {
+        "agentId": "2f8bc443-7aee-4d60-808a-0e2ed7ac9e73",
+        "kind": "agent"
+      },
+      "at": "2026-10-12T00:00:43.000Z",
+      "cardId": "card_cf28d936-4bb0-4dc7-8d26-1654273da52e",
+      "from": null,
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:17",
+      "to": "todo"
+    },
+    {
+      "actor": {
+        "agentId": "2f8bc443-7aee-4d60-808a-0e2ed7ac9e73",
+        "kind": "agent"
+      },
+      "at": "2026-10-12T00:00:48.000Z",
+      "cardId": "card_cf28d936-4bb0-4dc7-8d26-1654273da52e",
+      "from": "todo",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:19",
+      "to": "doing"
+    },
+    {
+      "actor": {
+        "kind": "user"
+      },
+      "at": "2026-10-12T00:00:51.000Z",
+      "cardId": "card_cf28d936-4bb0-4dc7-8d26-1654273da52e",
+      "from": "doing",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:20",
+      "to": "review"
+    },
+    {
+      "actor": {
+        "agentId": "3001131e-7219-482d-84ff-01977088e32e",
+        "kind": "agent"
+      },
+      "at": "2026-10-12T00:00:52.000Z",
+      "cardId": "card_5912c202-8da1-4d80-8d9b-fc89a3723b28",
+      "from": null,
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:21",
+      "to": "todo"
+    },
+    {
+      "actor": {
+        "agentId": "3001131e-7219-482d-84ff-01977088e32e",
+        "kind": "agent"
+      },
+      "at": "2026-10-12T00:00:57.000Z",
+      "cardId": "card_5912c202-8da1-4d80-8d9b-fc89a3723b28",
+      "from": "todo",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:23",
+      "to": "doing"
+    },
+    {
+      "actor": {
+        "kind": "user"
+      },
+      "at": "2026-10-12T00:01:00.000Z",
+      "cardId": "card_5912c202-8da1-4d80-8d9b-fc89a3723b28",
+      "from": "doing",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:24",
+      "to": "todo"
+    },
+    {
+      "actor": {
+        "agentId": "6ae874ea-be10-4a27-86fe-463072c5796f",
+        "kind": "agent"
+      },
+      "at": "2026-10-12T00:01:03.000Z",
+      "cardId": "card_f1e9b7f1-4675-4d84-8d01-570384bf773f",
+      "from": null,
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:25",
+      "to": "todo"
+    },
+    {
+      "actor": {
+        "agentId": "6ae874ea-be10-4a27-86fe-463072c5796f",
+        "kind": "agent"
+      },
+      "at": "2026-10-12T00:01:08.000Z",
+      "cardId": "card_f1e9b7f1-4675-4d84-8d01-570384bf773f",
+      "from": "todo",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:27",
+      "to": "doing"
+    },
+    {
+      "actor": {
+        "kind": "user"
+      },
+      "at": "2026-10-12T00:01:11.000Z",
+      "cardId": "card_f1e9b7f1-4675-4d84-8d01-570384bf773f",
+      "from": "doing",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:28",
+      "to": "todo"
+    },
+    {
+      "actor": {
+        "agentId": "6ae874ea-be10-4a27-86fe-463072c5796f",
+        "kind": "agent"
+      },
+      "at": "2026-10-12T00:01:15.000Z",
+      "cardId": "card_f1e9b7f1-4675-4d84-8d01-570384bf773f",
+      "from": "todo",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:29",
+      "to": "doing"
+    },
+    {
+      "actor": {
+        "kind": "user"
+      },
+      "at": "2026-10-12T00:01:18.000Z",
+      "cardId": "card_08629688-ae3b-4432-803a-31a821f2acb2",
+      "from": null,
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:30",
+      "to": "todo"
+    },
+    {
+      "actor": {
+        "kind": "user"
+      },
+      "at": "2026-10-12T00:01:20.000Z",
+      "cardId": "card_9fd7cd67-fca7-4824-887f-ea61cc907b6d",
+      "from": null,
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:32",
+      "to": "todo"
+    },
+    {
+      "actor": {
+        "kind": "user"
+      },
+      "at": "2026-10-12T00:01:21.000Z",
+      "cardId": "card_9fd7cd67-fca7-4824-887f-ea61cc907b6d",
+      "from": "todo",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:33",
+      "to": "review"
+    },
+    {
+      "actor": {
+        "agentId": "70c7bfe8-bc27-4b2e-8509-4d18105f7670",
+        "kind": "agent"
+      },
+      "at": "2026-10-12T00:01:23.000Z",
+      "cardId": "card_1b17deb6-be8e-4460-845b-744a00aa3945",
+      "from": null,
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:35",
+      "to": "todo"
+    },
+    {
+      "actor": {
+        "agentId": "70c7bfe8-bc27-4b2e-8509-4d18105f7670",
+        "kind": "agent"
+      },
+      "at": "2026-10-12T00:01:28.000Z",
+      "cardId": "card_1b17deb6-be8e-4460-845b-744a00aa3945",
+      "from": "todo",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:37",
+      "to": "doing"
+    },
+    {
+      "actor": {
+        "agentId": "70c7bfe8-bc27-4b2e-8509-4d18105f7670",
+        "kind": "agent"
+      },
+      "at": "2026-10-12T00:01:31.000Z",
+      "cardId": "card_1b17deb6-be8e-4460-845b-744a00aa3945",
+      "from": "doing",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:38",
+      "to": "review"
+    },
+    {
+      "actor": {
+        "kind": "user"
+      },
+      "at": "2026-10-12T00:01:32.000Z",
+      "cardId": "card_c1ffafd7-e4fd-4946-8700-b354e26492ad",
+      "from": null,
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:39",
+      "to": "todo"
+    },
+    {
+      "actor": {
+        "kind": "user"
+      },
+      "at": "2026-10-12T00:01:33.000Z",
+      "cardId": "card_929dfbed-1a70-466d-80ee-b629d7028108",
+      "from": null,
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:40",
+      "to": "todo"
+    },
+    {
+      "actor": {
+        "kind": "user"
+      },
+      "at": "2026-10-12T00:01:34.000Z",
+      "cardId": "card_929dfbed-1a70-466d-80ee-b629d7028108",
+      "from": "todo",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:41",
+      "to": "review"
+    },
+    {
+      "actor": {
+        "kind": "user"
+      },
+      "at": "2026-10-12T00:01:35.000Z",
+      "cardId": "card_4968ca05-ffd8-4577-84d2-3cfc2b8ab304",
+      "from": null,
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:42",
+      "to": "todo"
+    },
+    {
+      "actor": {
+        "kind": "user"
+      },
+      "at": "2026-10-12T00:01:36.000Z",
+      "cardId": "card_4968ca05-ffd8-4577-84d2-3cfc2b8ab304",
+      "from": "todo",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:43",
+      "to": "done"
+    },
+    {
+      "actor": {
+        "agentId": "680ac7f6-4922-4775-8c83-836cae9ba165",
+        "kind": "agent"
+      },
+      "at": "2026-10-12T00:01:37.000Z",
+      "cardId": "card_598560aa-6276-487d-8466-b3856b59876c",
+      "from": null,
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:44",
+      "to": "todo"
+    },
+    {
+      "actor": {
+        "agentId": "680ac7f6-4922-4775-8c83-836cae9ba165",
+        "kind": "agent"
+      },
+      "at": "2026-10-12T00:01:42.000Z",
+      "cardId": "card_598560aa-6276-487d-8466-b3856b59876c",
+      "from": "todo",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:46",
+      "to": "doing"
+    },
+    {
+      "actor": {
+        "kind": "user"
+      },
+      "at": "2026-10-12T00:01:45.000Z",
+      "cardId": "card_598560aa-6276-487d-8466-b3856b59876c",
+      "from": "doing",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:47",
+      "to": "done"
+    },
+    {
+      "actor": {
+        "agentId": "564a8f16-4cf6-45a4-8f4d-f598f518cf65",
+        "kind": "agent"
+      },
+      "at": "2026-10-12T00:01:48.000Z",
+      "cardId": "card_0377a569-1cde-486a-8c08-73988b0d8696",
+      "from": null,
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:49",
+      "to": "todo"
+    },
+    {
+      "actor": {
+        "agentId": "564a8f16-4cf6-45a4-8f4d-f598f518cf65",
+        "kind": "agent"
+      },
+      "at": "2026-10-12T00:01:53.000Z",
+      "cardId": "card_0377a569-1cde-486a-8c08-73988b0d8696",
+      "from": "todo",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:51",
+      "to": "doing"
+    }
+  ],
+  "receipts": [
+    {
+      "cardIds": [],
+      "digest": "11fbe73e17611d49203cb75cd058047171cf199adf39a1bd3637a30d89a25544",
+      "requestId": "74735e80-9a35-42f0-8509-a6d8811f4755",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:1"
+    },
+    {
+      "cardIds": [
+        "card_ac4aa5c2-530b-42ae-8174-dd4e0b0b826d"
+      ],
+      "digest": "9c2b9d11d24ec38de5aab11afab622e2f73ffadc0090e4878fd528b592b81083",
+      "requestId": "20e0f7b1-0e5f-4d03-8bd4-151e45dd8231",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:2"
+    },
+    {
+      "cardIds": [
+        "card_ac4aa5c2-530b-42ae-8174-dd4e0b0b826d"
+      ],
+      "digest": "23312b0416053fd529d4e247b000f85c069fd9a048ed1c1f2f96057067acb09a",
+      "requestId": "9bb0ca08-3c53-40e7-84f1-7d4dd9167aef",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:3"
+    },
+    {
+      "cardIds": [
+        "card_ac4aa5c2-530b-42ae-8174-dd4e0b0b826d"
+      ],
+      "digest": "8704e7e105e6754929515b3221a74110b15f969a35e89a9f3a4eac0b4d488c84",
+      "requestId": "795cd539-2364-404a-8bdc-be8fbf9a45fb",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:4"
+    },
+    {
+      "cardIds": [
+        "card_e24ffaf8-6449-4c2c-8ca2-e8b88ae84197"
+      ],
+      "digest": "13fabffd5f85a6ad22d254433b66b5cb7c113edb7dfcbd262fdc3fe40bda46c8",
+      "requestId": "38c60e24-8e8b-467a-8d62-f4b6febbf078",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:5"
+    },
+    {
+      "cardIds": [
+        "card_e24ffaf8-6449-4c2c-8ca2-e8b88ae84197"
+      ],
+      "digest": "8adf03ce64d2a3530ce03f4f7613088b900d610767da027db71efec38cfb2a01",
+      "requestId": "6866536e-0c40-46b1-8916-93e0567b1696",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:6"
+    },
+    {
+      "cardIds": [
+        "card_e24ffaf8-6449-4c2c-8ca2-e8b88ae84197"
+      ],
+      "digest": "ddbeb6c1f0324668e0c66b05ca39cbd2e38542c72c92e0b454642dfe53bd0972",
+      "requestId": "bcf7ffd6-3c6c-4032-8506-dbda427efca0",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:7"
+    },
+    {
+      "cardIds": [
+        "card_e24ffaf8-6449-4c2c-8ca2-e8b88ae84197"
+      ],
+      "digest": "b6ac158810e110ab99f3daf6010153ff818ef40c8bed40d6d6a761bcb1a56f3b",
+      "requestId": "233fc525-5c6d-494d-8131-fadce2bf14c2",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:8"
+    },
+    {
+      "cardIds": [
+        "card_9cc64b98-33cb-40b0-8fe8-8b3863ec479f"
+      ],
+      "digest": "f3678141e877caf3056d79a48dcae6a170718b291022e03e73032cc1bed12ae3",
+      "requestId": "cd4a0b88-86fd-40c2-8a29-78120897f6b5",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:9"
+    },
+    {
+      "cardIds": [
+        "card_9cc64b98-33cb-40b0-8fe8-8b3863ec479f"
+      ],
+      "digest": "7c1514c32d968e9e9a60106e12ba8fe8201a2b04e78bf9e05525ce013d83f816",
+      "requestId": "58114b91-3c1f-4cf1-8239-bbffbb6998d9",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:10"
+    },
+    {
+      "cardIds": [
+        "card_9cc64b98-33cb-40b0-8fe8-8b3863ec479f"
+      ],
+      "digest": "ca6216f6a5f7d1f0a36e132b14b6a7c35b6942b9ae5d1e1150f17e9f84e2e292",
+      "requestId": "df406fee-f411-45f0-8e57-3ba0267b4498",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:11"
+    },
+    {
+      "cardIds": [
+        "card_9cc64b98-33cb-40b0-8fe8-8b3863ec479f"
+      ],
+      "digest": "156fb1312c54c4f11be31e415694a6fc5f06b1aee42974c4f7562c912c85a69b",
+      "requestId": "28768139-0967-41ac-887f-6e5e705fa608",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:12"
+    },
+    {
+      "cardIds": [
+        "card_741bd4e2-9bec-447a-808a-530a552b80ea"
+      ],
+      "digest": "fdd76500515678c1d76fe0149f287826e362b2dd7aee26af9a7b79b566f38990",
+      "requestId": "0d5ff151-afe2-4da8-89ce-eccbc696cf44",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:13"
+    },
+    {
+      "cardIds": [
+        "card_741bd4e2-9bec-447a-808a-530a552b80ea"
+      ],
+      "digest": "bf2a636e48039fdbdf0f63224ec1700f7f8942adb2165f1ea6b8fba1efbd2aab",
+      "requestId": "e82b6e73-a3d6-49cf-870a-3174dc3e2038",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:14"
+    },
+    {
+      "cardIds": [
+        "card_741bd4e2-9bec-447a-808a-530a552b80ea"
+      ],
+      "digest": "76e4d9baa2ee0978402084b0422381a22ca738ae8ced18f82b6ce7510e4b859a",
+      "requestId": "55424204-1781-40ff-86b1-4f9391122721",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:15"
+    },
+    {
+      "cardIds": [
+        "card_741bd4e2-9bec-447a-808a-530a552b80ea"
+      ],
+      "digest": "0ab3f55e0a181f004f56d18dafb93f33a84e34c137b951282a91ebfaddd11c9f",
+      "requestId": "783a456c-b910-4b04-857d-7ca7b974a112",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:16"
+    },
+    {
+      "cardIds": [
+        "card_cf28d936-4bb0-4dc7-8d26-1654273da52e"
+      ],
+      "digest": "f2e2a024e6a32414c27c38f9477b93cad3a406029a2df50c66a74ab4ff2a2a9a",
+      "requestId": "4d532c4e-2627-41fd-80ae-251a074d3451",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:17"
+    },
+    {
+      "cardIds": [
+        "card_cf28d936-4bb0-4dc7-8d26-1654273da52e"
+      ],
+      "digest": "deca104468c727718a65f4e54cfb9b72b69aeae3737452685ac385f65939f33d",
+      "requestId": "3f79769c-b8e6-4923-8248-d1c8d6ad21d2",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:18"
+    },
+    {
+      "cardIds": [
+        "card_cf28d936-4bb0-4dc7-8d26-1654273da52e"
+      ],
+      "digest": "2e68d0b4814ca1c1fa3ff8608b4e7f1f73ccee18fa19fad64fb5e09492cec702",
+      "requestId": "5d218b3e-4ea5-4603-84e0-74b4af2764ec",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:19"
+    },
+    {
+      "cardIds": [
+        "card_cf28d936-4bb0-4dc7-8d26-1654273da52e"
+      ],
+      "digest": "ed0769da43e78011bb725419c3b5918d4f6d62c27e844354fa3d34999dff1e05",
+      "requestId": "ff29f65d-a151-4351-81be-8f0ea4a91af8",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:20"
+    },
+    {
+      "cardIds": [
+        "card_5912c202-8da1-4d80-8d9b-fc89a3723b28"
+      ],
+      "digest": "5584e1334092a0fc3b290d2a12ff2f83c9713ee3223d6f9608ba58fab729b781",
+      "requestId": "dddc91aa-916a-42ac-8a57-cf07f4880395",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:21"
+    },
+    {
+      "cardIds": [
+        "card_5912c202-8da1-4d80-8d9b-fc89a3723b28"
+      ],
+      "digest": "a653976de49f8139b91e3937f1afd810ee4750782e551983d73bdb12953ee390",
+      "requestId": "df46ede3-2414-4684-87c6-bd9eb91482a3",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:22"
+    },
+    {
+      "cardIds": [
+        "card_5912c202-8da1-4d80-8d9b-fc89a3723b28"
+      ],
+      "digest": "2939385cd38d258a049d7ee1fca7db8ffbd3fbfefe8ddf75118cb15eb524b49f",
+      "requestId": "5219b14f-f5c5-458e-815c-780fe91edc7b",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:23"
+    },
+    {
+      "cardIds": [
+        "card_5912c202-8da1-4d80-8d9b-fc89a3723b28"
+      ],
+      "digest": "141207bb01ee6eb5d23970c090a2ca953be1bb610c5bf93a7078ed4486b82da5",
+      "requestId": "9f780b07-86d1-481f-8be4-caf5794d22b5",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:24"
+    },
+    {
+      "cardIds": [
+        "card_f1e9b7f1-4675-4d84-8d01-570384bf773f"
+      ],
+      "digest": "9486352a78f7c00491743d6d9473b0766c701fff8c9562288e17ec2fdbc5349a",
+      "requestId": "1f333fde-8fe9-48b4-8c3c-d7f3cdfff74d",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:25"
+    },
+    {
+      "cardIds": [
+        "card_f1e9b7f1-4675-4d84-8d01-570384bf773f"
+      ],
+      "digest": "021e163e3c2d1faaf1426987aaf9070ebf713f8109fe7f62fdc71d0b67496a88",
+      "requestId": "0ca244d8-757f-44dd-83c9-9a1f0b0bebd1",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:26"
+    },
+    {
+      "cardIds": [
+        "card_f1e9b7f1-4675-4d84-8d01-570384bf773f"
+      ],
+      "digest": "95257006f9386c9e283d578ec0badf002e14784945809c84f9f80079ff950583",
+      "requestId": "38fe2656-d087-4122-86dc-e2cad87d0bf3",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:27"
+    },
+    {
+      "cardIds": [
+        "card_f1e9b7f1-4675-4d84-8d01-570384bf773f"
+      ],
+      "digest": "57072c8f7f345de0e99a9af22670ddebff4425bdece796119db0a66f6c5eef67",
+      "requestId": "70df848a-2fa8-4964-8d3b-55335d997ec4",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:28"
+    },
+    {
+      "cardIds": [
+        "card_f1e9b7f1-4675-4d84-8d01-570384bf773f"
+      ],
+      "digest": "6dc5d8c6bf28195140320121937ddd46386ce38c2458d5458a51d75ea8ed8b8a",
+      "requestId": "b50d7498-362b-45d6-8986-d82e295c784c",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:29"
+    },
+    {
+      "cardIds": [
+        "card_08629688-ae3b-4432-803a-31a821f2acb2"
+      ],
+      "digest": "7a82dbc7077066558a03fd083393c2463deeb225c471c791d6c39afecab932b0",
+      "requestId": "d9428e60-6a41-41be-8c0c-7b09810ebbc7",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:30"
+    },
+    {
+      "cardIds": [
+        "card_08629688-ae3b-4432-803a-31a821f2acb2"
+      ],
+      "digest": "32ce303c7ceb65e10dfa328aef2204c0a9581ade3c3c876d3f1fffebfbf9eea1",
+      "requestId": "029d31d0-416b-4ea4-85a2-a931f7e8dc33",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:31"
+    },
+    {
+      "cardIds": [
+        "card_9fd7cd67-fca7-4824-887f-ea61cc907b6d"
+      ],
+      "digest": "9658fa10efaf529a2400bf139b891ab32c61f61bba380ad36eab1fa63d9aa456",
+      "requestId": "4c9b230f-8b72-4ba1-8262-7bd5a3e755f9",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:32"
+    },
+    {
+      "cardIds": [
+        "card_9fd7cd67-fca7-4824-887f-ea61cc907b6d"
+      ],
+      "digest": "bffa28819a1be51ef563a62aa7db2436893128baaa8b7f315a2db9294113c81a",
+      "requestId": "0bff9385-7b66-4ac0-8f7c-ce885ecca426",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:33"
+    },
+    {
+      "cardIds": [
+        "card_9fd7cd67-fca7-4824-887f-ea61cc907b6d"
+      ],
+      "digest": "d722a06d24a8fabce196dc88085f075d7734ab79caef8797ed29039047931e2c",
+      "requestId": "147826f1-e2e5-4851-86a1-08bb9ded96cd",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:34"
+    },
+    {
+      "cardIds": [
+        "card_1b17deb6-be8e-4460-845b-744a00aa3945"
+      ],
+      "digest": "78fea47bd7b9fa7fcd0d01aae57e834f3f48ddfe35b3aed67aa906e6692000fc",
+      "requestId": "57b11229-6e4b-49db-890f-31adc23b95c7",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:35"
+    },
+    {
+      "cardIds": [
+        "card_1b17deb6-be8e-4460-845b-744a00aa3945"
+      ],
+      "digest": "a5c89ba1e1f4e2a8e097a43273a90964e5ccabe89aa87913c8e1cd8470b307a8",
+      "requestId": "ed512a7b-1679-438d-8359-1351a555544a",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:36"
+    },
+    {
+      "cardIds": [
+        "card_1b17deb6-be8e-4460-845b-744a00aa3945"
+      ],
+      "digest": "473a206dbc948c317fb53e78a08ce980bcaed7aef5b112d71f017872529cbfc1",
+      "requestId": "6c837f95-5c04-4c7f-8693-060d47ff80fc",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:37"
+    },
+    {
+      "cardIds": [
+        "card_1b17deb6-be8e-4460-845b-744a00aa3945"
+      ],
+      "digest": "4b72401ef53ec702d8076c9f0692d40fd585b4c7ec7cbfc7d8e2e8997f793466",
+      "requestId": "bcc8589f-7c8f-4b84-8c97-23c577db4520",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:38"
+    },
+    {
+      "cardIds": [
+        "card_c1ffafd7-e4fd-4946-8700-b354e26492ad"
+      ],
+      "digest": "be59799b637f582db98dd83fd82bec5163b52f2b3af9afbe75b84443d65b8480",
+      "requestId": "23d715ad-bb20-45da-85e0-eb3e31b4ed52",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:39"
+    },
+    {
+      "cardIds": [
+        "card_929dfbed-1a70-466d-80ee-b629d7028108"
+      ],
+      "digest": "239e04d732fcfdbe6164a44574ad7a5dd451ed66cddb2d78fb8c21e0e58449f1",
+      "requestId": "abff20dd-759d-4601-8def-d051afac9d4b",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:40"
+    },
+    {
+      "cardIds": [
+        "card_929dfbed-1a70-466d-80ee-b629d7028108"
+      ],
+      "digest": "b38a75f17238ec49036ba0f36942a9b0cbc5ec0d5aead91f474e53fdc9e7f797",
+      "requestId": "076ca52d-37ba-4c83-8697-d3cff0cfdfbe",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:41"
+    },
+    {
+      "cardIds": [
+        "card_4968ca05-ffd8-4577-84d2-3cfc2b8ab304"
+      ],
+      "digest": "6328d6bf416689f2597dedf0780ceede2edcb18ee09cf32105bfcd57693cb31c",
+      "requestId": "02d297b6-b798-437c-8b8c-37750b25ec17",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:42"
+    },
+    {
+      "cardIds": [
+        "card_4968ca05-ffd8-4577-84d2-3cfc2b8ab304"
+      ],
+      "digest": "c1bf8ffc591f9db5667c2923866c631fdc3034504874e482ff071ff467b52377",
+      "requestId": "0e081f04-849a-4164-8fee-3537ee53d63d",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:43"
+    },
+    {
+      "cardIds": [
+        "card_598560aa-6276-487d-8466-b3856b59876c"
+      ],
+      "digest": "d4f84a01b0e797c2bb51c65504a2492d76a3d84805b7b23b6cf5b1c067b1208c",
+      "requestId": "a8f7b721-3cb3-427e-8fc0-2582834f638f",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:44"
+    },
+    {
+      "cardIds": [
+        "card_598560aa-6276-487d-8466-b3856b59876c"
+      ],
+      "digest": "1f992de55d8432c106fdcc283e4626c67d9616f3c9b32fce10e547baec02b9da",
+      "requestId": "731ccd9e-3346-4acb-8188-910e6d59a43b",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:45"
+    },
+    {
+      "cardIds": [
+        "card_598560aa-6276-487d-8466-b3856b59876c"
+      ],
+      "digest": "d65d2058577875572629ec181a37925c0cb5d6dbe8043b7e3ed01a03a1c4eb5b",
+      "requestId": "f9179b2d-ac45-4bdb-8a0d-bbcae4946835",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:46"
+    },
+    {
+      "cardIds": [
+        "card_598560aa-6276-487d-8466-b3856b59876c"
+      ],
+      "digest": "2a26ca943db86ed112f38e2f73b9be49997ded130c081f3390f4e72af7a8ede4",
+      "requestId": "6a4560f8-b74f-4b44-8554-7f724721bfd4",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:47"
+    },
+    {
+      "cardIds": [
+        "card_598560aa-6276-487d-8466-b3856b59876c"
+      ],
+      "digest": "6fb38b8200d2a6da4a2c3b5e6c530c1c60e7bbc182b4db66cc4fafacd4260292",
+      "requestId": "e3fc2e40-7fc1-47f5-8d7b-9d7f298f345d",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:48"
+    },
+    {
+      "cardIds": [
+        "card_0377a569-1cde-486a-8c08-73988b0d8696"
+      ],
+      "digest": "5b1adbe5a0731d8f11b4f092a1a29def0efde4a943cfa1eacd828e572f059baa",
+      "requestId": "13391af4-c5c0-4764-8ada-4316fc8fea11",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:49"
+    },
+    {
+      "cardIds": [
+        "card_0377a569-1cde-486a-8c08-73988b0d8696"
+      ],
+      "digest": "f24c150584e90143218d00787f50ee9b4b421a326de364bf549bb906a885dc20",
+      "requestId": "75176bc8-01e8-4136-839e-8e060d3cb138",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:50"
+    },
+    {
+      "cardIds": [
+        "card_0377a569-1cde-486a-8c08-73988b0d8696"
+      ],
+      "digest": "df2a92ce1dd1039fcd437daa4f8aa66a71e16104f946d20e402457c6378370f8",
+      "requestId": "f7dcb1e4-c92e-4b0e-8e6a-32ffccf317a7",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:51"
+    },
+    {
+      "cardIds": [
+        "card_0377a569-1cde-486a-8c08-73988b0d8696"
+      ],
+      "digest": "510f28084c7f752c38b78fc24e9f3ff02bb19987b8a45da69024d5814740663f",
+      "requestId": "972ef8f8-3a1b-44c3-85b7-596971b9adc1",
+      "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:52"
+    }
+  ],
+  "revision": "5b3394cd-df9a-49f7-85ee-40f00bb2e2cb:52",
+  "template": {
+    "id": "basic",
+    "name": "Basic workflow",
+    "schemaVersion": 1,
+    "stages": [
+      {
+        "countsAsDone": false,
+        "name": "Waiting",
+        "stageId": "todo"
+      },
+      {
+        "countsAsDone": false,
+        "name": "In progress",
+        "stageId": "doing"
+      },
+      {
+        "countsAsDone": false,
+        "name": "Review",
+        "stageId": "review"
+      },
+      {
+        "countsAsDone": true,
+        "name": "Done",
+        "stageId": "done"
+      }
+    ],
+    "version": 1
+  },
+  "updatedAt": "2026-10-12T00:01:56.000Z"
+}

@@ -295,7 +295,9 @@ test('298-F1: an open screen\'s revisions look wakes the automatic archive (ten 
   const card = await f.addCard('Finished', 'done');
   const handlers = createReadHandlers(f.store, () => iso(f.clock.now), async () => ({ available: false, source: 'none', definitions: [], byWorkspace: {} }),
     async () => ({ active: [], entries: [] }));
-  const context = vm.createContext({ archiver: Promise.resolve(f.archiver), handlers: Promise.resolve(handlers), auto: { wake() {} }, dispatch: { wake() {} }, Promise });
+  const context = vm.createContext({ archiver: Promise.resolve(f.archiver), handlers: Promise.resolve(handlers), auto: { wake() {} }, dispatch: { wake() {} },
+    // REQ-156: the reads also start the new-version look; this test is about the archive only.
+    lookForUpdate: () => {}, Promise });
   const run = key => vm.runInContext(ts.transpileModule('(' + callbacks[key] + ')', { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context);
   const boardGet = run('boardGet'), revisionsGet = run('revisionsGet');
   f.clock.now = T0 + 7 * DAY_MS - 1;

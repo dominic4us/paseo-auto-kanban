@@ -26,7 +26,7 @@ Al crear un agente en Paseo, aparece una tarjeta (Card) en el tablero de ese esp
 queda a la espera de tu respuesta (Needs you) cuando necesita un permiso y espera en revisión (Review) cuando se detiene. Que un agente se haya detenido
 no significa que el trabajo esté terminado: tú decides cuándo darlo por hecho. Los agentes líderes también pueden crear tarjetas
 y vincular a los agentes responsables con el comando `kanban`. Los tableros se guardan en archivos locales del equipo que ejecuta el servidor de Paseo.
-El propio plugin no recopila datos de uso ni se conecta a servicios externos. Sin embargo, siguiendo el funcionamiento habitual de Paseo, el tablero se
+El propio plugin no recopila datos de uso. Su única conexión externa propia es la comprobación de versiones nuevas: como máximo una vez al día pregunta al registro de npm solo el número de la última versión (sin enviar el contenido de tableros o tarjetas ni datos tuyos), y puedes desactivarla en los ajustes. Sin embargo, siguiendo el funcionamiento habitual de Paseo, el tablero se
 muestra en las aplicaciones de Paseo que conectes. Cuando confirmas el envío de una tarjeta a un agente, su contenido se
 transmite a ese agente y, por tanto, a su proveedor de modelos.
 
@@ -71,7 +71,7 @@ Node.js **22 o posterior**.
    O desde Git, indicando una etiqueta de versión:
 
    ```sh
-   paseo plugin install https://github.com/dominic4us/paseo-auto-kanban --ref v0.2.4
+   paseo plugin install https://github.com/dominic4us/paseo-auto-kanban --ref v0.2.5
    ```
 
    Ambas opciones instalan el mismo plugin. El paquete npm se publica desde 0.2.1 y Paseo lo instala sin ejecutar scripts del paquete.
@@ -106,6 +106,8 @@ npm install -g --prefix ~/.local paseo-auto-kanban@latest
 La segunda línea solo es necesaria si instalaste el comando `kanban` de esa forma. Si no hay una versión más reciente, la primera línea indica `up to date`.
 Para una versión concreta, usa `--version <version>` en instalaciones desde npm o `--ref <tag>` en instalaciones desde Git. Repetir `install` con un ID ya instalado se rechaza.
 El rango declarado de Paseo es `>=0.8.0 <1.0.0` (consulta las combinaciones realmente verificadas en la tabla de compatibilidad del README en inglés).
+
+**Volver desde 0.2.5 o restaurar una copia de seguridad.** La primera vez que 0.2.5 lee un tablero, decide una sola vez qué tarjetas pueden seguir moviendo las tarjetas automáticas y escribe un informe junto a ellas; las tarjetas que no puede confirmar como seguras muestran **Needs a check** (requiere revisión) en su detalle y se reactivan una por una. 0.2.3 y 0.2.4 siguen leyendo todo lo que escribe 0.2.5. Antes de volver a ellas o de restaurar archivos desde una copia, detén todos los servidores de Paseo y la CLI `kanban`, y desactiva **Agent auto cards**; mantenlo desactivado en la versión anterior. Consulta [Automatic-move records](docs/reference.md#automatic-move-records-auto-control) (en inglés) para los pasos y lo que no está cubierto.
 
 ## Comando `kanban` (opcional)
 
@@ -174,6 +176,7 @@ Los ajustes se abren desde el botón de engranaje en la esquina superior derecha
 | `PROCESS.md` en la carpeta del espacio de trabajo (solo para tableros creados con `kanban init` o con **+** en un carril vacío) | Activado | Establece `"exportEnabled": false` en `~/paseo-kanban-data/config.json` |
 | Archivado automático de tarjetas terminadas (Archive finished cards: no se eliminan y pueden restaurarse) | 7 días | Ajustes → Automation → Archive finished cards → Off |
 | Actualización automática (Auto refresh: solo lectura cada 4 segundos mientras la pantalla está visible) | Activado | Ajustes → Automation → Auto refresh |
+| Comprobación de versiones nuevas (Check for new versions: como máximo una vez al día, cuando una pantalla de Kanban lee o actualiza los tableros, pregunta al registro de npm solo el número de la última versión; el límite de una vez al día se mantiene tras reinicios, al desactivarla y activarla y con varios servidores que comparten la carpeta de datos, porque cada intento se registra antes de hacerse; el día se mide con el reloj del ordenador: retrasarlo nunca adelanta la comprobación, adelantarlo puede hacerlo (salvo mientras una máquina Linux sigue encendida y puede leerse su reloj de arranque; si no puede leerse, decide solo la fecha, como en otros sistemas); si hay una versión más nueva, se muestra en Ajustes → About y con un punto en el engranaje durante un máximo de siete días desde la última respuesta; si falla, no avisa y vuelve a intentarlo al día siguiente, y tras siete días sin respuesta deja de mostrarse) | Activado | Ajustes → Automation → Status & refresh → Check for new versions. Una vez guardada como desactivada, no se hace ninguna solicitud. El ajuste se guarda con una copia de seguridad; si no se puede leer, no se hace ninguna solicitud hasta que vuelvas a elegir el interruptor |
 
 Una tarjeta en borrador solo se envía a un agente cuando pulsas **Enviar (Send)** en la ventana de confirmación.
 
@@ -182,6 +185,7 @@ Una tarjeta en borrador solo se envía a un agente cuando pulsas **Enviar (Send)
 Trata la carpeta de datos y cualquier `PROCESS.md` como privados: contienen los títulos y las notas de tus tarjetas.
 
 - Carpeta de datos: `~/paseo-kanban-data` (conserva el nombre anterior para seguir usando los tableros existentes).
+- El interruptor de la comprobación de nuevas versiones (y su copia de respaldo), el último intento y el número de la última versión se guardan en la carpeta de datos, en `update-check.json`, `update-check.backup.json` y `update-check-cache.json`; el último tema e idioma, y dónde abre Kanban el enlace de la barra lateral, se guardan en el almacenamiento local de la app (claves que empiezan por `paseo-kanban:`).
 - Las instalaciones nuevas muestran la interfaz en inglés. Para usar coreano, añade `"locale": "ko"` a `config.json`.
   La configuración de versiones anteriores conserva el coreano.
 - El nombre de la primera etapa varía según dónde se muestre. Se guarda como *Waiting*, por lo que `kanban ls` muestra `todo (Waiting)`, mientras que la interfaz en inglés

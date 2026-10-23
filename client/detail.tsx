@@ -23,7 +23,7 @@ import { DispatchSheet, type DispatchRequest } from './dispatch-confirm.js';
 import { dispatchFallback, dispatchLine } from './dispatch-view.js';
 import { isOrphanedCard } from './signal-model.js';
 import { spaceFlips } from './view-tools.js';
-import { editorReducer, emptyEditor, type Fields } from './editor-state.js';
+import { editorReducer, emptyEditor, newRequestId, type Fields } from './editor-state.js';
 import { dirtyFields, useFieldSaves, type FieldKey } from './field-save.js';
 import { detailLayout } from './visual-model.js';
 import { criteriaLines, criteriaProgress, toggleCriterion } from '../shared/criteria.js';
@@ -58,8 +58,11 @@ export function Detail({ boardId, cardId, locale, onClose, onChanged, lead = fal
   const [discard, setDiscard] = useState(false), [closing, setClosing] = useState(false);
   // REQ-74: a resume answered by the server shows at once; the next read of the card replaces it.
   const resume = useRpc(autoCardsResume);
-  const [auto, setAuto] = useState<Pick<CardSnapshot, 'reason' | 'tracking'> | null>(null);
-  const [resuming, setResuming] = useState(false), [resumeNote, setResumeNote] = useState<'' | 'resumed' | 'failed'>('');
+  const [auto, setAuto] = useState<Pick<CardSnapshot, 'reason' | 'tracking' | 'trackingToken'> | null>(null);
+  const [resuming, setResuming] = useState(false), [resumeNote, setResumeNote] = useState<'' | 'resumed' | 'failed' | 'storage' | 'stale'>('');
+  // D66 G2: the resume being decided — the token it was pressed on and its own id, kept while its answer is not known so a
+  // press again is the same decision (the server replays it), dropped once the server answered.
+  const pendingResume = useRef<{ key: string; decisionId: string } | null>(null);
   // REQ-82 ④: the stage flow's move — sent on its own — and its notice.
   const sendMove = useMoveSender(), sendUndo = useUndoSender();
   // REQ-52: the card put away from here; the detail closes once it is archived.
@@ -154,15 +157,43 @@ export function Detail({ boardId, cardId, locale, onClose, onChanged, lead = fal
       if (alive.current && latest.ok) dispatch({ type: 'rebase', snapshot: latest.data });
     } catch { if (alive.current) setMemoNote('failed'); }
   };
+  /**
+   * D66 G2: only by the decision the detail shows (its token). A card changed since (E_AUTO_STALE) is read again for the
+   * person to look at and decide again — never resumed by the newer token behind their back. A decision that could not be
+   * read or saved (E_AUTO_CONTROL) says to check the storage, and the same press stays the same decision.
+   */
   const resumeTracking = async () => {
-    if (resuming) return;
+    const token = (auto ?? data)?.trackingToken;
+    if (resuming || !token) return;
+    const key = token.controlEpoch + ':' + token.generation + ':' + token.card;
+    if (pendingResume.current?.key !== key) pendingResume.current = { key, decisionId: newRequestId() };
     setResuming(true); setResumeNote('');
     try {
-      const reply = await resume({ boardId, cardId });
-      if (!reply?.ok) throw new Error(reply?.error.message);
+      const reply = await resume({ boardId, cardId, controlEpoch: token.controlEpoch, generation: token.generation, card: token.card, decisionId: pendingResume.current.decisionId });
+      if (!reply) throw new Error('no answer');
+      if (!reply.ok) {
+        const code = reply.error.code;
+        if (code !== 'E_AUTO_CONTROL') pendingResume.current = null;
+        // Gate 495 J1: a resume the server could not confirm (its file replaced, then not flushed) may have been saved — the
+        // card read again tells; a card changed since is read again for the person to look at.
+        if (code === 'E_AUTO_STALE' || code === 'E_AUTO_CONTROL') {
+          const latest = await get({ boardId, cardId });
+          if (alive.current && latest.ok) {
+            if (code === 'E_AUTO_CONTROL' && latest.data.tracking?.state === 'on') {
+              pendingResume.current = null;
+              setAuto({ reason: latest.data.reason, tracking: latest.data.tracking, trackingToken: latest.data.trackingToken });
+              setResumeNote('resumed'); return;
+            }
+            if (code === 'E_AUTO_STALE') dispatch({ type: 'rebase', snapshot: latest.data });
+          }
+        }
+        if (alive.current) setResumeNote(code === 'E_AUTO_CONTROL' ? 'storage' : code === 'E_AUTO_STALE' ? 'stale' : 'failed');
+        return;
+      }
+      pendingResume.current = null;
       const latest = await get({ boardId, cardId });
       if (!alive.current) return;
-      if (latest.ok) setAuto({ reason: latest.data.reason, tracking: latest.data.tracking });
+      if (latest.ok) setAuto({ reason: latest.data.reason, tracking: latest.data.tracking, trackingToken: latest.data.trackingToken });
       else setAuto({ reason: data?.reason ?? null, tracking: { state: 'on', since: null } });
       setResumeNote('resumed');
     } catch { if (alive.current) setResumeNote('failed'); }
@@ -185,7 +216,7 @@ export function Detail({ boardId, cardId, locale, onClose, onChanged, lead = fal
     void settleMove(sendUndo(back), result =>
       ({ text: m.movedBack(data.template.stages.find(s => s.stageId === result.to)?.name ?? result.to) }));
   };
-  const settleMove = async <R extends { ok: true; revision: string }>(sent: Promise<R | { ok: false; unknown: boolean; meanwhile?: boolean }>,
+  const settleMove = async <R extends { ok: true; revision: string }>(sent: Promise<R | { ok: false; unknown: boolean; meanwhile?: boolean; storage?: boolean }>,
     note: (result: R) => { text: string; back?: UndoRequest }) => {
     setMoving(true); setMoveNote(null);
     const result = await sent;
@@ -197,7 +228,7 @@ export function Detail({ boardId, cardId, locale, onClose, onChanged, lead = fal
     if (!alive.current) return;
     if (result.ok) onChanged?.();
     setMoveNote(result.ok ? note(result)
-      : { text: result.meanwhile ? m.undoMeanwhile : result.unknown ? m.moveUnknown : m.moveFailed, error: true });
+      : { text: result.meanwhile ? m.undoMeanwhile : result.unknown ? m.moveUnknown : result.storage ? m.storageRetry : m.moveFailed, error: true });
     setMoving(false);
   };
   const signalArchived = (id: string) => signals.archived?.(id) === true;
@@ -303,11 +334,17 @@ export function Detail({ boardId, cardId, locale, onClose, onChanged, lead = fal
         <Text testID="detail-move-reason" selectable style={{ ...small, flex: 1, lineHeight: px(16) }}>{moveReasonText((auto ?? data).reason!, m, clock, data.card.agents.map(a => a.agentId), agentText)}</Text>
       </View>}
       {!!(auto ?? data).tracking && <View style={{ gap: px(6) }}>
-        <Text testID="detail-tracking" style={small}>{m.tracking + ' · ' + trackingText((auto ?? data).tracking!, m, clock)}</Text>
-        {(auto ?? data).tracking!.state === 'paused' && <Button label={m.resumeTracking} colors={c} mobile={mobile}
+        {/* D66 G2: a card nobody paused ("needs a check", or its record unreadable) is told apart by the warning mark. */}
+        {(auto ?? data).tracking!.held ? <View testID="detail-tracking-held" style={{ flexDirection: 'row', alignItems: 'flex-start', gap: px(4) }}>
+          <View style={{ height: px(16), justifyContent: 'center' }}><Icon name="TriangleAlert" size={px(12)} color={warnColor} /></View>
+          <Text testID="detail-tracking" style={{ ...small, color: warnColor, flex: 1, lineHeight: px(16) }}>{m.tracking + ' · ' + trackingText((auto ?? data).tracking!, m, clock)}</Text>
+        </View> : <Text testID="detail-tracking" style={small}>{m.tracking + ' · ' + trackingText((auto ?? data).tracking!, m, clock)}</Text>}
+        {(auto ?? data).tracking!.state === 'paused' && !!(auto ?? data).trackingToken && <Button label={m.resumeTracking} colors={c} mobile={mobile}
           disabled={resuming} onPress={() => { void resumeTracking(); }} />}
         {resumeNote === 'resumed' && <Notice text={m.resumed} colors={c} />}
         {resumeNote === 'failed' && <Notice text={m.resumeFailed} colors={c} error />}
+        {resumeNote === 'storage' && <Notice testID="detail-resume-storage" text={m.storageRetry} colors={c} error />}
+        {resumeNote === 'stale' && <Notice testID="detail-resume-stale" text={m.resumeStale} colors={c} error />}
       </View>}
     </View>,
     nextAction: text('nextAction'),

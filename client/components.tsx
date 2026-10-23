@@ -219,13 +219,15 @@ export function joinHandlers(...sets: Handlers[]): Handlers {
  * disclosure never looks like the project disclosure sitting above it.
  */
 export function IconButton({ name, label, onPress, mobile, colors, disabled = false, buttonRef,
-  plain = false, iconSize = plain ? px(14) : px(17), testID, tooltip = false, on, tipAlign = 'right', round = false, badge }: {
+  plain = false, iconSize = plain ? px(14) : px(17), testID, tooltip = false, on, tipAlign = 'right', round = false, badge, dot = false }: {
   name: string; label: string; onPress: () => void; mobile: boolean; colors: Palette; disabled?: boolean;
   buttonRef?: Ref<View>; plain?: boolean; iconSize?: number; testID?: string;
   /** REQ-87 ⑥: a sheet's close — a 32px round fill (the touch box stays 44px on a phone). */
   round?: boolean;
   /** REQ-91: a small count at the glyph's top right (the filters applied); 0 or none shows nothing. */
   badge?: number | undefined;
+  /** REQ-156: a small dot at the glyph's top right (a new version, on ⚙) — top left when a count is there too; the label says why. */
+  dot?: boolean;
   /**
    * REQ-67 ①: show `label` while the glyph is hovered or has the keyboard's focus. REQ-80: below it (above near the
    * bottom of the window), anchored at `tipAlign` until it can be measured.
@@ -260,6 +262,12 @@ export function IconButton({ name, label, onPress, mobile, colors, disabled = fa
       <Text style={{ color: countLook.text, fontSize: COUNT_BADGE.fontSize, lineHeight: COUNT_BADGE.lineHeight,
         fontWeight: COUNT_BADGE.fontWeight }}>{count > 9 ? '9+' : count}</Text>
     </View>}
+    {/* REQ-156: the main colour at 3:1 on the bar, ringed in the bar's colour so it stands apart from the glyph. */}
+    {dot && <View testID={testID ? testID + '-dot' : undefined} pointerEvents="none" accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants" style={{ position: 'absolute', top: (size - face) / 2 - px(2),
+        ...(count > 0 ? { left: (size - face) / 2 - px(2) } : { right: (size - face) / 2 - px(2) }),
+        width: px(9), height: px(9), borderRadius: px(5), borderWidth: px(1.5), borderColor: colors.surface0,
+        backgroundColor: readable(colors.accent, colors.surface0, 3) }} />}
     {tooltip && tip.shown && <Tip label={label} place={place} offset={size} span={size} colors={colors} />}
   </View>;
 }

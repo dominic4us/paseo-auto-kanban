@@ -5,7 +5,7 @@ import { Icon, ScrollView, TextInput } from '@getpaseo/plugin/client/react-nativ
 import type { PluginSurfaceProps } from '@getpaseo/plugin/client';
 import type { Fields } from './editor-state.js';
 import { reclaimSeconds } from './editor-state.js';
-import type { MutationState } from './mutation-state.js';
+import { storageRefused, type MutationState } from './mutation-state.js';
 import { editorLayout } from './layout.js';
 import { Button, Field, IconButton, Notice, useHovered } from './components.js';
 import { fieldLine, FIELD_LINE_WIDTH, hoverFill, readable, selectedLine, selectedTint, type Palette } from './palette.js';
@@ -254,8 +254,8 @@ export function MutationNotice({ state, m, colors, onCheck, onRetry }: {
     {state.reply?.ok && (state.reply.data.export === 'failed' || state.reply.warnings.some(w => w.code.startsWith('W_EXPORT'))) &&
       <Notice text={m.exportWarning} colors={colors} error />}
     {state.reply?.ok && state.reply.warnings.map((w, i) => <Notice key={i} text={`${w.code}: ${w.message} ${w.nextAction}`} colors={colors} />)}
-    {error && state.phase !== 'conflict' && <Notice text={state.phase === 'unknown' ? m.unknownWrite
-      : `${m.saveFailed} ${error.code}: ${error.message} ${error.nextAction}`} colors={colors} error />}
+    {error && state.phase !== 'conflict' && <Notice {...(storageRefused(state) ? { testID: 'mutation-storage' } : {})} text={state.phase === 'unknown' ? m.unknownWrite
+      : storageRefused(state) ? m.storageRetry : `${m.saveFailed} ${error.code}: ${error.message} ${error.nextAction}`} colors={colors} error />}
     {wait !== null && <Notice text={m.retryAfter(wait)} colors={colors} />}
     {state.phase === 'unknown' && <>
       <Button label={m.checkCurrent} colors={colors} mobile onPress={onCheck} />

@@ -4,7 +4,8 @@ import { fail, folderKey, isKanbanError, normalizeOperations, type Board, type C
 import { AUTO_STATE_BACKUP, AUTO_STATE_FILE, AUTO_BOARD_LIMIT, WORKSPACE_LIMIT, autoMadeBoard, isText, readAutoState, workspaceSetting, writeAutoState,
   type AppliedState, type AutoMove, type AutoState, type Bucket, type HostSetting, type MoveCause, type ParentMemory, type Signal } from './core/auto-state.js';
 import { normalizeCwd } from '../shared/rpc.js';
-import type { Store } from './core/store.js';
+import type { ControlView, ResumeData, ResumeExpectation, Store } from './core/store.js';
+import { AUTO_CONTROL_DIR, type ControlEntry } from './core/auto-control.js';
 import { boardCreateKey, serially } from './serial.js';
 
 /**
@@ -311,11 +312,27 @@ export function cardPause(history: readonly MoveRecord[], card: Pick<Card, 'id' 
   const kept = entries.map(([, e]) => e.pausedAt).filter((v): v is string => !!v).sort();
   return kept[0] ?? foreignMove(history, card, entries)?.at ?? null;
 }
+/**
+ * D66 G2: what a resume did — `committed` when this call saved it, `replayed` when the same decision had been saved before
+ * (a retried request), and the card's decision after it; `decision` is null for a card that is gone.
+ */
+export interface ResumeAnswer { resumed: number; committed: boolean; replayed: boolean; decision: ResumeData | null }
 /** Why the card is where it is: its latest stage record, told apart as this feature's, a person's or another agent's. */
 export interface MoveReason { by: 'auto' | 'user' | 'agent'; cause: MoveCause | null; agentId: string | null; at: string; created: boolean }
-/** Automatic tracking of one card: following its agent, paused by somebody's move (since when), or switched off. */
-export interface Tracking { state: 'on' | 'paused' | 'off'; since: string | null }
-export function cardTracking(board: Pick<Board, 'id' | 'history'>, card: Pick<Card, 'id' | 'agents'>, state: AutoState):
+/**
+ * Automatic tracking of one card: following its agent, paused by somebody's move (since when), or switched off. D66 G2:
+ * `held` tells a paused card apart that nobody paused — `check`: nothing tells whether its stage is somebody's decision
+ * (an old card, a stage changed without the decision file), shown as "needs a check"; `unreadable`: the decision file
+ * cannot be read now. Absent for a card a person (or another agent) paused.
+ */
+export interface Tracking { state: 'on' | 'paused' | 'off'; since: string | null; held?: 'check' | 'unreadable' }
+/**
+ * D66: `decision` is the card's entry in the control file — what the engine obeys, so the detail view says the same: paused
+ * unless `managed`, a card that needs a check named as such (G2). It is shown whether or not the engine's memory still
+ * names the card (481: a pause outlives the memory), for a card with an agent linked. `null` is a decision file that
+ * cannot be read (held). Left out, the memory's judgement is used, as before (callers without the Store).
+ */
+export function cardTracking(board: Pick<Board, 'id' | 'history'>, card: Pick<Card, 'id' | 'agents'>, state: AutoState, decision?: ControlEntry | null):
   { reason: MoveReason | null; tracking: Tracking | null } {
   const entries = cardEntries(state, board.id, card.id) as [string, AppliedState][];
   const last = board.history.filter(h => h.cardId === card.id).at(-1);
@@ -324,6 +341,13 @@ export function cardTracking(board: Pick<Board, 'id' | 'history'>, card: Pick<Ca
     const mine = automaticMove(last, card, entries);
     reason = mine ? { by: 'auto', cause: mine[1].moved?.revision === last.revision ? mine[1].moved.cause : null, agentId: mine[0], at: last.at, created: last.from === null }
       : { by: last.actor.kind, cause: null, agentId: last.actor.kind === 'agent' ? last.actor.agentId : null, at: last.at, created: last.from === null };
+  }
+  if (decision !== undefined && !state.damaged) {
+    if (!card.agents.length || decision?.mode === 'unowned') return { reason, tracking: null };
+    if (!effectiveSetting(state).enabled) return { reason, tracking: { state: 'off', since: null } };
+    if (decision?.mode === 'managed') return { reason, tracking: { state: 'on', since: null } };
+    const since = decision?.at ?? entries.map(([, e]) => e.pausedAt).filter((v): v is string => !!v).sort()[0] ?? null;
+    return { reason, tracking: { state: 'paused', since, ...(!decision ? { held: 'unreadable' as const } : decision.mode === 'unknown' ? { held: 'check' as const } : {}) } };
   }
   if (!trackedEntries(state, board.id, card).length) return { reason, tracking: null };
   if (!effectiveSetting(state).enabled) return { reason, tracking: { state: 'off', since: null } };
@@ -545,7 +569,8 @@ export function createAutoCards(options: AutoCardsOptions) {
     const next = { ...entry, at: now() };
     const same = before && before.boardId === next.boardId && before.cardId === next.cardId && before.bucket === next.bucket &&
       before.awaiting === next.awaiting && before.title === next.title && (before.moved?.revision ?? null) === (next.moved?.revision ?? null) &&
-      (before.pausedAt ?? null) === (next.pausedAt ?? null) && (before.resumedAt ?? null) === (next.resumedAt ?? null);
+      (before.pausedAt ?? null) === (next.pausedAt ?? null) && (before.resumedAt ?? null) === (next.resumedAt ?? null) &&
+      (before.generation ?? null) === (next.generation ?? null);
     if (same) return { value: undefined, changed: false };
     state.agents[agentId] = next;
     if (!state.activatedAt) state.activatedAt = startedAt;
@@ -629,35 +654,62 @@ export function createAutoCards(options: AutoCardsOptions) {
         if (remembered?.cardId === cardId || late) return 'unlinked';
       } else {
         const stageId = stageFor(board.template.stages, bucket) ?? board.template.stages[0]!.stageId;
-        const added = await store.mutateBoard(id, { actor, requestId: addId, operations: normalizeOperations([{
+        // D66: through the engine's own entry point, so the card starts `managed` in the same commit (O1: no gap before the link).
+        const added = await store.autoMutate(id, { agentId: actor.agentId, requestId: addId, operations: normalizeOperations([{
           op: 'add', title: text.title, acceptanceCriteria: text.criteria, notes: text.notes, intent: 'requested', stageId,
           ...(change.awaiting ? { awaiting: 'user' } : {}) }]) });
         cardId = added.data.cardIds[0];
         moved = { cause: change.cause ?? 'created', revision: added.data.revision, at: now() };
       }
       if (!cardId) return 'no-card';
-      // The link is its own commit (an add cannot carry agents); a retry after a crash picks it up here.
-      await store.mutateBoard(id, { actor, requestId: linkRequest(agent.id),
-        operations: normalizeOperations([{ op: 'link', id: cardId, agentId: agent.id, role: 'worker' }]) });
+      // The link is its own commit (an add cannot carry agents); a retry after a crash picks it up here. A link never
+      // changes the card's decision: a card a person completed in between stays paused (D66 O1).
+      try {
+        await store.autoMutate(id, { agentId: agent.id, requestId: linkRequest(agent.id),
+          operations: normalizeOperations([{ op: 'link', id: cardId, agentId: agent.id, role: 'worker' }]) });
+      } catch (error) { if (refused(error)) return 'held'; throw error; }
       await remember(agent.id, { boardId: id, cardId, bucket, awaiting: !!change.awaiting, title: text.title,
-        moved: moved ?? remembered?.moved ?? null, pausedAt: null, resumedAt: null });
+        moved: moved ?? remembered?.moved ?? null, pausedAt: null, resumedAt: null,
+        // The engine's own new card starts `managed` at generation 1; a card found from its receipt is placed again.
+        generation: moved ? 1 : null });
       return 'created';
     });
   }
 
-  /** Brings one existing card up to date. Writes only what differs from what was last applied. */
-  async function update(store: Store, agent: AutoAgent, change: Change, board: Board, card: Card,
+  /**
+   * D66: the board's decision file could not be read (gate 489 F1: for now, or damaged and not yet set aside): nothing
+   * automatic happens on the board, and the screens say so.
+   */
+  const controlHold = (view: ControlView) => {
+    const key = 'file:' + AUTO_CONTROL_DIR + '/' + view.board.id + '.json';
+    if (view.status !== 'damaged' && view.status !== 'unreadable') { holds.delete(key); return false; }
+    hold(key, { issue: 'missing-field', detail: AUTO_CONTROL_DIR + '/' + view.board.id.slice(0, 14) + '…' }, 'control'); return true;
+  };
+
+  /**
+   * Brings one existing card up to date. Writes only what differs from what was last applied.
+   * D66: whether the card may move is its decision in the control file (`view`, read with the board), never this
+   * feature's memory: `managed` follows the agent, `paused` keeps its stage (the awaiting flag and the automatic title still
+   * follow), `unknown` takes nothing at all. The proposal carries the decision's token; the Store judges it again in its lock.
+   */
+  async function update(store: Store, agent: AutoAgent, change: Change, view: ControlView, card: Card,
     state: AutoState, lookup?: () => Promise<string | null>): Promise<Outcome> {
+    const board = view.board;
+    if (controlHold(view)) return 'held';
+    const decision = view.cards[card.id];
+    if (!decision || decision.mode === 'unknown' || decision.mode === 'unowned') return 'held';
     const remembered = state.agents[agent.id];
     const known = remembered?.boardId === board.id && remembered.cardId === card.id ? remembered : undefined;
-    const next: Omit<AppliedState, 'at'> = { boardId: board.id, cardId: card.id, bucket: known?.bucket ?? null,
+    // J1 (gates 481/483): a bucket applied under another `managed` decision than the card's now (a resume since, or the late
+    // write of an older judgement) is not taken as applied, so the next signal places the card again.
+    const current = decision.mode !== 'managed' || (known?.generation ?? null) === decision.generation;
+    const next: Omit<AppliedState, 'at'> = { boardId: board.id, cardId: card.id, bucket: current ? known?.bucket ?? null : null,
       awaiting: known?.awaiting ?? false, title: known?.title ?? null, moved: known?.moved ?? null,
-      pausedAt: known?.pausedAt ?? null, resumedAt: known?.resumedAt ?? null };
-    // REQ-74: a move outside automatic tracking since it began on the card (or since the last resume)
-    // pauses the card for all its agents, this one too if it joined later. The same judgement as the
-    // detail view's. The time is kept here too, so the pause outlives the ledger's bounded history.
-    const entries: TrackedEntry[] = [...cardEntries(state, board.id, card.id).filter(([id]) => id !== agent.id), [agent.id, next]];
-    next.pausedAt = cardPause(board.history, card, entries);
+      pausedAt: known?.pausedAt ?? null, resumedAt: known?.resumedAt ?? null,
+      generation: decision.mode === 'managed' ? decision.generation : known?.generation ?? null };
+    // REQ-74: the pause is the card's (D66: its control entry), so an agent linked later obeys it too. The time is kept in
+    // the memory only for the screens.
+    next.pausedAt = decision.mode === 'paused' ? known?.pausedAt ?? decision.at : null;
     const operations: Operation[] = [];
     const patch: { awaiting?: 'user' | null; title?: string } = {};
     let held = false, to: string | null = null;
@@ -691,12 +743,12 @@ export function createAutoCards(options: AutoCardsOptions) {
     if (Object.keys(patch).length) operations.push({ op: 'update', id: card.id, patch });
     if (operations.length) {
       try {
-        const result = await store.mutateBoard(board.id, { actor: { kind: 'agent', agentId: agent.id },
-          requestId: newId(), ifRevision: board.revision, operations: normalizeOperations(operations) });
+        const result = await store.autoMutate(board.id, { agentId: agent.id, requestId: newId(), ifRevision: board.revision,
+          expect: { controlEpoch: view.controlEpoch!, generation: decision.generation }, operations: normalizeOperations(operations) });
         if (operations.some(o => o.op === 'move')) next.moved = { cause: change.cause ?? 'reconcile', revision: result.data.revision, at: now() };
       } catch (error) {
-        // D65: leave the newer board and applied state alone. The next signal reads and judges again.
-        if (isKanbanError(error) && error.code === 'E_REVISION_CONFLICT' && error.committed === false) return 'held';
+        // D65/D66: a newer board or a newer decision. Leave both and the applied state alone; the next signal judges again.
+        if (refused(error)) return 'held';
         throw error;
       }
     }
@@ -725,12 +777,20 @@ export function createAutoCards(options: AutoCardsOptions) {
     if (found) return enqueue(boardKey(found.board.id), async () => {
       const current = await readState();
       if (!effectiveSetting(current).enabled) return 'disabled';
-      const board = await store.readBoard(found.board.id);
+      // D66: the board and its card decisions, read together (board first) for this one judgement. What the file does not
+      // hold yet (a board from before it, a card an older writer changed, a damaged file to set aside — gate 489 F1) is saved
+      // first, in the board's lock, and read again.
+      let view = await store.readAutoControl(found.board.id);
+      if (!view.settled) {
+        await store.settleAutoControl(found.board.id);
+        view = await store.readAutoControl(found.board.id);
+      }
+      const board = view.board;
       if (!workspaceSetting(current, [agent.cwd, board.cwd]).enabled) return 'disabled';
       const card = board.cards.find(c => c.id === found.card.id && c.agents.some(a => a.agentId === agent.id));
       if (!card) return 'no-card';
       if (card.archivedAt !== null) return 'archived-card';
-      return update(store, agent, change, board, card, current, lookup);
+      return update(store, agent, change, view, card, current, lookup);
     });
     // D44/247-D3: Paseo's record of the agent — the listing's, or its snapshot asked once (null when it cannot be read).
     let asked: Promise<Birth | null> | null = null;
@@ -1000,16 +1060,33 @@ export function createAutoCards(options: AutoCardsOptions) {
      * for the card cannot write its older entry back over the resume.
      */
     resume(boardId: string, cardId: string): Promise<{ resumed: number }> {
-      return enqueue(boardKey(boardId), () => withState<{ resumed: number }>(async state => {
-        const at = now();
-        let resumed = 0;
-        for (const entry of Object.values(state.agents)) {
-          if (entry.boardId !== boardId || entry.cardId !== cardId) continue;
-          entry.resumedAt = at; entry.pausedAt = null; entry.bucket = null; entry.at = at;
-          resumed++;
-        }
-        return { value: { resumed }, changed: resumed > 0 };
-      }));
+      return this.resumeDecision(boardId, cardId).then(answer => ({ resumed: answer.resumed }));
+    },
+    /**
+     * D66 G2: the same resume, by the decision a screen showed (`expect`, the RPC's token), answering whether this call
+     * committed it, found it already saved (a retried press), and the card's decision after it.
+     */
+    resumeDecision(boardId: string, cardId: string, expect?: ResumeExpectation): Promise<ResumeAnswer> {
+      return enqueue(boardKey(boardId), async (): Promise<ResumeAnswer> => {
+        // D66: the resume is the card's decision, committed in the control file under the board's lock. The memory below is
+        // only reset so the next signal places the card again; failing that does not undo the resume. G2: a screen's resume
+        // carries the token it showed (`expect`); a retry of the same decision is a replay, which resets nothing again.
+        let decided: ResumeData;
+        try { decided = (await (await storePromise).resumeAuto(boardId, cardId, expect)).data; }
+        catch (error) { if (isKanbanError(error) && error.code === 'E_NOT_FOUND') return { resumed: 0, committed: false, replayed: false, decision: null }; throw error; }
+        const done = (resumed: number): ResumeAnswer => ({ resumed, committed: !decided.replayed, replayed: decided.replayed, decision: decided });
+        if (decided.replayed) return done(0);
+        return withState<number>(async state => {
+          const at = now();
+          let resumed = 0;
+          for (const entry of Object.values(state.agents)) {
+            if (entry.boardId !== boardId || entry.cardId !== cardId) continue;
+            entry.resumedAt = at; entry.pausedAt = null; entry.bucket = null; entry.at = at;
+            resumed++;
+          }
+          return { value: resumed, changed: resumed > 0 };
+        }).then(done, error => { log('resume ' + cardId + ' kept, its memory not reset', describe(error)); return done(0); });
+      });
     },
     /** Waits until every queued signal has been handled (tests and shutdown). */
     async idle(): Promise<void> {
@@ -1125,4 +1202,6 @@ function snapshotBirth(value: unknown, id: string): Birth | null {
     archived: !!listed.archived };
 }
 const describe = (error: unknown) => error instanceof Error ? error.name + ': ' + error.message : String(error);
+/** D65/D66: the Store refused the engine's write and wrote nothing — a newer board, or a newer decision of the card. */
+const refused = (error: unknown) => isKanbanError(error) && error.committed === false && (error.code === 'E_REVISION_CONFLICT' || error.code === 'E_AUTO_HELD');
 export type AutoCards = ReturnType<typeof createAutoCards>;

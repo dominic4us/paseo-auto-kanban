@@ -11,13 +11,14 @@ async function setup(t) {
   const f = await fixture(t);
   let intercept = null;
   const writes = [];
+  // D66: the engine writes through its own entry point (`autoMutate`), caught the same way as `mutateBoard` was.
   const store = new Proxy(f.store, { get(target, key) {
-    if (key === 'mutateBoard') return async (id, input, ...rest) => {
+    if (key === 'mutateBoard' || key === 'autoMutate') return async (id, input, ...rest) => {
       writes.push(input);
-      if (intercept && input.actor.kind === 'agent') {
+      if (intercept && (key === 'autoMutate' || input.actor.kind === 'agent')) {
         const run = intercept; intercept = null; await run(input);
       }
-      return target.mutateBoard(id, input, ...rest);
+      return target[key](id, input, ...rest);
     };
     const value = Reflect.get(target, key);
     return typeof value === 'function' ? value.bind(target) : value;

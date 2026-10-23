@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { useRpc } from '@getpaseo/plugin/client';
 import { revisionsGet, type AutoHealthDTO } from '../shared/rpc.js';
-import { AUTO_REFRESH, createPoller, createShownWatch, knownRevisions, mailChanged, revisionsChanged, shownRevision, type MailWatch, type RefreshStatus, type RevisionScope, type ShownWatch } from './refresh-model.js';
+import { AUTO_REFRESH, createPoller, createShownWatch, knownRevisions, mailChanged, revisionsChanged, updatesChanged, shownRevision, type MailWatch, type RefreshStatus, type RevisionScope, type ShownWatch } from './refresh-model.js';
 export { knownRevisions } from './refresh-model.js';
 
 /*
@@ -87,20 +87,22 @@ export type AutoRefreshStatus = { kind: 'off' } | { kind: 'live' } | { kind: 'pa
  */
 export type AutoRefreshReport = AutoRefreshStatus & { failing?: boolean; health?: AutoHealthDTO | undefined };
 export const REFRESH_FAILS = 2;
-export function useAutoRefresh({ enabled, known, scope, boardIds, busy, revalidate, shown, groups = false, mail }: {
+export function useAutoRefresh({ enabled, known, scope, boardIds, busy, revalidate, shown, groups = false, mail, updates }: {
   enabled: boolean; known: Readonly<Record<string, string>> | null; scope: RevisionScope;
   boardIds?: readonly string[] | undefined; busy: boolean; revalidate: () => Promise<boolean>;
   shown?: ShownWatch | undefined;
   /** REQ-76 F1: the screen draws sub-cards under their parent, so its `known` carries the boards' groups. */
   groups?: boolean;
   mail?: MailWatch | undefined;
+  /** Gate 486 F4: the fingerprint of the new-version reading the screen shows (`updateCheckKey`), when it shows one. */
+  updates?: string | undefined;
 }): AutoRefreshReport {
   const [status, setStatus] = useState<RefreshStatus>({ live: true });
   const [failing, setFailing] = useState(false), [health, setHealth] = useState<AutoHealthDTO | undefined>(undefined);
   const provided = useContext(ShownContext), watch = shown ?? provided;
   const get = useRpc(revisionsGet);
-  const latest = useRef({ get, known, scope, boardIds, busy, revalidate, mail });
-  latest.current = { get, known, scope, boardIds, busy, revalidate, mail };
+  const latest = useRef({ get, known, scope, boardIds, busy, revalidate, mail, updates });
+  latest.current = { get, known, scope, boardIds, busy, revalidate, mail, updates };
   const idKey = boardIds?.join('\n') ?? '';
   useEffect(() => {
     if (!enabled) return undefined;
@@ -130,9 +132,9 @@ export function useAutoRefresh({ enabled, known, scope, boardIds, busy, revalida
       const now = latest.current;
       if (!now.known || now.busy || now.known !== known) { note(true); return; }
       if (scope === 'appeared' && !baseline) { baseline = knownRevisions(reply.data.boards); return; }
-      const messages = mailChanged(now.mail, reply.data.mail);
-      if (!revisionsChanged(scope === 'appeared' ? baseline! : known, reply.data, scope) && !messages) { note(true); return; }
-      const signature = JSON.stringify([reply.data.boards.map(b => [b.id, shownRevision(b)]), reply.data.mail ?? '']);
+      const messages = mailChanged(now.mail, reply.data.mail), versions = updatesChanged(now.updates, reply.data.updates);
+      if (!revisionsChanged(scope === 'appeared' ? baseline! : known, reply.data, scope) && !messages && !versions) { note(true); return; }
+      const signature = JSON.stringify([reply.data.boards.map(b => [b.id, shownRevision(b)]), reply.data.mail ?? '', versions ? reply.data.updates : '']);
       if (asked && asked.known === known && asked.reply === signature) { note(true); return; }
       asked = { known, reply: signature };
       // The next look waits for this read, so one change is read once.

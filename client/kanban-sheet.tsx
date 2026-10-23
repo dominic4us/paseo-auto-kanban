@@ -29,7 +29,7 @@ const SHEET_EASING = Easing.out(Easing.cubic);
  * the whole `height` (an editor with its own scroll and footer); without one the body is as tall as it holds (D67).
  */
 export function KanbanSheet({ title, open, onClose, onDismiss, colors: c, platform, closeLabel, testID, closeTestID,
-  centered, width = px(560), height, scroll = true, children, canClose, headerExtra, onBack, notice }: {
+  centered, width = px(560), height, scroll = true, children, canClose, headerExtra, onBack, notice, overlay }: {
   title: string; open: boolean; onClose: () => void; onDismiss?: (() => void) | undefined; colors: Palette; platform: HostPlatform;
   closeLabel: string; testID: string; closeTestID?: string; centered?: boolean; width?: number; height?: number;
   scroll?: boolean; children: ReactNode;
@@ -47,6 +47,8 @@ export function KanbanSheet({ title, open, onClose, onDismiss, colors: c, platfo
   onBack?: (() => boolean) | undefined;
   /** REQ-125 F2: a line fixed under the head, above the scrolling body, so it is seen without scrolling (the pick list's refusal). */
   notice?: ReactNode;
+  /** REQ-161: drawn over the whole window, above the sheet and outside its scroll's clipping (a settings row's ⓘ balloon). */
+  overlay?: ReactNode;
 }) {
   const screen = useWindowDimensions(), native = platform !== 'web';
   // REQ-87 ⑦: the system bar under the sheet, or none while the keyboard is up (it pushes the sheet above itself).
@@ -152,5 +154,6 @@ export function KanbanSheet({ title, open, onClose, onDismiss, colors: c, platfo
         </View>
       </Animated.View>
     </KeyboardAvoidingView>
+    {overlay}
   </NativeModal>;
 }

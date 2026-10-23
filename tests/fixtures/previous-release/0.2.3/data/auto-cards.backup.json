@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "activatedAt": "2026-10-05T00:00:02.000Z",
+  "hosts": {},
+  "agents": {
+    "5605e0dc-8d18-4055-83fb-abfa2e45f0c3": {
+      "boardId": "board_98a296c7bded134675a04ea738200c1e065a27c38f60c3dea442d4ead69a2942",
+      "cardId": "card_0ff66704-581f-4945-8b11-e0682d3bf3a4",
+      "bucket": "working",
+      "awaiting": false,
+      "title": "Unlinked",
+      "moved": {
+        "cause": "turn_started",
+        "revision": "03d0cd70-7a3e-4525-8126-d9cb4db66a29:51",
+        "at": "2026-10-05T00:01:42.000Z"
+      },
+      "pausedAt": null,
+      "resumedAt": null,
+      "at": "2026-10-05T00:01:43.000Z"
+    },
+    "38fa48f5-6cae-49e5-84dc-110c66453293": {
+      "boardId": "board_98a296c7bded134675a04ea738200c1e065a27c38f60c3dea442d4ead69a2942",
+      "cardId": "card_905951c1-d70e-4555-88cd-232761d9b3c5",
+      "bucket": "working",
+      "awaiting": false,
+      "title": "Archived done",
+      "at": "2026-10-05T00:01:35.000Z",
+      "moved": {
+        "cause": "turn_started",
+        "revision": "03d0cd70-7a3e-4525-8126-d9cb4db66a29:46",
+        "at": "2026-10-05T00:01:32.000Z"
+      },
+      "pausedAt": "2026-10-05T00:01:34.000Z",
+      "resumedAt": null
+    },
+    "9bbd17e1-2906-474e-8cec-10b485e1b73b": {
+      "boardId": "board_98a296c7bded134675a04ea738200c1e065a27c38f60c3dea442d4ead69a2942",
+      "cardId": "card_2057ab83-7220-4c48-80e1-5383606b7e55",
+      "bucket": "working",
+      "awaiting": false,
+      "title": "Own CLI move",
+      "at": "2026-10-05T00:01:20.000Z",
+      "moved": {
+        "cause": "turn_started",
+        "revision": "03d0cd70-7a3e-4525-8126-d9cb4db66a29:37",
+        "at": "2026-10-05T00:01:19.000Z"
+      },
+      "pausedAt": null,
+      "resumedAt": null
+    },
+    "3dfd93b4-4168-482b-8680-9d8b46969cb3": {
+      "boardId": "board_98a296c7bded134675a04ea738200c1e065a27c38f60c3dea442d4ead69a2942",
+      "cardId": "card_ca748d34-7560-4c0b-8321-1c01004cd931",
+      "bucket": "working",
+      "awaiting": false,
+      "title": "Resumed and moved",
+      "at": "2026-10-05T00:01:08.000Z",
+      "moved": {
+        "cause": "turn_started",
+        "revision": "03d0cd70-7a3e-4525-8126-d9cb4db66a29:29",
+        "at": "2026-10-05T00:01:07.000Z"
+      },
+      "pausedAt": null,
+      "resumedAt": "2026-10-05T00:01:05.000Z"
+    },
+    "8ebd1fbf-d77a-4312-8c75-d123c7d96828": {
+      "boardId": "board_98a296c7bded134675a04ea738200c1e065a27c38f60c3dea442d4ead69a2942",
+      "cardId": "card_bfbf9617-c6ab-4c15-84f4-a31c8ec68c65",
+      "bucket": null,
+      "awaiting": false,
+      "title": "Resumed, not moved",
+      "at": "2026-10-05T00:00:55.000Z",
+      "moved": {
+        "cause": "turn_started",
+        "revision": "03d0cd70-7a3e-4525-8126-d9cb4db66a29:23",
+        "at": "2026-10-05T00:00:51.000Z"
+      },
+      "pausedAt": null,
+      "resumedAt": "2026-10-05T00:00:55.000Z"
+    },
+    "c9a02b73-6daf-4806-8352-8af7f6b7a741": {
+      "boardId": "board_98a296c7bded134675a04ea738200c1e065a27c38f60c3dea442d4ead69a2942",
+      "cardId": "card_22a76ae5-b91e-4ee5-8b14-5ed2d88b3a01",
+      "bucket": "working",
+      "awaiting": false,
+      "title": "Moved, not seen",
+      "at": "2026-10-05T00:00:44.000Z",
+      "moved": {
+        "cause": "turn_started",
+        "revision": "03d0cd70-7a3e-4525-8126-d9cb4db66a29:19",
+        "at": "2026-10-05T00:00:43.000Z"
+      },
+      "pausedAt": null,
+      "resumedAt": null
+    },
+    "09462d2c-3286-47e9-84ac-b3ff7ee927b4": {
+      "boardId": "board_98a296c7bded134675a04ea738200c1e065a27c38f60c3dea442d4ead69a2942",
+      "cardId": "card_2503c0fd-9035-4661-81f5-363014cd315e",
+      "bucket": "working",
+      "awaiting": false,
+      "title": "Paused by a person",
+      "at": "2026-10-05T00:00:37.000Z",
+      "moved": {
+        "cause": "turn_started",
+        "revision": "03d0cd70-7a3e-4525-8126-d9cb4db66a29:15",
+        "at": "2026-10-05T00:00:34.000Z"
+      },
+      "pausedAt": "2026-10-05T00:00:36.000Z",
+      "resumedAt": null
+    },
+    "61caa4bf-3bf7-46ef-8f62-87d2ecbe2a56": {
+      "boardId": "board_98a296c7bded134675a04ea738200c1e065a27c38f60c3dea442d4ead69a2942",
+      "cardId": "card_53901ae4-70c2-4f89-8dfd-5b7d17cc833d",
+      "bucket": "working",
+      "awaiting": false,
+      "title": "Done by a person",
+      "at": "2026-10-05T00:00:28.000Z",
+      "moved": {
+        "cause": "turn_started",
+        "revision": "03d0cd70-7a3e-4525-8126-d9cb4db66a29:11",
+        "at": "2026-10-05T00:00:25.000Z"
+      },
+      "pausedAt": "2026-10-05T00:00:27.000Z",
+      "resumedAt": null
+    },
+    "0844661f-da14-47f9-83d6-d9544968597f": {
+      "boardId": "board_98a296c7bded134675a04ea738200c1e065a27c38f60c3dea442d4ead69a2942",
+      "cardId": "card_184c0da7-f21e-4512-8113-02c00046c536",
+      "bucket": "review",
+      "awaiting": false,
+      "title": "Adopt review",
+      "at": "2026-10-05T00:00:19.000Z",
+      "moved": {
+        "cause": "turn_ended",
+        "revision": "03d0cd70-7a3e-4525-8126-d9cb4db66a29:8",
+        "at": "2026-10-05T00:00:18.000Z"
+      },
+      "pausedAt": null,
+      "resumedAt": null
+    },
+    "1b5499af-b1bb-46c4-895b-b523276dee9a": {
+      "boardId": "board_98a296c7bded134675a04ea738200c1e065a27c38f60c3dea442d4ead69a2942",
+      "cardId": "card_c89159c8-bc5a-4b97-88e9-84fe2b2dec13",
+      "bucket": "working",
+      "awaiting": false,
+      "title": "Adopt doing",
+      "at": "2026-10-05T00:00:09.000Z",
+      "moved": {
+        "cause": "turn_started",
+        "revision": "03d0cd70-7a3e-4525-8126-d9cb4db66a29:4",
+        "at": "2026-10-05T00:00:08.000Z"
+      },
+      "pausedAt": null,
+      "resumedAt": null
+    }
+  },
+  "autoBoardFloor": "2026-10-05T00:00:02.000Z"
+}

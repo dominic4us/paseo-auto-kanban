@@ -1,3 +1,4 @@
+import { useOverviewScroll, type OverviewScrollMemory } from './overview-scroll.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Text, View, type ScrollView as NativeScrollView } from 'react-native';
 import { ScrollView } from '@getpaseo/plugin/client/react-native';
@@ -38,6 +39,8 @@ import { PreviewDetail } from './preview-detail.js';
 import { Detail } from './detail.js';
 import { CreateDraft } from './create.js';
 import { SettingsSheet, useSettingsWindow } from './settings-sheet.js';
+import { useUpdateCheck } from './update-check.js';
+import { updateDot } from './update-model.js';
 import { MailBadge } from './mail-badge.js';
 import { MailboxButton, MailboxPanel, mailboxCount, mailWorkspaceList, useMailList } from './mailbox.js';
 import { RefreshStatus } from './refresh-status.js';
@@ -51,8 +54,8 @@ import { ArchivedSheet, archivedDoneOf, DoneHeadTools, TidyConfirm, TidyNote, us
 import { CheckupButton, useCheckup } from './checkup.js';
 import { px } from './ui-scale.js';
 
-export function SwimlaneScreen({ width, onList, onBoard, preview = false, onPreview = () => {}, ...props }: PluginSurfaceProps & {
-  width: number; onList: () => void; onBoard: (id: string) => void; preview?: boolean; onPreview?: (value: boolean) => void;
+export function SwimlaneScreen({ width, onList, onBoard, scrollMemory, preview = false, onPreview = () => {}, ...props }: PluginSurfaceProps & {
+  scrollMemory?: OverviewScrollMemory | undefined; width: number; onList: () => void; onBoard: (id: string) => void; preview?: boolean; onPreview?: (value: boolean) => void;
 }) {
   const scope = props.host.id + ':surface' + (preview ? ':demo' : ''), source = useBoardSource(props.host.id, preview);
   const hidden = useHiddenProjects(scope, props.host.id, source.hiddenProjects, !preview);
@@ -66,6 +69,8 @@ export function SwimlaneScreen({ width, onList, onBoard, preview = false, onPrev
   const workspaceAuto = useWorkspaceAutoCards(scope, source.autoCardsOff, !preview, source.settingsRead);
   // REQ-52: the automatic archive's days (settings), the done column's "Tidy" line and a workspace's archived list.
   const autoArchive = useAutoArchive(scope, source.autoArchive, !preview, source.settingsRead);
+  // REQ-156: the new-version notice — its switch and line in settings, a dot on ⚙.
+  const updateCheck = useUpdateCheck(scope, source.updateCheck, !preview, source.settingsRead);
   const [tidy, setTidy] = useState<{ boardId: string; ask: boolean; text?: string } | null>(null);
   const [archivedOf, setArchivedOf] = useState<{ boardId: string; name: string; stages: { stageId: string; name: string }[] } | null>(null);
   // Scroll offsets never enter React state: the anchored rows follow an Animated value and the
@@ -73,7 +78,7 @@ export function SwimlaneScreen({ width, onList, onBoard, preview = false, onPrev
   const store = sessionFor(scope);
   // The horizontal view always starts at 0 so the Animated offset and the real scroll can never disagree;
   // only the vertical position is restored (contentOffset is a no-op on RN Web, honoured on native).
-  const start = useRef({ y: Number(store.get('scrollY') ?? 0) }).current;
+  const start = useRef({ y: scrollMemory ? 0 : Number(store.get('scrollY') ?? 0) }).current;
   const scrollX = useRef(new Animated.Value(0)).current;
   // REQ-75 B1: a lane whose whole name a long press has shown; a tap on the name opens the board instead.
   const [namesExpanded, setNamesExpanded] = useSessionValue<Record<string, boolean>>(scope, 'expandedNames', {});
@@ -90,6 +95,7 @@ export function SwimlaneScreen({ width, onList, onBoard, preview = false, onPrev
   const draftIn = (boardId: string, name: string) => { if (!preview) { setCreateBoard(boardId); setCreateLane({ boardId, name }); setCreate(true); } };
   const [detail, setDetail] = useState<{ boardId: string; cardId: string; lead?: boolean } | null>(null);
   const horizontal = useRef<NativeScrollView>(null), vertical = useRef<NativeScrollView>(null), c = palette(props.theme), m = copy(source.locale);
+  const scrollPosition = useOverviewScroll(scrollMemory, vertical, source.ready && !source.loading && !source.placing && !source.localePending);
   const signalSource = useSignalSource();
   const orphaned = useOrphanedCards(signalSource, source.boards);
   // REQ-83: the agents' states could not be read (the demo's fixed source never fails).
@@ -111,7 +117,8 @@ export function SwimlaneScreen({ width, onList, onBoard, preview = false, onPrev
   // REQ-149: the check up looks at the boards the screen shows (hidden projects left out), never the demo's.
   const checkupBoards = useMemo(() => source.boards.filter(b => !filters.hiddenProjects.includes(workspaceEntry(source.directory, b.summary.workspaceId, b.summary.cwd)?.projectId ?? '')),
     [source.boards, source.directory, hiddenKey]);
-  const checkup = useCheckup({ hostId: props.host.id, scope, source: signalSource, boards: checkupBoards, enabled: !preview && source.ready, refresh: source.refresh });
+  const checkup = useCheckup({ hostId: props.host.id, scope, source: signalSource, boards: checkupBoards, enabled: !preview && source.ready, refresh: source.refresh,
+    agents: agentLinks });
   const boardName = (boardId: string) => { const board = source.boards.find(b => b.summary.id === boardId);
     return board ? workspaceName(board.summary.workspaceId, board.summary.cwd, source.directory) : ''; };
   // REQ-59: projects move among the projects shown; the group Paseo no longer has is never among them.
@@ -229,7 +236,7 @@ export function SwimlaneScreen({ width, onList, onBoard, preview = false, onPrev
     // REQ-124: a lane whose workspace holds a workflow definition offers its workflow, shown in place of the columns.
     // REQ-125: one with none offers "Try a workflow" there instead — a built-in, kept in Kanban only.
     const offer = laneOffer(lane.board.summary, picks[id]), offered = offer === 'workflow', big = offered && views[id] === 'workflow';
-    return <TipLayer key={id} testID="swimlane-lane-section" style={{ marginTop }}>
+    return <TipLayer key={id} viewRef={scrollPosition.laneRef(lane.workspaceKey)} testID="swimlane-lane-section" style={{ marginTop }}>
       {/* Pinned inside this section only, so the next lane's header pushes this one out. */}
       <View testID="lane-section-header" style={laneSticky(laneTop, flat)}>
         {/* REQ-75 F1: one step above the stage headings, which come later in the page, so the name tip is drawn over them. */}
@@ -363,8 +370,8 @@ export function SwimlaneScreen({ width, onList, onBoard, preview = false, onPrev
       {/* REQ-128: the message list, with the ways of looking at the board (a lab feature; REQ-134 MA: the phone's is in its top bar, mobile-swimlane.tsx). */}
       {mailboxOn && <MailboxButton count={mailboxBadge} open={mailboxOpen} onPress={() => mailboxOpen ? closeMailbox() : setMailboxOpen(true)} colors={c} m={m} />}
       <ViewSwitch value="swimlane" onChange={() => { if (!preview) onList(); }} disabled={preview ? ['list'] : []} colors={c} m={m} />
-      <IconButton testID="open-settings" name="Settings" label={m.settings} colors={c} mobile={false} tooltip
-        buttonRef={settingsWindow.opener} onPress={settingsWindow.open} />
+      <IconButton testID="open-settings" name="Settings" label={updateDot(updateCheck) ? m.settingsUpdateBadge : m.settings} colors={c} mobile={false} tooltip
+        dot={updateDot(updateCheck)} buttonRef={settingsWindow.opener} onPress={settingsWindow.open} />
     </View>
     {preview && <View testID="swimlane-demo-row" style={{ width: '100%', maxWidth: headerWidth, marginLeft: offset }}><DemoBanner onExit={toggleDemo} colors={c} m={m} /></View>}
     {/* REQ-26/REQ-54: the filter row lives outside both scroll views (never leaves the top) and shares the board's right edge.
@@ -380,7 +387,8 @@ export function SwimlaneScreen({ width, onList, onBoard, preview = false, onPrev
       {/* research/121 F1: the lanes' tips are cut at this view's edge, so they flip above against it, not the window. */}
       <ScrollView testID="swimlane-vertical" ref={vertical} style={{ width: contentWidth, height: '100%' }} contentOffset={{ x: 0, y: start.y }}
         contentContainerStyle={{ paddingBottom: px(16) }} scrollEventThrottle={16}
-        onScroll={event => { store.set('scrollY', event.nativeEvent.contentOffset.y); }}>
+        onLayout={scrollPosition.onLayout} onContentSizeChange={scrollPosition.onContentSizeChange}
+        onScroll={event => { const y = event.nativeEvent.contentOffset.y; store.set('scrollY', y); scrollPosition.remember(y); }}>
         <TipArea.Provider value={vertical}>
         {!!source.error && <Animated.View style={anchored}><Notice text={source.error} colors={c} error /></Animated.View>}
         {source.loading && !source.ready && <Animated.View style={anchored}><Notice text={m.loading} colors={c} /></Animated.View>}
@@ -433,7 +441,7 @@ export function SwimlaneScreen({ width, onList, onBoard, preview = false, onPrev
       leads={workspaceLeadEntries(source.boards, source.directory, agentLinks, archived, m)}
       readOnly={preview} about={source.about} connection={{ host: props.host.label, observedAt: source.observedAt }} colors={c} m={m} platform={props.layout.platform}
       demo={{ on: preview, onChange: toggleDemo }} orderReset={{ enabled: arrange.arranged, onReset: arrange.resetAll }}
-      labs={{ mail: source.mail, onChange: source.revalidate }} autoArchive={autoArchive} hiddenBoards={source.hiddenBoards} />
+      labs={{ mail: source.mail, onChange: source.revalidate }} autoArchive={autoArchive} hiddenBoards={source.hiddenBoards} updateCheck={updateCheck} />
     {/* REQ-52: a workspace's archived cards, from its ⋯ or the done column's "Archived N". */}
     {!preview && archivedOf && <ArchivedSheet open boardId={archivedOf.boardId} name={archivedOf.name} stages={archivedOf.stages}
       onClose={() => setArchivedOf(null)} onChanged={source.refresh} colors={c} m={m} platform={props.layout.platform} />}

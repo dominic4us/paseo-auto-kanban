@@ -1,3 +1,4 @@
+import type { OverviewScrollMemory } from './overview-scroll.js';
 import { MenuSheet } from './menu-sheet.js';
 import { PreviewContext } from './preview-context.js';
 import { SignalContext } from './signal-context.js';
@@ -5,7 +6,7 @@ import { staticSignalSource, useAgentLinks, useLiveSignals, useSignalProblem } f
 import { boardMark, linkStages } from './card-groups.js';
 import { useSignalSource } from './signal-context.js';
 import { demoSignals, demoArchived, demoModels } from './demo.js';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, Text, View, useWindowDimensions } from 'react-native';
 import { Icon, ScrollView } from '@getpaseo/plugin/client/react-native';
 import { useRpc, type PluginSurfaceProps } from '@getpaseo/plugin/client';
@@ -32,6 +33,9 @@ import { knownRevisions, noteActivity, ShownContext, useAutoRefresh, useShownWat
 import { answeredSettings, noteRefreshRead, useKanbanSettings, useKanbanTheme, useUiScale } from './settings.js';
 import { useAutoCards, useWorkspaceAutoCards, workspaceAutoEntries } from './auto-cards.js';
 import { SettingsSheet, useSettingsWindow } from './settings-sheet.js';
+import { useUpdateCheck } from './update-check.js';
+import { updateCheckKey } from '../shared/update-check.js';
+import { updateDot } from './update-model.js';
 import { DirectoryReadyMark, DirectoryStatus, TrackingStatus } from './directory-status.js';
 import { LocalePending, useScreenLocale } from './locale-hint.js';
 import { px } from './ui-scale.js';
@@ -51,6 +55,10 @@ export function OverviewScreen(surface: PluginSurfaceProps & { availableWidth?: 
   const [mode, setMode] = useSessionValue<'swimlane' | 'list'>(scope, 'mode', 'swimlane');
   const [board, setBoard] = useSessionValue<string | null>(scope, 'board', null);
   const layout = surfaceLayout(width, props.layout.platform), wide = layout === 'wide';
+  const scrollPositions = useRef(new Map<string, OverviewScrollMemory>()).current;
+  const scrollKey = scope + (preview ? ':demo' : '') + (wide ? ':wide' : ':mobile');
+  if (!scrollPositions.has(scrollKey)) scrollPositions.set(scrollKey, {});
+  const scrollMemory = props.layout.platform === 'web' ? scrollPositions.get(scrollKey) : undefined;
   // REQ-22: one SDK subscription per host feeds every card; the demo uses a fixed map instead.
   const live = useLiveSignals(props.host.id, !preview);
   const demoSource = useMemo(() => staticSignalSource(demoSignals, demoArchived, demoModels), []);
@@ -59,8 +67,8 @@ export function OverviewScreen(surface: PluginSurfaceProps & { availableWidth?: 
   return <PreviewContext.Provider value={preview}><SignalContext.Provider value={preview ? demoSource : live}><ShownContext.Provider value={shown}>
     <View ref={shown.ref} style={{ flex: 1, minHeight: 0 }} onTouchStart={noteActivity} onLayout={event => setWidth(event.nativeEvent.layout.width)}>
     {board ? <BoardScreen {...props} key={board} selector={{ boardId: board }} onBack={() => setBoard(null)} />
-      : wide && mode === 'swimlane' ? <SwimlaneScreen {...props} preview={preview} onPreview={value => setPreviewHost(value ? props.host.id : null)} width={width} onList={() => setMode('list')} onBoard={setBoard} />
-        : (layout === 'mobile' || preview) && mode === 'swimlane' ? <MobileSwimlaneScreen {...props} preview={preview} onPreview={value => setPreviewHost(value ? props.host.id : null)} width={width} onList={() => setMode('list')} onBoard={setBoard} />
+      : wide && mode === 'swimlane' ? <SwimlaneScreen {...props} scrollMemory={scrollMemory} preview={preview} onPreview={value => setPreviewHost(value ? props.host.id : null)} width={width} onList={() => setMode('list')} onBoard={setBoard} />
+        : (layout === 'mobile' || preview) && mode === 'swimlane' ? <MobileSwimlaneScreen {...props} scrollMemory={scrollMemory} preview={preview} onPreview={value => setPreviewHost(value ? props.host.id : null)} width={width} onList={() => setMode('list')} onBoard={setBoard} />
           : <ListOverview {...props} availableWidth={width} onBoard={setBoard} {...(layout !== 'legacy' ? { onKanban: () => setMode('swimlane') } : {})}
             onDemo={() => { setPreviewHost(props.host.id); setMode('swimlane'); }} />}
   </View></ShownContext.Provider></SignalContext.Provider></PreviewContext.Provider>;
@@ -91,7 +99,8 @@ export function ListOverview({ onBoard, onKanban, onDemo, availableWidth, ...pro
   const known = useMemo(() => state.data ? knownRevisions(state.data.boards) : null, [state.data]);
   // REQ-66: unless auto refresh is switched off in the settings.
   const settings = useKanbanSettings(props.host.id, answeredSettings(!!state.data?.ui, state.data?.ui?.settings));
-  const looks = useAutoRefresh({ enabled: settings.autoRefresh, known, scope: 'all', busy: state.loading, revalidate: state.revalidate });
+  const looks = useAutoRefresh({ enabled: settings.autoRefresh, known, scope: 'all', busy: state.loading, revalidate: state.revalidate,
+    updates: updateCheckKey(state.data?.updateCheck) });
   // REQ-83: the agents' states, the automatic tracking (the latest look's report, else the read's) and the looks themselves.
   const signalProblem = useSignalProblem(useSignalSource());
   const [create, setCreate] = useState(false);
@@ -107,6 +116,8 @@ export function ListOverview({ onBoard, onKanban, onDemo, availableWidth, ...pro
   // REQ-67 ⑥/REQ-68: the same settings window as the Kanban screen, from this screen's ⚙.
   const autoCards = useAutoCards(props.host.id + ':surface', props.host.id, state.data?.autoCards, true, state.readToken);
   const workspaceAuto = useWorkspaceAutoCards(props.host.id + ':surface', state.data?.autoCardsOff, true, state.readToken);
+  // REQ-156: the new-version notice, as on the boards.
+  const updateCheck = useUpdateCheck(props.host.id + ':surface', state.data?.updateCheck, true, state.readToken), newVersion = updateDot(updateCheck);
   const settingsWindow = useSettingsWindow(useWindowDimensions().width);
   const c = palette(props.theme), m = copy(locale ?? 'en');
   const mobile = props.layout.platform !== 'web' || props.layout.compact;
@@ -143,8 +154,8 @@ export function ListOverview({ onBoard, onKanban, onDemo, availableWidth, ...pro
     // REQ-79: no card order here — the list shows what waits for a person and each board's progress, not columns of cards.
     ...(onKanban ? [mobile ? <IconButton key="view" testID="view-toggle" name="SquareKanban" label={m.swimlaneView} onPress={onKanban} colors={c} mobile />
       : <ViewSwitch key="view" value="list" onChange={onKanban} colors={c} m={m} />] : []),
-    <IconButton key="settings" testID="open-settings" name="Settings" label={m.settings} onPress={settingsWindow.open} colors={c} mobile={mobile}
-      tooltip={!mobile} buttonRef={settingsWindow.opener} />,
+    <IconButton key="settings" testID="open-settings" name="Settings" label={newVersion ? m.settingsUpdateBadge : m.settings} onPress={settingsWindow.open} colors={c} mobile={mobile}
+      tooltip={!mobile} buttonRef={settingsWindow.opener} dot={newVersion} />,
   ];
   const crowded = mobile && crowdedTitleRow(screenWidth, glyphs.length, px(6));
   // D60: crowded, the glyphs keep one line under the title — closer together, or the last beside the title.
@@ -250,7 +261,8 @@ export function ListOverview({ onBoard, onKanban, onDemo, availableWidth, ...pro
       hiddenBoards={kept && (kept.hidden || reveal) ? { count: kept.hidden, shown: reveal, onChange: setReveal } : undefined}
       about={state.data?.about} connection={{ host: props.host.label, observedAt: state.data?.observedAt ?? '' }} colors={c} m={m} platform={props.layout.platform}
       {...(onDemo ? { demo: { on: false, onChange: (next: boolean) => { if (next) onDemo(); } } } : {})}
-      orderReset={{ enabled: order.projects.length + order.workspaces.length + flatOrder(order).length > 0, onReset: () => setOrder(emptyLaneOrder()) }} />
+      orderReset={{ enabled: order.projects.length + order.workspaces.length + flatOrder(order).length > 0, onReset: () => setOrder(emptyLaneOrder()) }}
+      updateCheck={updateCheck} />
     <MenuSheet title={m.projects} open={projectsOpen} onClose={() => setProjectsOpen(false)} colors={c} platform={props.layout.platform} closeLabel={m.close}>{sc =>
       <View style={{ gap: px(4) }}>
         {/* REQ-57 ④: every project is on until it is switched off; the first row switches them all. */}

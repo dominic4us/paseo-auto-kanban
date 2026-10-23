@@ -25,7 +25,17 @@ access and the agent API Paseo offers to plugins. What it actually does:
 - reads, without writing, Paseo's workspace and label records and, for the workflow view, files inside a
   workspace folder;
 - sends a prompt to an agent only after a person confirms sending a draft card;
-- makes **no network connections** of its own, runs no child processes, and collects no telemetry.
+- makes **one kind of network request** of its own: at most once a day, while a Kanban screen is open, the plugin
+  server asks `https://registry.npmjs.org/paseo-auto-kanban/latest` for the latest version number. Once a day holds
+  across restarts, switching off and on, and servers sharing one data folder (each attempt is recorded, under a lock,
+  before it is made), measured by the computer's clock: setting it back never brings a check sooner; setting it forward
+  can, except while a Linux machine keeps running and its boot clock can be read (it is then counted too; if it
+  cannot be read, the date alone decides, as on other systems). The request carries no board content, path, name or identifier (the registry sees the server's
+  IP address); only a release number is kept from the answer, shown for up to seven days, and nothing else from it
+  is shown. It is on by default and turned off under Settings → Automation → Status & refresh → **Check for new
+  versions**; once off is saved, no request is started. A lost or unreadable setting also means no request — only a
+  data folder with no trace of the check starts on;
+- runs no child processes, and collects no telemetry.
 
 Reports about any behaviour outside this list are especially welcome.
 

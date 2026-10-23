@@ -12,6 +12,10 @@
 // fresh folder per run, _archive/test-web/<KST time>/ (outside git), so a run never overwrites an earlier gate's evidence.
 import fs from 'node:fs';
 import { runReq152 } from './req152.mjs';
+import { runScroll760 } from './scroll760.mjs';
+import { runReq156 } from './req156.mjs';
+import { runReq161 } from './req161.mjs';
+import { switchBeside, switchRow, underPlaced } from './req160.mjs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,6 +23,7 @@ import { execFileSync } from 'node:child_process';
 import { build } from 'esbuild';
 import { chromium } from 'playwright-core';
 import { req151Scenes } from './req151.mjs';
+import { R157T, req157Scenes } from './req157.mjs';
 import { d53FlowScenes } from './d53-flow.mjs';
 import { d67Scenes } from './d67-sheet.mjs';
 import { applyOperations, builtinTemplate, summarizeBoard } from '../../dist/server/core/index.js';
@@ -536,6 +541,23 @@ const req145Reads = key => {
  */
 const fixture = (mode, mobile, remembered = false) => {
   const f = fixtureBase(mode, mobile, String(remembered).startsWith('req152-') ? 'lead' : remembered), variant = String(remembered);
+  if (variant.startsWith('scroll760-')) {
+    const [, lang, surface, width] = variant.split('-');
+    const boards = Array.from({ length: 8 }, (_, i) => {
+      let board = newBoard((8 + i).toString(16), 'wks_scroll' + i);
+      for (const stage of ['doing', 'review']) for (let n = 0; n < 3; n++)
+        board = applyOperations(board, [add('Scroll card ' + i + ' ' + stage + n, stage)], actor, ctx(T(2))).board;
+      return board;
+    });
+    const reads = values => ({ ...toOverview(values, lang, T(6)), boardViews: values.map(x => toBoardDTO(x, lang, 'off', Date.now())),
+      removedIds: [], workspaceLabels: { available: false, source: 'none', definitions: [], byWorkspace: {} } });
+    f.ui.settings = { autoRefresh: false };
+    f.overview = reads(boards);
+    f.boards = Object.fromEntries(boards.map(x => [x.id, { board: toBoardDTO(x, lang, 'off', Date.now()), revision: x.revision, locale: lang, observedAt: T(6) }]));
+    f.workspaces.entries = boards.map((x, i) => ({ id: x.workspaceId, name: 'Scroll Workspace ' + i, projectId: 'prj_example01', projectDisplayName: 'Example Project' }));
+    if (surface === 'explorer') f.explorer = Number(width);
+    f.later = { overview: reads(boards.slice(0, 2)), boards: f.boards };
+  }
   if (variant.startsWith('entry-')) {
     const [, api, workspace, panelOpen, platform, problem] = variant.split('-');
     f.entry = { api, workspace: workspace === 'workspace', panelOpen: panelOpen === 'open', platform, problem };
@@ -554,6 +576,26 @@ const fixture = (mode, mobile, remembered = false) => {
     Object.assign(f, leadReads(lang));
     const translate = value => { if (!value || typeof value !== 'object') return; for (const [key, inner] of Object.entries(value)) if (key === 'locale') value[key] = lang; else translate(inner); };
     translate(f.overview); translate(f.boards); translate(f.cards);
+  }
+  // REQ-156: `req156-<lang>-<state>` — the running plugin 0.2.5 and the server's reading of the new-version check in that state.
+  if (variant.startsWith('req156-')) {
+    const [, lang, state] = variant.split('-');
+    const at = '2026-10-19T00:30:00.000Z';
+    const update = { newer: { enabled: true, newer: '0.2.6', checkedAt: at }, current: { enabled: true, checkedAt: at }, unchecked: { enabled: true },
+      off: { enabled: false }, damaged: { enabled: false, damaged: true } }[state];
+    const translate = value => { if (!value || typeof value !== 'object') return; for (const [key, inner] of Object.entries(value)) if (key === 'locale') value[key] = lang; else translate(inner); };
+    translate(f.overview); translate(f.boards); translate(f.cards);
+    f.ui.settings = { autoRefresh: false };
+    for (const read of [f.overview, ...Object.values(f.boards)]) Object.assign(read, { about: { version: '0.2.5' }, ...(update ? { updateCheck: update } : {}) });
+  }
+  // REQ-161: `req161-<percent>-<lang>-<state>` — REQ-151's three workspaces at that size, the left menu's row (Display → where it
+  // opens) and the update check newer (About shows its commands) or damaged (508 J1).
+  if (variant.startsWith('req161-')) {
+    const [, percent, lang, state] = variant.split('-');
+    Object.assign(f, req151Reads(percent + '-' + lang + '-normal'));
+    f.sidebarApi = true;
+    const update = state === 'damaged' ? { enabled: false, damaged: true } : { enabled: true, newer: '0.2.6', checkedAt: '2026-10-19T00:30:00.000Z' };
+    for (const read of [f.overview, ...Object.values(f.boards)]) Object.assign(read, { about: { version: '0.2.5' }, updateCheck: update });
   }
   if (variant.startsWith('lead-panel-foreign')) f.agents = f.agents.map(agent => ({ ...agent, workspaceId: 'wks_foreign', cwd: '/tmp/wks_foreign' }));
   if (variant.startsWith('lead-panel') && variant.endsWith('-ko')) {
@@ -579,7 +621,7 @@ const fixtureBase = (mode, mobile, remembered = false) => ({ mobile, width: mobi
   projects: { projects: [{ projectId: 'prj_example01', projectDisplayName: 'Example Project' }] }, agents: AGENTS,
   workspaces: { entries: [{ id: 'wks_example01', name: 'Example Workspace', projectId: 'prj_example01', projectDisplayName: 'Example Project' },
     { id: 'wks_example02', name: 'Second Workspace', projectId: 'prj_example01', projectDisplayName: 'Example Project' }], pageInfo: { nextCursor: null } },
-  ...(String(remembered).startsWith('req151-') ? req151Reads(remembered.slice(7)) : String(remembered).startsWith('req149-') ? req149Reads(remembered.slice(7)) : String(remembered).startsWith('d64-') ? d64Reads(remembered.slice(4)) : String(remembered).startsWith('req148-') ? req148Reads(remembered.slice(7)) : String(remembered).startsWith('d60-') ? d60Reads(remembered.slice(4)) : String(remembered).startsWith('req145-') ? req145Reads(remembered.slice(7)) : String(remembered).startsWith('req52-') ? req52Reads(remembered.slice(6)) : String(remembered).startsWith('req139-') ? req139Reads(remembered.slice(7)) : String(remembered).startsWith('req138-') ? req138Reads(remembered.slice(7)) : String(remembered).startsWith('req137-') ? req137Reads(remembered.slice(7)) : String(remembered).startsWith('req136f2-') ? req136f2Reads(remembered.slice(9)) : String(remembered).startsWith('req136-') ? req136Reads(remembered.slice(7)) : String(remembered).startsWith('req135-') ? req135Reads(remembered.slice(7)) : String(remembered).startsWith('req133-') ? req133Reads(remembered.slice(7)) : String(remembered).startsWith('req130-') ? req130Reads(remembered.slice(7)) : remembered === 'models' ? modelReads() : String(remembered).startsWith('modelsperm-') ? permReads(remembered.slice(11)) : String(remembered).startsWith('modelstate-') ? stateReads(remembered.slice(11)) : remembered === 'mail128long' ? mail128Reads(true) : remembered === 'mail128en' ? mail128Reads(false, 'en') : remembered === 'mailnodir' ? mailReads(MAIL, 'ko', '') : String(remembered).startsWith('wf-') ? workflowReads(remembered.slice(3)) : String(remembered).startsWith('bplong-') ? longNameReads({ locale: remembered.slice(7) }) : String(remembered).startsWith('dispatchheld-') ? heldReads(remembered.slice(13)) : String(remembered).startsWith('dispatch-') ? dispatchReads(remembered.slice(9)) : remembered === 'newlead' ? newLeadReads() : remembered === 'topic' ? topicReads() : remembered === 'lead' || String(remembered).startsWith('lead-panel') ? leadReads() : remembered === 'status' ? statusReads() : remembered === 'refs' ? refReads() : remembered === 'dwell' ? dwellReads() : remembered === 'busy' ? busyReads() : remembered === 'mail' ? mailReads() : remembered === 'mail128' ? mail128Reads() : remembered === 'mailtall' ? mailReads(MAIL_TALL) : remembered ? { ...lateReads(undefined), later: lateReads(LATE_OF) } : {}) });
+  ...(String(remembered).startsWith('req157-') ? req157Reads(remembered.slice(7)) : String(remembered).startsWith('req151-') ? req151Reads(remembered.slice(7)) : String(remembered).startsWith('req149-') ? req149Reads(remembered.slice(7)) : String(remembered).startsWith('d64-') ? d64Reads(remembered.slice(4)) : String(remembered).startsWith('req148-') ? req148Reads(remembered.slice(7)) : String(remembered).startsWith('d60-') ? d60Reads(remembered.slice(4)) : String(remembered).startsWith('req145-') ? req145Reads(remembered.slice(7)) : String(remembered).startsWith('req52-') ? req52Reads(remembered.slice(6)) : String(remembered).startsWith('req139-') ? req139Reads(remembered.slice(7)) : String(remembered).startsWith('req138-') ? req138Reads(remembered.slice(7)) : String(remembered).startsWith('req137-') ? req137Reads(remembered.slice(7)) : String(remembered).startsWith('req136f2-') ? req136f2Reads(remembered.slice(9)) : String(remembered).startsWith('req136-') ? req136Reads(remembered.slice(7)) : String(remembered).startsWith('req135-') ? req135Reads(remembered.slice(7)) : String(remembered).startsWith('req133-') ? req133Reads(remembered.slice(7)) : String(remembered).startsWith('req130-') ? req130Reads(remembered.slice(7)) : remembered === 'models' ? modelReads() : String(remembered).startsWith('modelsperm-') ? permReads(remembered.slice(11)) : String(remembered).startsWith('modelstate-') ? stateReads(remembered.slice(11)) : remembered === 'mail128long' ? mail128Reads(true) : remembered === 'mail128en' ? mail128Reads(false, 'en') : remembered === 'mailnodir' ? mailReads(MAIL, 'ko', '') : String(remembered).startsWith('wf-') ? workflowReads(remembered.slice(3)) : String(remembered).startsWith('bplong-') ? longNameReads({ locale: remembered.slice(7) }) : String(remembered).startsWith('dispatchheld-') ? heldReads(remembered.slice(13)) : String(remembered).startsWith('dispatch-') ? dispatchReads(remembered.slice(9)) : remembered === 'newlead' ? newLeadReads() : remembered === 'topic' ? topicReads() : remembered === 'lead' || String(remembered).startsWith('lead-panel') ? leadReads() : remembered === 'status' ? statusReads() : remembered === 'refs' ? refReads() : remembered === 'dwell' ? dwellReads() : remembered === 'busy' ? busyReads() : remembered === 'mail' ? mailReads() : remembered === 'mail128' ? mail128Reads() : remembered === 'mailtall' ? mailReads(MAIL_TALL) : remembered ? { ...lateReads(undefined), later: lateReads(LATE_OF) } : {}) });
 
 // REQ-126: agents named "<label>-<version>-<thinking>" — the version from the host's model list (`models`). A lead "총괄-09_…" in
 // review, a topic lead and its worker (two agents: "· +1") in progress, a label from before 09-30 ("실행_Sol-6"), a long label on a
@@ -1046,6 +1088,47 @@ const req149Reads = spec => {
     cards: Object.fromEntries(boards.flatMap(x => x.cards.map(card => [card.id, { boardId: x.id, revision: x.revision, card, template: x.template,
       history: x.history.filter(h => h.cardId === card.id), ...enteredOf(stageEntry(stageEntries(x), card)) }]))) };
 };
+/**
+ * REQ-157: the check up's families — 'req157-<percent>-<ko|en>'. "Example Workspace": a lead in progress, busy and fresh (no
+ * candidate), with a sub-card whose agent is archived (R1) and two still ones (R2); a still card of its own and one whose parent
+ * is not on the board (both flat). "Second Workspace": a lead whose agent is archived (R1) with a sub-card likewise (R1). Made-up names.
+ */
+const R157_IDS = Object.fromEntries(['lead', 'gone', 'quiet', 'leadTwo', 'goneTwo'].map((key, i) => [key, '00000000-0000-4000-8000-0000001570' + String(i).padStart(2, '0')]));
+const req157Reads = spec => {
+  const [percent, locale] = spec.split('-'), now = Date.now(), ago = days => new Date(now - days * 86400_000).toISOString();
+  let one = newBoard('9', 'wks_example01'), two = newBoard('0', 'wks_example02');
+  const parents = new Map(), idOf = (board, title) => board.cards.find(c => c.title === title).id;
+  const put = (board, title, stageId, days, agentIds = []) => {
+    board = applyOperations(board, [add(title, stageId)], actor, ctx(ago(days))).board;
+    for (const agentId of agentIds) board = applyOperations(board, [{ op: 'link', id: board.cards.at(-1).id, agentId }], actor, ctx(ago(days))).board;
+    return board;
+  };
+  // Oldest first: the ledger never lets a board's time run backwards.
+  one = put(one, R157T.solo, 'doing', 12);
+  one = put(one, R157T.s3, 'doing', 10);
+  one = put(one, R157T.s2, 'doing', 9, [R157_IDS.quiet]);
+  one = put(one, R157T.stray, 'doing', 8);
+  one = put(one, R157T.s1, 'doing', 3, [R157_IDS.gone]);
+  one = put(one, R157T.lead, 'doing', 0, [R157_IDS.lead]);
+  two = put(two, R157T.leadTwo, 'review', 5, [R157_IDS.leadTwo]);
+  two = put(two, R157T.subTwo, 'doing', 2, [R157_IDS.goneTwo]);
+  for (const t of [R157T.s1, R157T.s2, R157T.s3]) parents.set(idOf(one, t), idOf(one, R157T.lead));
+  parents.set(idOf(one, R157T.stray), '00000000-0000-4000-8000-00000015709f');
+  parents.set(idOf(two, R157T.subTwo), idOf(two, R157T.leadTwo));
+  const boards = [one, two], view = x => toBoardDTO(x, locale, 'off', now, parents);
+  const agents = [R_AGENT(R157_IDS.lead, { status: 'running', title: R157T.lead, lastActivityAt: ago(0), updatedAt: ago(0), labels: { profile: '총괄_Opus' } }),
+    R_AGENT(R157_IDS.gone, { archivedAt: ago(2), status: 'closed', labels: { profile: '실행_Opus' } }),
+    R_AGENT(R157_IDS.quiet, { lastActivityAt: ago(9), updatedAt: ago(9), labels: { profile: '산출물_Opus' } }),
+    R_AGENT(R157_IDS.leadTwo, { archivedAt: ago(4), status: 'closed', title: R157T.leadTwo, cwd: '/tmp/wks_example02', workspaceId: 'wks_example02' }),
+    R_AGENT(R157_IDS.goneTwo, { archivedAt: ago(1), status: 'closed', cwd: '/tmp/wks_example02', workspaceId: 'wks_example02' })];
+  return { liveMoves: true, agents: [...AGENTS, ...agents], cardLocale: locale,
+    ui: { hiddenProjects: [], order: { projects: [], workspaces: [] }, ...(percent === '100' ? {} : { settings: { uiScale: Number(percent) } }) },
+    overview: { ...toOverview(boards, locale, new Date(now).toISOString()), boardViews: boards.map(view), removedIds: [],
+      workspaceLabels: { available: false, source: 'none', definitions: [], byWorkspace: {} } },
+    boards: Object.fromEntries(boards.map(x => [x.id, { board: view(x), revision: x.revision, locale, observedAt: new Date(now).toISOString() }])),
+    cards: Object.fromEntries(boards.flatMap(x => x.cards.map(card => [card.id, { boardId: x.id, revision: x.revision, card, template: x.template,
+      history: x.history.filter(h => h.cardId === card.id), ...enteredOf(stageEntry(stageEntries(x), card)) }]))) };
+};
 // REQ-151: real overview and settings, synthetic workspace lists (0/1/3/10), old lead warning, damaged archive.
 const req151Reads = spec => {
   const [percent, locale, data = 'normal'] = spec.split('-'), count = data === 'empty' ? 0 : data === 'one' ? 1 : data === 'many' ? 10 : 3;
@@ -1186,7 +1269,7 @@ try {
   // REQ-135: =req135 the family line. REQ-136: =req136 only the English screen fixes (research/277) — early1, early2, req124, d47, req130,
   // req133, req134, req135 and req136 are all of it.
   // REQ-143: =req143 only the built-in banner line, the wide flow's loop labels and the phone's 건 table heading (research/347 X4·X9·X10).
-  const ONLY = process.env.KANBAN_WEB_ONLY ?? '', D47 = ONLY === 'd47', R130 = ONLY === 'req130', R133 = ONLY === 'req133', R134 = ONLY === 'req134', R135 = ONLY === 'req135', R136 = ONLY === 'req136', R137 = ONLY === 'req137', R125 = ONLY === 'req125', R52 = ONLY === 'req52', R125U1 = ONLY === 'req125u1', R125U2 = ONLY === 'req125u2', R125U3 = ONLY === 'req125u3', R125U4 = ONLY === 'req125u4', R138 = ONLY === 'req138', R139 = ONLY === 'req139', R142 = ONLY === 'req142', R143 = ONLY === 'req143', R145 = ONLY === 'req145', R148 = ONLY === 'req148', D64 = ONLY === 'd64', D62 = ONLY === 'd62', R149 = ONLY === 'req149', R151 = ONLY === 'req151', R152 = ONLY === 'req152', D67 = ONLY === 'd67';
+  const ONLY = process.env.KANBAN_WEB_ONLY ?? '', D47 = ONLY === 'd47', R130 = ONLY === 'req130', R133 = ONLY === 'req133', R134 = ONLY === 'req134', R135 = ONLY === 'req135', R136 = ONLY === 'req136', R137 = ONLY === 'req137', R125 = ONLY === 'req125', R52 = ONLY === 'req52', R125U1 = ONLY === 'req125u1', R125U2 = ONLY === 'req125u2', R125U3 = ONLY === 'req125u3', R125U4 = ONLY === 'req125u4', R138 = ONLY === 'req138', R139 = ONLY === 'req139', R142 = ONLY === 'req142', R143 = ONLY === 'req143', R145 = ONLY === 'req145', R148 = ONLY === 'req148', D64 = ONLY === 'd64', D62 = ONLY === 'd62', R149 = ONLY === 'req149', R151 = ONLY === 'req151', R152 = ONLY === 'req152', S760 = ONLY === 'scroll760', D67 = ONLY === 'd67', R156 = ONLY === 'req156', R157 = ONLY === 'req157', R161 = ONLY === 'req161';
   // Optional small foreground slices of req143 on a busy machine; default still runs the complete bundle.
   // 0:44, 44:88, ..., 220:264 cover D53; 'base' runs the earlier REQ-143 scenes. The first slice includes the component cases.
   const d53SliceText = process.env.KANBAN_WEB_D53_SLICE;
@@ -1212,7 +1295,7 @@ try {
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] }); await p.waitForTimeout(900);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] }); await p.waitForTimeout(400);
   };
-  if (ONLY !== 'req124' && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !D62 && !R149 && !R151 && !R152 && !E2) {
+  if (ONLY !== 'req124' && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !D62 && !R149 && !R151 && !R152 && !R157 && !S760 && !R156 && !R161 && !E2) {
   for (const mode of ['light', 'dark']) {
     const c = palette(PASEO_THEMES[mode]), scene = `wide-${mode}`, line = selectedLine(c, c.surface0);
     const p = await (await browser.newContext({ viewport: { width: 1400, height: 900 } })).newPage();
@@ -2083,7 +2166,7 @@ try {
   }
   // REQ-133: =early grew past ten minutes (588 s at 0.1.48, over 595 s now), so it runs as =early1 (the scenes above) and =early2
   // (from here); =early is still both. Their shared helpers are declared before the first half.
-  if (ONLY !== 'req124' && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !D62 && !R149 && !R151 && !R152 && !E1) {
+  if (ONLY !== 'req124' && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !D62 && !R149 && !R151 && !R152 && !R157 && !S760 && !R156 && !R161 && !E1) {
   // ---- REQ-95·96 by real input: the lead card first whatever the order, its head title, crown and stage edge; the orange of
   // an awaited answer; "Go to agent ↗" on hover and atop ⋯; "Response needed" to the agent that waits; the phone's sheet ----
   const opened = p => p.evaluate(() => window.__opened.slice());
@@ -2681,7 +2764,16 @@ try {
     await p.waitForSelector(byId('labs-note'), { timeout: 5000 }).catch(() => {});
     await p.waitForTimeout(500);
     check(scene, 'the lab on a phone', await visible(p, byId('labs-mail-toggle')) && await visible(p, byId('labs-mail-dir')));
+    const lg = await switchRow(p, 'setting-labs-mail', 'labs-mail-toggle', 'labs-mail-status');
+    check(scene, 'REQ-160 the lab switch right of its title, what it read under the description', switchBeside(lg, true) && underPlaced(lg, true), JSON.stringify(lg));
     await p.screenshot({ path: path.join(out, `${scene}-labs.png`) });
+    // REQ-160: the demo switch (shown behind the developer key) beside its title on a phone, too.
+    await p.locator(byId('settings-back')).first().tap(); await p.waitForTimeout(300);
+    await p.locator(byId('settings-open-about')).first().tap();
+    await p.waitForSelector(byId('demo-toggle'), { timeout: 5000 }).catch(() => {});
+    const dg = await switchRow(p, 'setting-demo', 'demo-toggle');
+    check(scene, 'REQ-160 the demo switch right of its title, at its height', switchBeside(dg, true), JSON.stringify(dg));
+    await p.screenshot({ path: path.join(out, `${scene}-about.png`) });
     check(scene, 'no page errors', errors.length === 0, errors.join(' | '));
     check(scene, 'nothing written', (await p.evaluate(() => window.__writes.length)) === 0);
     await p.context().close();
@@ -3232,7 +3324,7 @@ try {
       els.filter(e => e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1).map(e => e.innerText));
     check(scene, 'no label or note cut', cut.length === 0, JSON.stringify(cut));
   }
-  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !D62 && !R149 && !R151 && !R152) {
+  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !D62 && !R149 && !R151 && !R152 && !R157 && !S760 && !R156 && !R161) {
   // ---- REQ-124 2단위 (research/215·216·217): the wide lane heading's "보드 | 워크플로", only on the lane whose workspace holds
   // a workflow definition; the flow (steps, straight-angled lines, the diamond, the loops that went back, the chosen release's
   // way bold), the release × step table whose states are told apart ("기록 없음" is not "not done"), and a cell's evidence.
@@ -3377,7 +3469,7 @@ try {
     await p.context().close();
   }
   }
-  if (!EARLY && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !D62 && !R149 && !R151 && !R152) {
+  if (!EARLY && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !D62 && !R149 && !R151 && !R152 && !R157 && !S760 && !R156 && !R161) {
   // ---- REQ-126: every agent named "<label>-<version>-<thinking>" on the cards (a lead, a topic lead, a worker with "· +1", an old label, a
   // long label on a crowded card, no label, archived, unknown) and in the detail (assignees, author, the move's reason, the history) ----
   for (const [mode, mobile] of [['light', false], ['dark', false], ['light', true], ['dark', true]]) {
@@ -3437,7 +3529,7 @@ try {
     await p.context().close();
   }
   }
-  if (!EARLY && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !D62 && !R149 && !R151 && !R152) {
+  if (!EARLY && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !D62 && !R149 && !R151 && !R152 && !R157 && !S760 && !R156 && !R161) {
   // ---- D45: the wide detail's side panel (280px) keeps each assignee row on one line — a long label ("…_Astra-6-XHigh", also
   // the card's author), an old one ("실행_Sol-6-High"), new ones ("실행_Sol-6.1-High", with a second agent) — the name cut at its end,
   // the state and id whole; on 390px the rows read and wrap as before. ----
@@ -3665,7 +3757,7 @@ try {
   }
   fs.writeFileSync(path.join(out, 'd47.json'), JSON.stringify(d47Log, null, 2) + '\n');
   }
-  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !D62 && !R149 && !R151 && !R152) {
+  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req127' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !D62 && !R149 && !R151 && !R152 && !R157 && !S760 && !R156 && !R161) {
   // ---- research/210 (208-D1) kept, REQ-124 ③: on 390px no workflow button in this release (not even on the lane with a
   // definition); the gate's real names keep eight characters and more, the heading's parts side by side inside the screen. ----
   for (const [mode, lang] of [['light', 'en'], ['dark', 'en'], ['light', 'ko'], ['dark', 'ko']]) {
@@ -3703,7 +3795,7 @@ try {
     await p.context().close();
   }
   }
-  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !D62 && !R149 && !R151 && !R152) {
+  if (!EARLY && ONLY !== 'req126' && ONLY !== 'req128' && ONLY !== 'v0146b' && !D47 && !R130 && !R133 && !R134 && !R135 && !R136 && !R137 && !R125 && !R52 && !R125U1 && !R125U2 && !R125U3 && !R125U4 && !R138 && !R139 && !R142 && !R143 && !R145 && !R148 && !D64 && !D62 && !R149 && !R151 && !R152 && !R157 && !S760 && !R156 && !R161) {
   // ---- REQ-127: the board screen a lane's name opens has the lane's "보드 | 워크플로" too, beside its title — only for a workspace
   // with a definition, only on a wide window. The workflow takes the board's whole width in place of its columns; the choice is the
   // lane's own (one session value), so the lane shows what its board showed when it is left. 1400 and 1920, light and dark. ----
@@ -4653,7 +4745,9 @@ try {
       els.map(e => ({ text: e.innerText, cut: e.scrollWidth > e.clientWidth + 1 })));
     check(scene, 'the workspace names whole', names.length === 2 && names.every(n => !n.cut && !n.text.includes('…')) && names[0].text.includes('Example Workspace'), JSON.stringify(names));
     check(scene, 'read only: no switch in the lead lines', (await p.locator(byId('lead-status-list') + ' [role="switch"]').count()) === 0);
-    const helpLine = await p.locator(byId('setting-lead-status')).first().innerText();
+    // REQ-161: on a phone the way to change it is behind the ⓘ after the row's name (held, or read as its description).
+    const helpLine = mobile ? await p.locator(byId('info-setting-lead-status')).first().evaluate(e => document.getElementById(e.getAttribute('aria-describedby'))?.textContent ?? '')
+      : await p.locator(byId('setting-lead-status')).first().innerText();
     check(scene, 'it says how to change it', helpLine.includes(m.leadStatusHelp), helpLine);
     await p.screenshot({ path: path.join(out, `${scene}-settings.png`) });
     check(scene, 'no settings written', (await p.evaluate(() => window.__writes.length)) === 0);
@@ -6356,13 +6450,18 @@ try {
     await press(byId(wide ? 'settings-tab-about' : 'settings-open-about'));
     await p.waitForSelector(byId('setting-hidden-boards'), { timeout: 5000 }).catch(() => {});
     const rowText = await t138(p, byId('setting-hidden-boards'));
-    check(scene, 'About: "Hidden empty boards" with its count and help', rowText.includes(m.hiddenBoards) && rowText.includes(m.hiddenBoardsHelp)
+    // REQ-161: a phone shows the short line, the whole help behind the ⓘ after the name (its description).
+    const about138 = wide ? m.hiddenBoardsHelp : m.hiddenBoardsShort, behind138 = wide ? m.hiddenBoardsHelp
+      : await p.locator(byId('info-setting-hidden-boards')).first().evaluate(e => document.getElementById(e.getAttribute('aria-describedby'))?.textContent ?? '').catch(() => '');
+    check(scene, 'About: "Hidden empty boards" with its count and help', rowText.includes(m.hiddenBoards) && rowText.includes(about138) && behind138 === m.hiddenBoardsHelp
       && await t138(p, byId('hidden-boards-count')) === m.hiddenBoardsCount(1), rowText);
     check(scene, 'the switch off, named for a screen reader', (await p.locator(byId('hidden-boards-toggle')).first().getAttribute('aria-checked')) === 'false'
       && (await p.locator(byId('hidden-boards-toggle')).first().getAttribute('aria-label')) === m.hiddenBoardsShow);
     const rb = await box(p, byId('setting-hidden-boards')), sb = await box(p, byId('hidden-boards-toggle'));
     check(scene, 'the row in the window, not cut', !!rb && rb.x >= 0 && rb.x + rb.width <= W + .5 && (await cut138(p, byId('setting-hidden-boards') + ' div')).length === 0, JSON.stringify(rb));
     if (!wide) check(scene, 'the switch reachable by a finger (8px slop around 40×22)', !!sb && sb.width >= 40 && sb.height >= 22, JSON.stringify(sb));
+    const hg = await switchRow(p, 'setting-hidden-boards', 'hidden-boards-toggle', null), cb = await box(p, byId('hidden-boards-count'));
+    check(scene, 'REQ-160 the switch (its count beside it) right of the title, at its height', switchBeside(hg, !wide) && !!cb && cb.x >= hg.help.right - .5 && cb.x + cb.width <= hg.sw.left + .5, JSON.stringify({ hg, cb }));
     for (const id of ['hidden-boards-count']) { const v = await paint138(p, byId(id)), r = contrast(rgb(v.fg), rgb(v.bg));
       check(scene, id + ' 4.5:1', r >= 4.5, r.toFixed(2)); }
     if (lang === 'en') check(scene, 'English: no Hangul in the row', !/[ᄀ-ᇿ㄰-㆏가-힣]/.test(rowText));
@@ -7463,7 +7562,13 @@ try {
   if (ONLY === '' || R151) await req151Scenes({ browser, page, out, check, byId });
   // D67: the phone settings sheet's height, its list's end and taps inside it (research/479).
   if (ONLY === '' || D67) fs.writeFileSync(path.join(out, 'd67-geometry.json'), JSON.stringify(await d67Scenes({ browser, page, out, check, byId }), null, 1) + '\n');
+  if (ONLY === '' || R157) await req157Scenes({ browser, page, out, check, byId, clickAt, copy });
+  if (ONLY === '' || S760) await runScroll760({ browser, page, out, check, byId, copy });
   if (ONLY === '' || R152) await runReq152({ browser, page, out, check, byId, clickAt, longPress, copy });
+  // REQ-156: the new-version notice — the gear's dot, About's line and commands, the switch (research/485).
+  if (ONLY === '' || R156) await runReq156({ browser, page, out, check, byId });
+  // REQ-161: a phone row's short line and its ⓘ held for the whole description; the wide window's shortened descriptions (research/509).
+  if (ONLY === '' || R161) await runReq161({ browser, page, out, check, byId });
 } catch (error) {
   // J3′: a scene that throws (a wait that timed out) is reported with the checks so far, not lost with them.
   check('runner', 'stopped by an error', false, String(error?.stack ?? error).split('\n').slice(0, 3).join(' | '));

@@ -7,6 +7,7 @@ import { OverviewScreen } from '../../client/overview.js';
 import { BoardScreen } from '../../client/board.js';
 import { SignalContext } from '../../client/signal-context.js';
 import { useLiveSignals } from '../../client/agent-signals.js';
+import { updateCheckKey } from '../../shared/update-check.js';
 
 type Reads = { overview: Record<string, unknown>; boards: Record<string, Record<string, unknown>> };
 type Snapshot = { boardId: string; revision: string; card: Record<string, unknown> & { id: string; stageId: string };
@@ -21,7 +22,9 @@ type Fixture = Reads & { later?: Reads; ui: Record<string, unknown>; agents?: un
   sidebarApi?: boolean;
   entry?: { api: string; workspace: boolean; panelOpen: boolean; platform: 'web' | 'ios' | 'android'; problem?: string } };
 declare global { interface Window { __FIXTURE__: Fixture; __writes: unknown[]; __calls: string[]; __inputs: { name: string; input: unknown }[];
-  __settingsValues: () => { archiveDays: number; autoCards: boolean; autoRefresh: boolean; workspaceOff: string[] }; __settingsFailNext?: string | null; __settingsDelayNext?: number; __remember: () => void; __failNext: 'failed' | 'lost' | null; __cards: Map<string, Snapshot>; __opened: [string, string][];
+  __settingsValues: () => { archiveDays: number; autoCards: boolean; autoRefresh: boolean; workspaceOff: string[] }; __settingsFailNext?: string | null; __settingsDelayNext?: number; __remember: () => void; __failNext: 'failed' | 'lost' | 'autoControl' | null;
+  /** D66 G2: the next resume refused with this code (E_AUTO_CONTROL, E_AUTO_STALE); a resume otherwise turns the card's tracking on. */
+  __resumeFail?: string | null; __cards: Map<string, Snapshot>; __opened: [string, string][];
   __busyOff: (cardId: string) => boolean;
   /** REQ-130: a busy mark turned on (the detail's memo, kanban.v1.busy.set) and a live agent event (the host's directory). */
   __busyOn: (cardId: string, mark: { text: string; since: string; by: string }) => void; __agentUpsert: (agent: Record<string, unknown>) => void;
@@ -37,7 +40,8 @@ window.__writes = []; window.__calls = []; window.__inputs = [];
 let autoOff: string[] = [];
 window.__settingsValues = () => ({ archiveDays: Number((reads.overview.autoArchive as { days?: number } | undefined)?.days ?? 7),
   autoCards: reads.overview.autoCards !== false, autoRefresh: ui.settings?.autoRefresh !== false, workspaceOff: [...autoOff] });
-const respond = (value: unknown) => ({ ok: true, data: { ...(value as object), about: { version: 'harness' } }, committed: false, warnings: [] });
+// REQ-156: a fixture may name the running version (the new-version line says it); every other read says "harness" as before.
+const respond = (value: unknown) => ({ ok: true, data: { about: { version: 'harness' }, ...(value as object) }, committed: false, warnings: [] });
 // REQ-88: every card as `kanban.v1.card.get` answers it, changed by the writes below (a field's update, a move), each write
 // one revision later on its board. `window.__failNext` refuses the next write ('failed') or loses its reply after applying it ('lost').
 const cards = new Map(Object.entries(structuredClone(fixture.cards ?? {})));
@@ -117,7 +121,9 @@ window.__rpc = async (name, input) => {
         ...((summary as { busy?: string }).busy ? { busy: (summary as { busy?: string }).busy } : {}) }; }),
     // REQ-90: like the server, the message folder's fingerprint to a look that says its host, while the lab's badge is on.
     ...(value.hostId && (reads.overview as { mail?: { key: string } }).mail && (ui.settings as { labs?: { mail?: boolean } } | undefined)?.labs?.mail
-      ? { mail: (reads.overview as { mail: { key: string } }).mail.key } : {}) });
+      ? { mail: (reads.overview as { mail: { key: string } }).mail.key } : {}),
+    // Gate 486 F4: like the server, the fingerprint of the new-version reading it would send now (none from an older server).
+    ...(reads.overview.updateCheck ? { updates: updateCheckKey(reads.overview.updateCheck as Parameters<typeof updateCheckKey>[0]) } : {}) });
   // REQ-124: a lane's workflow as the server read it from the fixture's made-up workspace (tests/fixtures/workflow-fixtures.mjs).
   if (name === 'kanban.v1.workflow.get') {
     const data = (reads as { workflow?: Record<string, unknown> }).workflow?.[String(value.workspaceId)];
@@ -147,6 +153,14 @@ window.__rpc = async (name, input) => {
   const archived52 = (reads as { archived?: Record<string, Archived> }).archived;
   const views52 = (id: string) => [...new Set([...Object.values(reads.boards).map(b => b.board as View52), ...((reads.overview.boardViews ?? []) as View52[])])]
     .filter(v => v.summary.id === id);
+  // REQ-156: the new-version switch for the whole plugin — off shows nothing, on shows nothing until the next read (gate 486: the
+  // server keeps its cache, and the next read carries the kept answer again if it is under seven days old).
+  if (name === 'kanban.v1.update_check.set') {
+    const before = (reads.overview.updateCheck as { enabled?: boolean } | undefined)?.enabled, enabled = value.enabled === true;
+    reads.overview.updateCheck = { enabled };
+    for (const b of Object.values(reads.boards)) (b as Record<string, unknown>).updateCheck = { enabled };
+    return respond({ enabled, changed: before !== enabled });
+  }
   if (name === 'kanban.v1.archive.settings.set') {
     const before = (reads.overview.autoArchive as { days?: number } | undefined)?.days, days = Number(value.days);
     reads.overview.autoArchive = { days };
@@ -226,6 +240,9 @@ window.__rpc = async (name, input) => {
     const fail = window.__failNext; window.__failNext = null;
     if (fail === 'failed') return { ok: false, committed: false, error: { code: 'E_LOCK_TIMEOUT', message: 'Synthetic refusal.', target: String(value.boardId),
       nextAction: 'Retry.', details: null } };
+    // D66 G2: as the server when the card's automatic-move decision cannot be read or saved first.
+    if (fail === 'autoControl') return { ok: false, committed: false, error: { code: 'E_AUTO_CONTROL', message: 'The change was not saved.', target: String(value.boardId),
+      nextAction: 'Check the data folder, then send the same change again.', details: null } };
     const own = [...cards.values()].filter(c => c.boardId === value.boardId);
     // REQ-149 / J5: the live check-up fixture uses the same board-wide revision refusal as the store.
     if ((fixture as { liveMoves?: boolean }).liveMoves && value.ifRevision && value.ifRevision !== own[0]?.revision)
@@ -286,6 +303,15 @@ window.__rpc = async (name, input) => {
       view.summary.groups = (view.summary.groups ?? '') + '*';
     }
     return respond({ lead, previous, changed: lead !== previous });
+  }
+  // D66 G2: a resume by the detail's token — refused once with `window.__resumeFail`, else the card's tracking is on again.
+  if (name === 'kanban.v1.auto_cards.resume') {
+    const fail = window.__resumeFail; window.__resumeFail = null;
+    if (fail) return { ok: false, committed: false, error: { code: fail, message: 'Synthetic refusal.', target: String(value.cardId), nextAction: 'Retry.', details: null } };
+    const snapshot = cards.get(String(value.cardId)) as (Snapshot & { tracking?: unknown; trackingToken?: unknown }) | undefined;
+    if (snapshot) { snapshot.tracking = { state: 'on', since: null }; delete snapshot.trackingToken; }
+    return respond({ resumed: 1, committed: true, replayed: false, mode: 'managed',
+      token: { controlEpoch: String(value.controlEpoch), generation: Number(value.generation) + 1, decisionId: String(value.decisionId), card: String(value.card) } });
   }
   if (name === 'kanban.v1.auto_cards.workspace.set') {
     const key = String(value.cwd).replace(/[\\/]+$/, ''), on = value.enabled === true;

@@ -58,7 +58,8 @@ export function useMovedBoards<B extends BoardDTO>(hostId: string, boards: B[], 
 }
 
 export interface MoveRequest { boardId: string; revision: string; cardId: string; to: string }
-export type MoveResult = { ok: true; revision: string } | { ok: false; unknown: boolean };
+/** D66 G2: `storage` — refused because the card's automatic-move decision could not be read or saved (E_AUTO_CONTROL). */
+export type MoveResult = { ok: true; revision: string } | { ok: false; unknown: boolean; storage?: boolean };
 /**
  * REQ-82: one person's move of one card, through the same `board.mutate` as the detail's save (actor user), so the
  * REQ-74 pause applies. When the board changed since it was read, the latest board is read and the move is sent
@@ -75,6 +76,7 @@ export function useMoveSender() {
       catch { return { ok: false, unknown: true }; }
       if (reply.ok) return { ok: true, revision: reply.data.revision };
       if (reply.committed === 'unknown') return { ok: false, unknown: true };
+      if (reply.error.code === 'E_AUTO_CONTROL') return { ok: false, unknown: false, storage: true };
       if (reply.error.code !== 'E_REVISION_CONFLICT' || attempt) return { ok: false, unknown: false };
       try {
         const latest = await read({ boardId });
@@ -115,7 +117,7 @@ export function useArchiveSender() {
 }
 /** A move made, for its undo: where it put the card and the revision it produced. */
 export interface UndoRequest { boardId: string; cardId: string; movedTo: string; revision: string }
-export type UndoResult = { ok: true; revision: string; to: string } | { ok: false; unknown: boolean; meanwhile?: boolean };
+export type UndoResult = { ok: true; revision: string; to: string } | { ok: false; unknown: boolean; meanwhile?: boolean; storage?: boolean };
 /**
  * REQ-82 G1: undo is one more move by a person, back to the stage the ledger had the card in right before the move
  * (`undoTarget`), read from the card's history at the time of the undo — not the stage the screen showed. If the
@@ -136,6 +138,7 @@ export function useUndoSender() {
       catch { return { ok: false, unknown: true }; }
       if (reply.ok) return { ok: true, revision: reply.data.revision, to };
       if (reply.committed === 'unknown') return { ok: false, unknown: true };
+      if (reply.error.code === 'E_AUTO_CONTROL') return { ok: false, unknown: false, storage: true };
       if (reply.error.code !== 'E_REVISION_CONFLICT') return { ok: false, unknown: false };
     }
     return { ok: false, unknown: false };
@@ -244,7 +247,7 @@ export function useQuickMoves({ hostId, enabled, touch, boards, refresh, m, colo
     refresh();
     if (!alive.current) return;
     hold(cardId, false);
-    if (!result.ok) { setToast({ text: result.unknown ? m.moveUnknown : m.moveFailed, error: true }); return; }
+    if (!result.ok) { setToast({ text: result.unknown ? m.moveUnknown : result.storage ? m.storageRetry : m.moveFailed, error: true }); return; }
     setToast({ text: m.movedTo(stageName(board, to)), undo: { boardId: request.boardId, cardId, movedTo: to, revision: result.revision } });
   };
   const move = (boardId: string, cardId: string, to: string) => {
@@ -271,7 +274,7 @@ export function useQuickMoves({ hostId, enabled, touch, boards, refresh, m, colo
     if (!alive.current) return;
     hold(back.cardId, false);
     setToast(result.ok ? { text: m.movedBack(shownBoard ? stageName(shownBoard, result.to) : result.to) }
-      : { text: result.meanwhile ? m.undoMeanwhile : result.unknown ? m.moveUnknown : m.moveFailed, error: true });
+      : { text: result.meanwhile ? m.undoMeanwhile : result.unknown ? m.moveUnknown : result.storage ? m.storageRetry : m.moveFailed, error: true });
   };
   const leave = useAgentLeave({ openAgent: navigation ? input => navigation.openAgent(input) : undefined, here, colors, m, platform, mobile: touch });
   const jump = (boardId: string, agentId: string | undefined) =>

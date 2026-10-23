@@ -1,3 +1,4 @@
+import { useOverviewScroll, type OverviewScrollMemory } from './overview-scroll.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import { ScrollView } from '@getpaseo/plugin/client/react-native';
@@ -38,6 +39,8 @@ import { Detail } from './detail.js';
 import { CreateDraft } from './create.js';
 import type { BoardFilters } from './filter-model.js';
 import { SettingsSheet, useSettingsWindow } from './settings-sheet.js';
+import { useUpdateCheck } from './update-check.js';
+import { updateDot } from './update-model.js';
 import { MailBadge } from './mail-badge.js';
 import { RefreshStatus } from './refresh-status.js';
 import { QuickMoveContext, useQuickMoves } from './quick-move.js';
@@ -54,8 +57,8 @@ import { ArchivedSheet, archivedDoneOf, DoneHeadTools, TidyConfirm, TidyNote, us
 import { useCheckup } from './checkup.js';
 import { px } from './ui-scale.js';
 
-export function MobileSwimlaneScreen({ width, onList, onBoard, preview = false, onPreview = () => {}, ...props }: PluginSurfaceProps & {
-  width: number; onList: () => void; onBoard: (id: string) => void; preview?: boolean; onPreview?: (value: boolean) => void;
+export function MobileSwimlaneScreen({ width, onList, onBoard, scrollMemory, preview = false, onPreview = () => {}, ...props }: PluginSurfaceProps & {
+  scrollMemory?: OverviewScrollMemory | undefined; width: number; onList: () => void; onBoard: (id: string) => void; preview?: boolean; onPreview?: (value: boolean) => void;
 }) {
   const scope = props.host.id + ':surface' + (preview ? ':demo' : ''), source = useBoardSource(props.host.id, preview);
   const hidden = useHiddenProjects(scope, props.host.id, source.hiddenProjects, !preview);
@@ -69,13 +72,16 @@ export function MobileSwimlaneScreen({ width, onList, onBoard, preview = false, 
   const workspaceAuto = useWorkspaceAutoCards(scope, source.autoCardsOff, !preview, source.settingsRead);
   // REQ-52: as on the wide board — the days (settings), "Tidy" on the Done tab and a workspace's archived list (its ⋯ sheet).
   const autoArchive = useAutoArchive(scope, source.autoArchive, !preview, source.settingsRead);
+  // REQ-156: as on the wide board.
+  const updateCheck = useUpdateCheck(scope, source.updateCheck, !preview, source.settingsRead);
   const [tidy, setTidy] = useState<{ boardId: string; ask: boolean; text?: string } | null>(null);
   const [archivedOf, setArchivedOf] = useState<{ boardId: string; name: string; stages: { stageId: string; name: string }[] } | null>(null);
   // REQ-148: '' until a tab is chosen (or the screen opened on one, below); the tab shown is the model's `stageId`.
   const [chosen, setSelected] = useSessionValue(scope, 'mobileStage', '');
   const [beforeAttention, setBeforeAttention] = useSessionValue(scope, 'mobileBeforeAttention', 'doing');
   // The stage tabs already sit outside the scroll view; the vertical offset stays out of React state (REQ-26 ⑨).
-  const store = sessionFor(scope), startY = useRef(Number(store.get('mobileScrollY') ?? 0)).current, sections = useRef(null);
+  const store = sessionFor(scope), startY = useRef(scrollMemory ? 0 : Number(store.get('mobileScrollY') ?? 0)).current, sections = useRef(null);
+  const scrollPosition = useOverviewScroll(scrollMemory, sections, source.ready && !source.loading && !source.placing && !source.localePending);
   // REQ-75 B1: a long press on a workspace name shows it whole; a tap opens its board.
   const [namesExpanded, setNamesExpanded] = useSessionValue<Record<string, boolean>>(scope, 'expandedNames', {});
   // REQ-75 A2/A3: the same switch as the wide board, in the filter sheet.
@@ -129,7 +135,8 @@ export function MobileSwimlaneScreen({ width, onList, onBoard, preview = false, 
   // its own in the top bar; it is the settings sheet's first row, and ⚙ carries how many cards it found.
   const checkupBoards = useMemo(() => source.boards.filter(b => !filters.hiddenProjects.includes(workspaceEntry(source.directory, b.summary.workspaceId, b.summary.cwd)?.projectId ?? '')),
     [source.boards, source.directory, hiddenKey]);
-  const checkup = useCheckup({ hostId: props.host.id, scope, source: signalSource, boards: checkupBoards, enabled: !preview && source.ready, refresh: source.refresh });
+  const checkup = useCheckup({ hostId: props.host.id, scope, source: signalSource, boards: checkupBoards, enabled: !preview && source.ready, refresh: source.refresh,
+    agents: agentLinks });
   const boardName = (boardId: string) => { const board = source.boards.find(b => b.summary.id === boardId);
     return board ? workspaceName(board.summary.workspaceId, board.summary.cwd, source.directory) : ''; };
   const options = { query: filters.query, labels: filters.labels, ...(source.labels ? { workspaceLabels: source.labels } : {}), projects, orphaned, order, grouped, cardOrder, archived, agents: agentLinks };
@@ -203,7 +210,7 @@ export function MobileSwimlaneScreen({ width, onList, onBoard, preview = false, 
       : name + (detail ? ' · ' + detail : '');
     // research/179 D1: a tip hanging from the heading (the mail badge's) runs past a short section, and the next section,
     // drawn later, would cover it; while one shows, this section and its project lift themselves (`TipLayer`, REQ-86).
-    return <TipLayer key={id} testID={'mobile-workspace-' + id} style={{ paddingLeft: indent, marginTop }}>
+    return <TipLayer key={id} viewRef={scrollPosition.laneRef(lane.workspaceKey)} testID={'mobile-workspace-' + id} style={{ paddingLeft: indent, marginTop }}>
       {/* Pinned inside this workspace section only, so the next section's heading pushes it out. */}
       <View testID="mobile-workspace-heading" style={{ ...sticky(flat ? 0 : projectHeaderHeight()),
         minHeight: MOBILE.contextHeight, flexDirection: 'row', alignItems: 'center', gap: px(4), marginLeft: flat ? -indent : 0 }}>
@@ -315,8 +322,9 @@ export function MobileSwimlaneScreen({ width, onList, onBoard, preview = false, 
       badge={mailboxBadge} onPress={() => openMailbox()} />] : []),
     <IconButton key="view" testID="view-toggle" name="List" label={m.listView} colors={c} mobile disabled={preview}
       onPress={() => { if (!preview) onList(); }} />,
-    <IconButton key="settings" testID="open-settings" name="Settings" label={checkup.count ? m.checkupSettingsBadge(checkup.count) : m.settings} colors={c} mobile
-      badge={checkup.count} buttonRef={settingsWindow.opener} onPress={settingsWindow.open} />,
+    <IconButton key="settings" testID="open-settings" name="Settings" label={checkup.count ? m.checkupSettingsBadge(checkup.count) + (updateDot(updateCheck) ? ' · ' + m.updateAvailableShort : '')
+        : updateDot(updateCheck) ? m.settingsUpdateBadge : m.settings} colors={c} mobile
+      badge={checkup.count} dot={updateDot(updateCheck)} buttonRef={settingsWindow.opener} onPress={settingsWindow.open} />,
   ];
   const crowded = crowdedTitleRow(width, glyphs.length, px(4));
   // D60: crowded, the glyphs keep one line under the title — closer together, or the last beside the title.
@@ -351,7 +359,8 @@ export function MobileSwimlaneScreen({ width, onList, onBoard, preview = false, 
     <MobileControls stages={stages} selected={selected} attention={filters.attention} count={model.attention}
       onStage={setSelected} onAttention={() => updateFilters({ attention: !filters.attention })} colors={c} m={m} />
     <ScrollView testID="mobile-workspace-sections" ref={sections} style={{ flex: 1, minHeight: 0 }} contentOffset={{ x: 0, y: startY }}
-      onScroll={event => { store.set('mobileScrollY', event.nativeEvent.contentOffset.y); }} scrollEventThrottle={16}
+      onLayout={scrollPosition.onLayout} onContentSizeChange={scrollPosition.onContentSizeChange}
+      onScroll={event => { const y = event.nativeEvent.contentOffset.y; store.set('mobileScrollY', y); scrollPosition.remember(y); }} scrollEventThrottle={16}
       contentContainerStyle={{ paddingBottom: bottom }}>
       {source.loading && !source.ready && <Notice text={m.loading} colors={c} />}
       {!!source.error && <Notice text={source.error} colors={c} error />}
@@ -386,7 +395,7 @@ export function MobileSwimlaneScreen({ width, onList, onBoard, preview = false, 
       leads={workspaceLeadEntries(source.boards, source.directory, agentLinks, archived, m)}
       about={source.about} connection={{ host: props.host.label, observedAt: source.observedAt }} colors={c} m={m} platform={props.layout.platform}
       demo={{ on: preview, onChange: toggleDemo }} orderReset={{ enabled: arrange.arranged, onReset: arrange.resetAll }}
-      labs={{ mail: source.mail, onChange: source.revalidate }} autoArchive={autoArchive} hiddenBoards={source.hiddenBoards}
+      labs={{ mail: source.mail, onChange: source.revalidate }} autoArchive={autoArchive} hiddenBoards={source.hiddenBoards} updateCheck={updateCheck}
       checkup={preview ? undefined : { count: checkup.count, onOpen: () => { settingsWindow.sheet.onClose(); checkup.open(); } }} />
     {!preview && archivedOf && <ArchivedSheet open boardId={archivedOf.boardId} name={archivedOf.name} stages={archivedOf.stages}
       onClose={() => setArchivedOf(null)} onChanged={source.refresh} colors={c} m={m} platform={props.layout.platform} mobile />}

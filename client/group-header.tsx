@@ -1,4 +1,4 @@
-import { useCallback, useContext, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useContext, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Pressable, Text, View, type ViewStyle } from 'react-native';
 import { Button, IconButton, RaiseTip, TIP, usePointerTip, useTipPlace } from './components.js';
 import { LaneProgress } from './progress.js';
@@ -25,11 +25,11 @@ export function ProjectIcon({ group, m }: { group: ProjectGroup; m: Copy }) {
  * its children through untouched, so a hover re-renders the layers only, never the cards. REQ-80: every glyph's tip
  * raises through the same context (`useTipPlace`), so a lane glyph's tip, now below it, is drawn over the columns too.
  */
-export function TipLayer({ testID, style, children }: { testID?: string; style?: ViewStyle; children: ReactNode }) {
+export function TipLayer({ testID, style, children, viewRef }: { viewRef?: Ref<View> | undefined; testID?: string; style?: ViewStyle; children: ReactNode }) {
   const [raised, setRaised] = useState(false), parent = useContext(RaiseTip);
   const raise = useCallback((shown: boolean) => { setRaised(shown); parent(shown); }, [parent]);
   return <RaiseTip.Provider value={raise}>
-    <View testID={testID} style={{ ...style, ...(raised ? { zIndex: 1 } : {}) }}>{children}</View>
+    <View ref={viewRef} testID={testID} style={{ ...style, ...(raised ? { zIndex: 1 } : {}) }}>{children}</View>
   </RaiseTip.Provider>;
 }
 /**

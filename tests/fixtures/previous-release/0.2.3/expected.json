@@ -1,0 +1,110 @@
+{
+  "release": "0.2.3",
+  "commit": null,
+  "boardId": "board_98a296c7bded134675a04ea738200c1e065a27c38f60c3dea442d4ead69a2942",
+  "cwd": "/tmp/kanban-previous-fixture/0.2.3/project",
+  "agents": {
+    "5605e0dc-8d18-4055-83fb-abfa2e45f0c3": "card_0ff66704-581f-4945-8b11-e0682d3bf3a4",
+    "38fa48f5-6cae-49e5-84dc-110c66453293": "card_905951c1-d70e-4555-88cd-232761d9b3c5",
+    "9bbd17e1-2906-474e-8cec-10b485e1b73b": "card_2057ab83-7220-4c48-80e1-5383606b7e55",
+    "3dfd93b4-4168-482b-8680-9d8b46969cb3": "card_ca748d34-7560-4c0b-8321-1c01004cd931",
+    "8ebd1fbf-d77a-4312-8c75-d123c7d96828": "card_bfbf9617-c6ab-4c15-84f4-a31c8ec68c65",
+    "c9a02b73-6daf-4806-8352-8af7f6b7a741": "card_22a76ae5-b91e-4ee5-8b14-5ed2d88b3a01",
+    "09462d2c-3286-47e9-84ac-b3ff7ee927b4": "card_2503c0fd-9035-4661-81f5-363014cd315e",
+    "61caa4bf-3bf7-46ef-8f62-87d2ecbe2a56": "card_53901ae4-70c2-4f89-8dfd-5b7d17cc833d",
+    "0844661f-da14-47f9-83d6-d9544968597f": "card_184c0da7-f21e-4512-8113-02c00046c536",
+    "1b5499af-b1bb-46c4-895b-b523276dee9a": "card_c89159c8-bc5a-4b97-88e9-84fe2b2dec13"
+  },
+  "cases": [
+    {
+      "name": "engine moved it last (doing)",
+      "cardId": "card_c89159c8-bc5a-4b97-88e9-84fe2b2dec13",
+      "mode": "managed",
+      "why": "the newest stage record is the engine's remembered move"
+    },
+    {
+      "name": "engine moved it last (review)",
+      "cardId": "card_184c0da7-f21e-4512-8113-02c00046c536",
+      "mode": "managed",
+      "why": "the newest stage record is the engine's remembered move"
+    },
+    {
+      "name": "a person completed it",
+      "cardId": "card_53901ae4-70c2-4f89-8dfd-5b7d17cc833d",
+      "mode": "paused",
+      "why": "a completion stage is protected"
+    },
+    {
+      "name": "a person moved it and the engine paused",
+      "cardId": "card_2503c0fd-9035-4661-81f5-363014cd315e",
+      "mode": "paused",
+      "why": "the memory holds the pause"
+    },
+    {
+      "name": "a person moved it, the engine never saw",
+      "cardId": "card_22a76ae5-b91e-4ee5-8b14-5ed2d88b3a01",
+      "mode": "paused",
+      "why": "the newest stage record is a person's"
+    },
+    {
+      "name": "resumed in that release, not moved since",
+      "cardId": "card_bfbf9617-c6ab-4c15-84f4-a31c8ec68c65",
+      "mode": "paused",
+      "why": "the newest stage record is still the person's"
+    },
+    {
+      "name": "resumed in that release and moved by the engine since",
+      "cardId": "card_ca748d34-7560-4c0b-8321-1c01004cd931",
+      "mode": "managed",
+      "why": "the newest stage record is the engine's remembered move"
+    },
+    {
+      "name": "linked, nothing remembered",
+      "cardId": "card_bf1c89bc-9a4d-404e-8d54-4c875b7189cd",
+      "mode": "unknown",
+      "why": "a link without the engine's memory needs a check"
+    },
+    {
+      "name": "arranged by a person, then linked",
+      "cardId": "card_dc436869-1472-415f-83e6-e76dc27c3afd",
+      "mode": "unknown",
+      "why": "a link without the engine's memory needs a check"
+    },
+    {
+      "name": "its own agent moved it with the CLI",
+      "cardId": "card_2057ab83-7220-4c48-80e1-5383606b7e55",
+      "mode": "unknown",
+      "why": "the newest stage record is an agent's, not the remembered move"
+    },
+    {
+      "name": "a person's card, never linked",
+      "cardId": "card_cdcdb6db-f16d-4f3f-89d9-04a32d839e03",
+      "mode": "unowned",
+      "why": "never tracked"
+    },
+    {
+      "name": "a person's card arranged, never linked",
+      "cardId": "card_47d6ea23-85b9-4d23-8078-dd8019f96019",
+      "mode": "unowned",
+      "why": "arranging an untracked card decides nothing"
+    },
+    {
+      "name": "a person's card completed, never linked",
+      "cardId": "card_ad94d3f6-e394-48fe-8bce-37f045790786",
+      "mode": "paused",
+      "why": "a completion stage is protected"
+    },
+    {
+      "name": "completed and archived",
+      "cardId": "card_905951c1-d70e-4555-88cd-232761d9b3c5",
+      "mode": "paused",
+      "why": "a completion stage is protected"
+    },
+    {
+      "name": "remembered, its agent unlinked",
+      "cardId": "card_0ff66704-581f-4945-8b11-e0682d3bf3a4",
+      "mode": "unknown",
+      "why": "no linked agent's memory names the newest stage record"
+    }
+  ]
+}

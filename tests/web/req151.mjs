@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { req151Races } from './req151-races.mjs';
+import { switchBeside, switchRow } from './req160.mjs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { copy } from '../../dist/client/i18n.js';
@@ -123,6 +124,13 @@ export async function req151Scenes({ browser, page, out, check, byId }) {
           && await p.locator(byId('automation-tabs') + ' [aria-selected="true"]').count() === 1);
         check(scene, tab + ': original title and help retained', (await el('automation-panel-' + tab).textContent()).includes(tab === 'cards' ? m.autoCardsHelp : tab === 'archive' ? m.autoArchiveHelp : m.autoRefreshHelp));
         const before = await geometryCheck(tab);
+        // REQ-160: each switch right of its title, at its height — on a phone too, as the workspace list has it.
+        for (const [row, toggle] of tab === 'cards' ? [['setting-auto-cards', 'auto-cards-toggle']] : tab === 'status'
+          ? [['setting-auto-refresh', 'auto-refresh-toggle'], ['setting-update-check', 'update-check-toggle']] : []) {
+          if (!(await el(row).count())) continue;
+          const g = await switchRow(p, row, toggle); geometry.push({ scene, suffix: 'req160-' + row, ...g });
+          check(scene, 'REQ-160 ' + toggle + ': right of the title, at its height', switchBeside(g, mobile), JSON.stringify(g));
+        }
         if (data === 'normal') await shot(tab);
         if (tab === 'cards' && data !== 'empty') {
           const count = data === 'one' ? 1 : data === 'many' ? 10 : 3;
@@ -163,6 +171,10 @@ export async function req151Scenes({ browser, page, out, check, byId }) {
           check(scene, 'archive days still saved', await el('auto-archive-14').getAttribute('aria-checked') === 'true' && await p.evaluate(() => window.__inputs.some(v => v.name === 'kanban.v1.archive.settings.set' && v.input.days === 14)));
         } else if (tab === 'status') {
           check(scene, 'lead list expanded with original read-only explanation', data === 'empty' ? await el('lead-status-list').count() === 0 : (await el('setting-lead-status').textContent()).includes(m.leadStatusHelp));
+          if (data !== 'empty') { // REQ-159: both switches sit above the lead list
+            const ys = await p.evaluate(() => { const y = id => document.querySelector('[data-testid="' + id + '"]')?.getBoundingClientRect().top; return { refresh: y('setting-auto-refresh'), check: y('setting-update-check'), list: y('setting-lead-status') }; });
+            check(scene, 'REQ-159: switches above the lead list', ys.refresh < ys.list && (ys.check === undefined || ys.check < ys.list), JSON.stringify(ys));
+          }
           if (data === 'unusable') check(scene, 'unusable lead indicated in tab text and accessible name', (await el('automation-tab-status').textContent()).includes('!') && (await el('automation-tab-status').getAttribute('aria-label')).includes(m.automationNeedsAttention));
           if (await el('auto-refresh-toggle').getAttribute('aria-checked') === 'false') await press('auto-refresh-toggle');
           await press('auto-refresh-toggle'); await settled();

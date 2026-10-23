@@ -33,6 +33,9 @@ import { createKanbanError, isKanbanError, type KanbanError,
      type Locale,
      } from '../../shared/core/domain.js';
 import { O_DIRECTORY, O_NOFOLLOW, flushAccess, isWindows, renameOver } from './durable.js';
+import { AUTO_CONTROL_BYTES, AUTO_CONTROL_DIR, cardSeen, commitDecisions, emptyControl, mayDecide, parseControl, rebaseReport, seen, reconcile, type AutoControl, type ControlEntry,
+    type ControlEvidence, type ControlToken, type RebaseKind, type RememberedEntry } from './auto-control.js';
+import { readAutoState } from './auto-state.js';
 export interface CommitEffect {
     status: 'written' | 'unchanged' | 'skipped' | 'failed';
     warnings: Warning[];
@@ -97,6 +100,40 @@ export interface MutationInput {
     ifRevision?: Revision;
     operations: Operation[];
 }
+/**
+ * D66: a write of the automatic cards, through their own entry point (`Store.autoMutate`). `expect` is the card decision
+ * token the engine judged by (`readAutoControl`); a move is committed only while the card is still `managed` under it.
+ */
+export interface AutoMutationInput {
+    agentId: string;
+    requestId: string;
+    ifRevision?: Revision;
+    expect?: ControlToken;
+    operations: Operation[];
+}
+/** D66: the card decisions of one board as they hold now — the file reconciled with the ledger in memory, nothing written. */
+export interface ControlView {
+    /**
+     * Gate 489 F1 (research/477 설계보완 §9): `unreadable` — the file could not be read for a passing reason (permissions,
+     * I/O, a newer schema): held, and every change that could decide is refused until it reads again. `damaged` — its bytes
+     * are no decision file (not JSON, another board's, a wrong shape): the first look under the board's lock sets it aside
+     * and starts the board again from its cards (`settleAutoControl`).
+     */
+    status: ControlStatus;
+    /** What is wrong with a damaged or unreadable file, for the screens and the log. */
+    problem: string | null;
+    controlEpoch: string | null;
+    board: Board;
+    cards: Record<string, ControlEntry>;
+    /** False when the file does not hold this judgement yet (missing, or cards it lacks or that differ); see `settleAutoControl`. */
+    settled: boolean;
+}
+export type ControlStatus = 'ok' | 'missing' | 'damaged' | 'unreadable';
+/** D66: a resume as a screen asks for it (G2 makes the token mandatory); `decisionId` makes a retried resume a replay. */
+export interface ResumeExpectation extends ControlToken { decisionId?: string;
+    /** Gate 495 F1: the card as the screen showed it (`cardSeen`); a card changed since is refused. */
+    card?: string }
+export interface ResumeData { boardId: string; cardId: string; controlEpoch: string; generation: number; decisionId: string; mode: ControlEntry['mode']; replayed: boolean }
 export interface InitInput {
     cwd: string;
     workspaceId?: string;
@@ -183,6 +220,34 @@ function ioError(error: unknown, target: string, writing = false): KanbanError {
          writing ? 'Inspect the current board. Retry with the original request id and arguments if available.' : 'Check the path, permissions, and available space.',
          { osCode: codeOf(error) ?? null },
          writing ? 'unknown' : false);
+}
+/** D66: why the engine may not make these changes now, or null. See `Store.autoMutate`. */
+function engineRefusal(board: Board, control: AutoControl, operations: readonly Operation[], agentId: string, expect: ControlToken | null):
+    { reason: string; cardId: string | null } | null {
+    for (const op of operations) {
+        if (op.op === 'add') continue;
+        const card = board.cards.find(c => c.id === op.id);
+        const entry = control.cards[op.id];
+        // A card that is not there fails as before, in applyOperations.
+        if (!card || !entry) continue;
+        const refuse = (reason: string) => ({ reason, cardId: card.id });
+        if (card.archivedAt !== null) return refuse('archived');
+        if (entry.mode === 'unknown') return refuse('unknown');
+        if (op.op === 'link') { if (op.agentId !== agentId) return refuse('link'); continue; }
+        if (!card.agents.some(a => a.agentId === agentId)) return refuse('unlinked');
+        if (op.op === 'move') {
+            if (entry.mode !== 'managed') return refuse(entry.mode);
+            if (!expect || expect.controlEpoch !== control.controlEpoch || expect.generation !== entry.generation) return refuse('stale');
+            continue;
+        }
+        if (op.op === 'update') {
+            if (Object.keys(op.patch).some(key => key !== 'awaiting' && key !== 'title')) return refuse('patch');
+            if (entry.mode !== 'managed' && entry.mode !== 'paused') return refuse(entry.mode);
+            continue;
+        }
+        return refuse('operation');
+    }
+    return null;
 }
 function envelope(value: unknown, required: string[], optional: string[] = []): void {
     if (!value || typeof value !== 'object' || Array.isArray(value))
@@ -780,6 +845,24 @@ export class Store {
             } finally { m.io.lockHeldMs += performance.now() - held; }
         }
     }
+    /**
+     * REQ-156 gate 490 R1: a plugin file of the data folder's top (the new-version check's `.update-check.lock`) held with the
+     * very rules of a board's lock — created and taken over only inside the entry guard, taken over only from an owner known
+     * dead for over a minute, released only by its own token — so two processes reclaiming one dead lock never both get in.
+     * The name is one dot-file of the data folder; the action's result is returned as it is.
+     */
+    async withDataLock<T>(name: string, action: () => Promise<T>): Promise<T> {
+        if (!/^\.[a-z0-9-]+\.lock$/.test(name))
+            fail('E_VALIDATION', 'Invalid lock name.', name);
+        await this.ensureDirectory(this.dataDir, this.measurement());
+        const release = await this.acquire(path.join(this.dataDir, name), this.measurement());
+        try {
+            return await action();
+        }
+        finally {
+            await release();
+        }
+    }
     async withBoardLock<T>(id: string, action: (board: Board) => Promise<T>): Promise<Result<T>> {
         const m = this.measurement();
         try {
@@ -1255,6 +1338,9 @@ export class Store {
                     if (sameCwd.length)
                         m.warnings.push(warning('W_SHARED_CWD', 'Other boards use this workspace directory.', cwd, 'Select boards by workspaceId and review export ownership.'));
                     await this.atomicWrite(this.boardPath(id), bytes, m, 'board');
+                    // D66: a new board starts its decision file, so every card on it is judged by this version from the first.
+                    // Its folder is not flushed for it: losing this empty file only makes the board read as one from before it.
+                    await this.saveControl(emptyControl(board), board, m, false, false);
                     const exportStatus = input.export === false ? 'skipped' : await this.committedEffect(board, m);
                     return { export: exportStatus, boardId: id, revision: board.revision, currentRevision: board.revision, requestId: input.requestId, cardIds: [], changed: true, replayed: false };
                 });
@@ -1344,6 +1430,30 @@ export class Store {
         const m = this.measurement();
         const operations = this.mutationInput(input);
         checkCaller(operations, input.actor, caller);
+        return this.commitMutation(id, m, input, operations, caller, null);
+    }
+    /**
+     * D66: the automatic cards' own entry point — the only way a stage change counts as automatic. Not reachable from a
+     * request: no actor, caller or field of `mutateBoard` claims it. Inside the board's lock the card's decision is read
+     * again: a move needs the card `managed` under the token the engine judged by, the awaiting flag and the automatic title
+     * need it `managed` or `paused`, a card that needs a check or is archived takes nothing, and every card but a new one
+     * must carry the agent. A refusal is `E_AUTO_HELD` with nothing written to the ledger.
+     */
+    async autoMutate(id: string, input: AutoMutationInput): Promise<Result<MutationData>> {
+        const m = this.measurement();
+        const base: MutationInput = { actor: { kind: 'agent', agentId: input.agentId }, requestId: input.requestId, operations: input.operations,
+            ...(input.ifRevision === undefined ? {} : { ifRevision: input.ifRevision }) };
+        const operations = this.mutationInput(base);
+        checkCaller(operations, base.actor, undefined);
+        if (input.expect !== undefined && (!input.expect || typeof input.expect.controlEpoch !== 'string' || !Number.isSafeInteger(input.expect.generation)))
+            fail('E_VALIDATION', 'Invalid automatic-move token.');
+        for (const op of operations)
+            if (!['add', 'link', 'move', 'update'].includes(op.op))
+                fail('E_VALIDATION', 'The automatic cards only add, link, move and update cards.', op.op);
+        return this.commitMutation(id, m, base, operations, undefined, { agentId: input.agentId, expect: input.expect ?? null });
+    }
+    private async commitMutation(id: string, m: Measurement, input: MutationInput, operations: Operation[], caller: Caller | undefined,
+        engine: { agentId: string; expect: ControlToken | null } | null): Promise<Result<MutationData>> {
         const digest = this.digest(id, input.actor, input.ifRevision, operations);
         const prepare = async (board: Board): Promise<{
             data: MutationData;
@@ -1372,7 +1482,7 @@ export class Store {
             return { data, next: applied.board, warnings: applied.warnings };
         };
         try {
-            if (input.ifRevision !== undefined) {
+            if (input.ifRevision !== undefined && !engine) {
                 const candidate = await prepare(await this.readBoard(id));
                 if (!candidate.next) {
                     m.warnings.push(...candidate.warnings, ...await this.boardWarnings(id));
@@ -1381,15 +1491,52 @@ export class Store {
             }
             const data = await this.exclusive(id, m, async () => {
                 const current = await this.readBoard(id);
+                // D66: the card decisions as they hold now, judged and saved under this same lock.
+                // A damaged file is set aside here and the board started again from its cards (gate 489 F1, `controlFor`).
+                const control = this.replay(current, input.requestId, digest) ? null : await this.controlFor(current, m);
+                if (engine && control) {
+                    const refusal = !control.control ? { reason: control.status, cardId: null } : engineRefusal(current, control.control, operations, engine.agentId, engine.expect);
+                    if (refusal) {
+                        if (control.control && control.changed) await this.saveControl(control.control, current, m);
+                        throw createKanbanError('E_AUTO_HELD', 'Automatic moves are on hold for this card.', refusal.cardId ?? id,
+                            'Reload the board and the card, then try again.', { reason: refusal.reason, problem: control.problem });
+                    }
+                }
                 const candidate = await prepare(current);
                 m.warnings.push(...candidate.warnings);
                 if (!candidate.next) {
                     this.scales(current, Buffer.byteLength(stableStringify(current, 2) + '\n'), m, await this.boardCount());
+                    if (control?.control && control.changed) await this.saveControl(control.control, current, m);
                     return candidate.data;
                 }
                 validateBoard(candidate.next);
                 const bytes = this.serializeBoard(candidate.next);
                 this.scales(candidate.next, bytes.length, m, await this.boardCount());
+                // Gates 481/483 — fail closed: the decisions this commit makes (a tracked card's stage changed by anybody, a
+                // first link, the engine's own move) are saved BEFORE the ledger, in this same lock. If they cannot be saved
+                // the ledger is not written and the change is refused, so no commit ever stands without its decision and
+                // nothing is inferred later from the bounded history or the ledger's clock. If the ledger write fails after
+                // them, the card is held (a paused card whose move did not land; research/477 설계보완 §8) — never freed.
+                // A change that decides nothing (an untracked card, a note) does not touch the decision file at all.
+                // Gate 489 F1 — the same for a file that cannot be read now: what it holds is not known, so a change that could
+                // decide anything (any card's stage, a first link) is refused, and nothing is left for it to learn once it reads
+                // again — no repair is skipped, there is none to make. A change that decides nothing still saves.
+                if (control && !control.control) {
+                    if (mayDecide(current, candidate.next))
+                        throw createKanbanError('E_AUTO_CONTROL', 'Not saved — the board\'s automatic-move record can\'t be read.',
+                            this.controlPath(id), 'Check free space and permissions for the plugin\'s data folder, then send the same change again.',
+                            { requestId: input.requestId, reason: control.status, problem: control.problem });
+                    m.warnings.push(warning('W_AUTO_CONTROL', 'The board was saved, but its automatic-move record can\'t be read, so the record was left as it is.',
+                        this.controlPath(id), 'Automatic moves stay on hold on this board until the record can be read.'));
+                }
+                else if (control?.control && (commitDecisions(current, candidate.next, control.control, !!engine, this.clock()) || control.changed)) {
+                    try { await this.saveControl(control.control, candidate.next, m, true); }
+                    catch (error) {
+                        throw createKanbanError('E_AUTO_CONTROL', 'Not saved — the card\'s automatic-move record couldn\'t be saved first.',
+                            this.controlPath(id), 'Check free space and permissions for the plugin\'s data folder, then send the same change again.',
+                            { requestId: input.requestId, cause: isKanbanError(error) ? error.details : String(error) });
+                    }
+                }
                 await this.backup(current, m);
                 await this.atomicWrite(this.boardPath(id), bytes, m, 'board');
                 const exportStatus = await this.committedEffect(candidate.next, m);
@@ -1403,6 +1550,212 @@ export class Store {
                 throw createKanbanError(e.code, e.message, e.target, e.nextAction, { requestId: input.requestId, cause: e.details }, 'unknown');
             throw e;
         }
+    }
+    // ---- D66: the card decisions of the automatic cards (server/core/auto-control.ts) ----
+    private controlPath(id: string): string { if (!isBoardId(id))
+        fail('E_VALIDATION', 'Invalid board id.', id); return path.join(this.dataDir, AUTO_CONTROL_DIR, `${id}.json`); }
+    private clock() { return { now: () => this.context.now(), newId: () => this.context.newId() }; }
+    /**
+     * Gate 489 F1: why a file is not read tells what may be done. Bytes that were read but are no decision file of this board
+     * are `damaged` for good (nothing will make them readable); anything that kept the bytes from being read — permissions,
+     * I/O, a path that is not a plain file — is `unreadable`, a passing state the file itself may be fine through, as is a
+     * newer schema (another version's file, not ours to set aside).
+     */
+    private async loadControl(id: string): Promise<{ status: ControlStatus; control: AutoControl | null; problem: string | null }> {
+        const file = this.controlPath(id);
+        let bytes: Buffer;
+        try { bytes = await this.fileBytes(file, AUTO_CONTROL_BYTES); }
+        catch (error) {
+            if (codeOf(error) === 'ENOENT') return { status: 'missing', control: null, problem: null };
+            if (isKanbanError(error) && error.code === 'E_LIMIT') return { status: 'damaged', control: null, problem: 'too large' };
+            return { status: 'unreadable', control: null, problem: isKanbanError(error) ? error.code : codeOf(error) ?? 'unreadable' };
+        }
+        let raw: unknown;
+        try { raw = this.decode(bytes, file); } catch { return { status: 'damaged', control: null, problem: 'json' }; }
+        const parsed = parseControl(raw, id);
+        if ('control' in parsed) return { status: 'ok', control: parsed.control, problem: null };
+        const version = (raw as { schemaVersion?: unknown } | null)?.schemaVersion;
+        if (typeof version === 'number' && version > 1) return { status: 'unreadable', control: null, problem: 'schemaVersion ' + version };
+        return { status: 'damaged', control: null, problem: parsed.problem };
+    }
+    /**
+     * Gate 489 F1: a damaged decision file is moved aside — kept beside, as `<board>.json.damaged-<time>`, never written
+     * over or deleted — so the board can start a new epoch. Its folder is flushed: the file must not come back after a crash.
+     */
+    private async setAsideControl(file: string, m: Measurement): Promise<string> {
+        const target = file + '.damaged-' + this.context.now().replace(/[:.]/g, '-') + '-' + this.context.newId().slice(0, 8);
+        await renameOver(file, target);
+        await this.syncDirectory(path.dirname(file), m);
+        return target;
+    }
+    /** What the engine's memory names of this board's cards; read only when a card has no decision yet. */
+    private async controlEvidence(id: string): Promise<ControlEvidence> {
+        try {
+            const state = await readAutoState(this.dataDir);
+            if (state.damaged) return { readable: false, remembered: new Set() };
+            const entries = new Map<string, RememberedEntry[]>();
+            for (const [agentId, e] of Object.entries(state.agents)) {
+                if (e.boardId !== id) continue;
+                entries.set(e.cardId, [...entries.get(e.cardId) ?? [], { agentId, moved: e.moved?.revision ?? null, paused: !!e.pausedAt }]);
+            }
+            return { readable: true, remembered: new Set(entries.keys()), entries };
+        } catch { return { readable: false, remembered: new Set() }; }
+    }
+    /**
+     * G2b: how a missing file starts again. A board none of whose files this version ever kept is one from before the file:
+     * it is migrated (`migrate`, research/470 B5). Anything this version keeps beside a board's file — a report of an earlier
+     * start, a file set aside — proves the board had one: it starts strictly (`lost`), or, when a file was set aside for a
+     * restore (`<boardId>.json.restored…`, see docs/reference.md) that no report names yet, as that restore (`restored`).
+     */
+    private async missingKind(id: string): Promise<{ kind: RebaseKind; previous: string | null }> {
+        const dir = path.join(this.dataDir, AUTO_CONTROL_DIR);
+        let names: string[];
+        try { names = (await fs.readdir(dir)).filter(name => name.startsWith(id + '.') && name !== id + '.json'); }
+        catch { return { kind: 'migrated', previous: null }; }
+        if (!names.length) return { kind: 'migrated', previous: null };
+        const named = new Set<string>();
+        for (const name of names.filter(n => n.startsWith(id + '.rebase-'))) {
+            try { const previous = JSON.parse((await this.fileBytes(path.join(dir, name), AUTO_CONTROL_BYTES)).toString('utf8')).previous;
+                if (typeof previous === 'string') named.add(previous); } catch { /* a report that cannot be read names nothing */ }
+        }
+        const restored = names.filter(n => n.startsWith(id + '.json.restored') && !named.has(n)).sort().at(-1);
+        return restored ? { kind: 'restored', previous: restored } : { kind: 'lost', previous: null };
+    }
+    /** G2b: the report of a start of a board's decisions, beside them. Only a record for people: a failure is a warning. */
+    private async writeRebaseReport(kind: RebaseKind, board: Board, control: AutoControl, previous: string | null, m: Measurement): Promise<void> {
+        const at = this.context.now();
+        const file = path.join(this.dataDir, AUTO_CONTROL_DIR, `${board.id}.rebase-${at.replace(/[:.]/g, '-')}-${this.context.newId().slice(0, 8)}.json`);
+        try { await this.atomicWrite(file, Buffer.from(stableStringify(rebaseReport(kind, board, control, previous, at), 2) + '\n'), m, 'config', false); }
+        catch { m.warnings.push(warning('W_AUTO_CONTROL', 'The board\'s automatic-move record was started over, but the report about it couldn\'t be saved.', file,
+            'Check free space and permissions for the plugin\'s data folder.')); }
+    }
+    /**
+     * The board's card decisions as they hold now. `m` is given under the board's lock only: there a damaged file is set
+     * aside (gate 489 F1) and the board judged again from its cards in a new epoch — the start of a board from before the
+     * file, but stricter: the file existed, so a card nothing proves untracked needs a check (nothing is freed, a completed
+     * card stays paused). It is saved with the commit that found it. A file that cannot be set aside is held as unreadable.
+     */
+    private async controlFor(board: Board, m?: Measurement): Promise<{ status: ControlStatus; control: AutoControl | null; changed: boolean; problem: string | null; started?: boolean }> {
+        let loaded = await this.loadControl(board.id), start: { kind: RebaseKind; previous: string | null } | null = null;
+        if (loaded.status === 'damaged' && m) {
+            const file = this.controlPath(board.id);
+            try {
+                const kept = await this.setAsideControl(file, m);
+                m.warnings.push(warning('W_AUTO_CONTROL', 'The automatic-move record was damaged (' + loaded.problem + '). It was set aside and kept, and the record was started over, so tracked cards need a check.',
+                    kept, 'Check each card, then turn its automatic tracking back on from its detail.'));
+                loaded = { status: 'missing', control: null, problem: loaded.problem }; start = { kind: 'damaged', previous: path.basename(kept) };
+            } catch (error) {
+                loaded = { status: 'unreadable', control: null, problem: loaded.problem + '; not set aside: ' + (codeOf(error) ?? 'error') };
+            }
+        }
+        if (!loaded.control && loaded.status !== 'missing') return { ...loaded, changed: false };
+        start ??= loaded.control ? null : await this.missingKind(board.id);
+        const saved = loaded.control;
+        // A strict start trusts no memory: the board had a file, so a card nothing proves untracked needs a check.
+        const evidence: ControlEvidence = start && start.kind !== 'migrated' ? { readable: false, remembered: new Set<string>() }
+            : !saved || board.cards.some(c => !saved.cards[c.id] && c.agents.length > 0) ? await this.controlEvidence(board.id) : { readable: true, remembered: new Set<string>() };
+        const { control, changed } = reconcile(board, saved, evidence, this.clock(), start?.kind === 'migrated');
+        // G2b: a start is made once, under the lock, and written down — the decisions, then the report of what they became.
+        // If they cannot be saved here the commit goes on as before (`changed`) and the next look starts again.
+        if (start && m) {
+            if (start.kind === 'lost' || start.kind === 'restored')
+                m.warnings.push(warning('W_AUTO_CONTROL', start.kind === 'restored'
+                    ? 'The automatic-move record was set aside for a restore and started over, so tracked cards need a check.'
+                    : 'The automatic-move record was missing and was started over, so tracked cards need a check.',
+                    this.controlPath(board.id), 'Check each card, then turn its automatic tracking back on from its detail.'));
+            if (await this.saveControl(control, board, m)) {
+                await this.writeRebaseReport(start.kind, board, control, start.previous, m);
+                return { status: 'ok', control, changed: false, problem: loaded.problem, started: true };
+            }
+        }
+        return { status: loaded.status, control, changed, problem: loaded.problem };
+    }
+    /** Saves the decisions after a ledger commit (or alone, for a resume). A failure is a warning: the cards differ next time. */
+    private async saveControl(control: AutoControl, board: Board, m: Measurement, strict = false, syncParent = true): Promise<boolean> {
+        try {
+            await this.ensureDirectory(path.join(this.dataDir, AUTO_CONTROL_DIR), m);
+            const next = { ...control, revision: board.revision, controlSeq: control.controlSeq + 1 };
+            await this.atomicWrite(this.controlPath(board.id), Buffer.from(stableStringify(next, 2) + '\n'), m, 'config', syncParent);
+            control.controlSeq = next.controlSeq; control.revision = next.revision;
+            return true;
+        } catch (error) {
+            if (strict) throw ioError(error, this.controlPath(board.id), true);
+            m.warnings.push(warning('W_AUTO_CONTROL', 'The board was saved, but its automatic-move record couldn\'t be.', this.controlPath(board.id),
+                'The cards this change moved are on hold for a check until they\'re turned back on.'));
+            return false;
+        }
+    }
+    /**
+     * D66: the card decisions of a board as they hold now, read without the lock (the board first, then the file): a
+     * writer between the two reads makes its cards differ, so they read as held, never as free. Nothing is written.
+     */
+    async readAutoControl(id: string): Promise<ControlView> {
+        const board = await this.readBoard(id);
+        const control = await this.controlFor(board);
+        // A damaged file is not settled: the next look under the lock sets it aside (`settleAutoControl`).
+        return { status: control.status, problem: control.problem, controlEpoch: control.control?.controlEpoch ?? null, board,
+            cards: control.control?.cards ?? {}, settled: control.status !== 'damaged' && !control.changed };
+    }
+    /**
+     * D66: saves what `readAutoControl` judged but the file does not hold yet — the first look at a board from before the
+     * file, a card an older writer added or moved, a damaged file set aside (gate 489 F1) — under the board's lock, read
+     * again there. Writes only when it differs, never over a damaged file (it is moved aside first); so an old card that
+     * needs a check stays recorded as such (not judged again from a memory that may be trimmed later).
+     */
+    async settleAutoControl(id: string): Promise<Result<{ saved: boolean }>> {
+        const m = this.measurement();
+        try {
+            const data = await this.exclusive(id, m, async () => {
+                const board = await this.readBoard(id);
+                const control = await this.controlFor(board, m);
+                return { saved: !!control.started || (!!control.control && control.changed && await this.saveControl(control.control, board, m)) };
+            });
+            return this.outcome(m, data, false);
+        } catch (error) { throw ioError(error, this.controlPath(id)); }
+    }
+    /**
+     * D66: "resume automatic tracking" for one card — committed when the decision file is saved, under the board's lock;
+     * the ledger is not written. Any mode resumes (476 F3: a card that needs a check too), the card's current stage becomes
+     * the confirmed one, and nothing moves until the next signal. With `expect` (G2's screens), the card's decision must
+     * still be the one the person saw — the board's revision aside (476 F2) — and a retry of the same decision replays.
+     */
+    async resumeAuto(id: string, cardId: string, expect?: ResumeExpectation): Promise<Result<ResumeData>> {
+        const m = this.measurement();
+        try {
+            const data = await this.exclusive(id, m, async (): Promise<ResumeData> => {
+                const board = await this.readBoard(id);
+                const card = board.cards.find(c => c.id === cardId);
+                if (!card) fail('E_NOT_FOUND', 'Card not found.', cardId, 'Refresh the board.');
+                const control = await this.controlFor(board, m);
+                // Gate 489 F1: not known now, so nothing can be decided — tried again once the file reads.
+                if (!control.control)
+                    throw createKanbanError('E_AUTO_CONTROL', 'Not saved — the board\'s automatic-move record can\'t be read.', this.controlPath(id),
+                        'Check free space and permissions for the plugin\'s data folder, then try again.', { reason: control.status, problem: control.problem });
+                const entry = control.control.cards[cardId]!;
+                const answer = (e: ControlEntry, replayed: boolean): ResumeData => ({ boardId: id, cardId, controlEpoch: control.control!.controlEpoch,
+                    generation: e.generation, decisionId: e.decisionId, mode: e.mode, replayed });
+                if (expect) {
+                    if (expect.decisionId && entry.decisionId === expect.decisionId && entry.reason === 'resumed') return answer(entry, true);
+                    if (expect.controlEpoch !== control.control.controlEpoch || expect.generation !== entry.generation
+                        || (expect.card !== undefined && expect.card !== cardSeen(board, card)))
+                        fail('E_AUTO_STALE', 'This card\'s automatic-move record has changed since it was read.', cardId,
+                            'Reload the card and decide again.', { controlEpoch: control.control.controlEpoch, generation: entry.generation });
+                }
+                const next: ControlEntry = { mode: 'managed', generation: entry.generation + 1, decisionId: expect?.decisionId ?? this.context.newId(),
+                    ...seen(card, board.revision), reason: 'resumed', at: this.context.now() };
+                control.control.cards[cardId] = next;
+                try { await this.saveControl(control.control, board, m, true); }
+                catch (error) {
+                    // Whether the file was replaced before the failure is not known; the card's next read tells, and a retry of
+                    // the same decision replays if it was.
+                    throw createKanbanError('E_AUTO_CONTROL', 'Turning tracking back on may not have been saved — the card\'s automatic-move record couldn\'t be written.', this.controlPath(id),
+                        'Check free space and permissions for the plugin\'s data folder, then try again.',
+                        { cause: isKanbanError(error) ? error.details : String(error) }, 'unknown');
+                }
+                return answer(next, false);
+            });
+            return this.outcome(m, data, !data.replayed);
+        } catch (error) { throw ioError(error, this.controlPath(id), true); }
     }
     async unlock(id?: string, options: UnlockOptions = {}): Promise<Result<{
         unlocked: boolean;

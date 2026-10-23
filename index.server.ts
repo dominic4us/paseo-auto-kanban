@@ -2,13 +2,15 @@ import type { PluginServerContext } from '@getpaseo/plugin/server';
 import { openStore } from './server/core/store.js';
 import { exportCommittedBoard } from './server/core/export.js';
 import { createEnsureHandler, createMutationHandler } from './server/mutations.js';
-import { createReadHandlers, readError, readLocale } from './server/handlers.js';
+import { createReadHandlers, createResumeHandler, readError, readLocale } from './server/handlers.js';
 import { listWorkspaces } from './server/workspaces.js';
 import { createAutoCards, type Signal } from './server/auto-cards.js';
 import { createDispatcher } from './server/dispatch.js';
 import { createAutoArchiver } from './server/auto-archive.js';
 import { pruneAfterWrite } from './server/busy.js';
-import { autoCardsLeadSet, autoCardsResume, autoCardsSet, autoCardsWorkspaceSet, boardEnsure, boardGet, busyClear, busySet, cardGet, dispatchPreview, overviewGet, revisionsGet, boardMutate, uiStateSet, workflowGet, workflowPickSet, workflowExport, mailListGet, mailThreadGet, archiveSettingsSet, archiveTidy, archivedList, archivedRestore } from './shared/rpc.js';
+import { createUpdateChecker } from './server/update-check.js';
+import { PACKAGE_VERSION } from './server/version.js';
+import { autoCardsLeadSet, autoCardsResume, autoCardsSet, autoCardsWorkspaceSet, boardEnsure, boardGet, busyClear, busySet, cardGet, dispatchPreview, overviewGet, revisionsGet, boardMutate, uiStateSet, workflowGet, workflowPickSet, workflowExport, mailListGet, mailThreadGet, archiveSettingsSet, archiveTidy, archivedList, archivedRestore, updateCheckSet } from './shared/rpc.js';
 
 export default function contribute(server: PluginServerContext) {
   const store = openStore({ lockTimeoutMs: 5000, afterCommit: exportCommittedBoard });
@@ -19,6 +21,10 @@ export default function contribute(server: PluginServerContext) {
   const dispatch = createDispatcher({ store, locale: readLocale, fallbackFloor: () => auto.dispatchFloor() });
   // REQ-52: finished cards archived after the set days — swept when a screen reads the boards, at most every ten minutes.
   const archiver = store.then(value => createAutoArchiver(value));
+  // REQ-156: the new-version notice — the registry asked at most once a day, when a screen reads or polls (no timer).
+  // Gate 490 R1: with the store, whose lock rules the check's lock follows.
+  const updates = store.then(value => createUpdateChecker({ dataDir: value.dataDir, running: PACKAGE_VERSION, store: value }));
+  const lookForUpdate = () => { void updates.then(checker => checker.wake()).catch(() => {}); };
   // REQ-83: every read says how automatic tracking is doing.
   // H5: a workspace listing that answered is Paseo answering again, so tracking's failed agent listing is retried at once.
   const workspaces: typeof listWorkspaces = async paseo => {
@@ -66,13 +72,14 @@ export default function contribute(server: PluginServerContext) {
   });
   server.handle(boardEnsure, async (input, { paseo }) => (await ensure)(input, paseo));
   // The first board read after a restart repairs what the hooks missed, in the background.
-  server.handle(overviewGet, async (input, { paseo }) => { auto.wake(paseo); void dispatch.wake(paseo); (await archiver).wake(); return (await handlers).overview(input, paseo); });
-  server.handle(boardGet, async (input, { paseo }) => { auto.wake(paseo); void dispatch.wake(paseo); (await archiver).wake(); return (await handlers).board(input, paseo); });
+  server.handle(overviewGet, async (input, { paseo }) => { auto.wake(paseo); void dispatch.wake(paseo); (await archiver).wake(); lookForUpdate(); return (await handlers).overview(input, paseo); });
+  server.handle(boardGet, async (input, { paseo }) => { auto.wake(paseo); void dispatch.wake(paseo); (await archiver).wake(); lookForUpdate(); return (await handlers).board(input, paseo); });
   server.handle(cardGet, async input => (await handlers).card(input));
   // 298-F1: an open screen only asks for revisions (client/auto-refresh.ts), so that look wakes the automatic archive too — still at
   // most every ten minutes; an archive moves the board's revision, and the screen then reads it again. No timer of its own: with no
   // screen looking nothing is written (research/294 §10).
-  server.handle(revisionsGet, async input => { (await archiver).wake(); return (await handlers).revisions(input); });
+  // Gate 486 F4: and the new-version check, so a screen left open on a quiet board still looks the next day (at most once a day).
+  server.handle(revisionsGet, async input => { (await archiver).wake(); lookForUpdate(); return (await handlers).revisions(input); });
   server.handle(uiStateSet, async input => (await handlers).ui(input));
   // REQ-124: a lane's workflow, read from its workspace's own documents.
   server.handle(workflowGet, async (input, { paseo }) => (await handlers).workflow(input, paseo));
@@ -109,13 +116,8 @@ export default function contribute(server: PluginServerContext) {
       return { ok: true as const, data, committed: false as const, warnings: [] };
     } catch (error) { return { ok: false as const, error: readError(error), committed: false as const }; }
   });
-  // REQ-74: a person turns automatic moves back on for a card they had moved.
-  server.handle(autoCardsResume, async input => {
-    try {
-      const value = autoCardsResume.input.parse(input);
-      return { ok: true as const, data: await auto.resume(value.boardId, value.cardId), committed: false as const, warnings: [] };
-    } catch (error) { return { ok: false as const, error: readError(error), committed: false as const }; }
-  });
+  // REQ-74: a person turns automatic moves back on for a card they had moved. D66 G2: only by the token the detail showed.
+  server.handle(autoCardsResume, createResumeHandler(auto));
   // REQ-52: the automatic archive's days, the done column's "Tidy", and the archived list with its restore.
   const archive = <I, T>(rpc: { input: { parse: (value: unknown) => I } }, action: (value: I) => Promise<T>) => async (input: unknown) => {
     try { return { ok: true as const, data: await action(rpc.input.parse(input)), committed: false as const, warnings: [] }; }
@@ -125,5 +127,7 @@ export default function contribute(server: PluginServerContext) {
   server.handle(archiveTidy, archive(archiveTidy, async value => (await archiver).tidy(value.boardId)));
   server.handle(archivedList, archive(archivedList, async value => (await archiver).list(value.boardId)));
   server.handle(archivedRestore, archive(archivedRestore, async value => (await archiver).restore(value.boardId, value.cardId, value.ifRevision)));
+  // REQ-156: the new-version notice on or off for the whole plugin; on, the next screen read looks.
+  server.handle(updateCheckSet, archive(updateCheckSet, async value => (await updates).setEnabled(value.enabled)));
   return () => { cleanups.forEach(cleanup => { try { cleanup(); } catch { /* already gone */ } }); };
 }

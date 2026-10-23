@@ -123,7 +123,7 @@ agent. The agent's own lifecycle signals then move it:
   board, the detail view, or `kanban card move` by a person or any agent — its automatic moves pause for good, for
   all its agents, including ones linked later. The permission flag and the automatic title still follow. The card
   detail shows why the card is where it is and offers **Resume automatic tracking**. Unlinking an agent is not a
-  move.
+  move. This is kept per card in the automatic-move record in the data folder ([below](#automatic-move-records-auto-control)).
 - A card that already links the agent (for example one an orchestrator linked) is updated instead of a second
   card being made. A board made after the agent started gets its card at the agent's next signal.
 - Sub-agents never get their own card; the parent they had when first seen is remembered so their cards group
@@ -167,6 +167,63 @@ never overwritten, and the screens say tracking is held. Repair the bytes or cop
 it. Deleting `auto-cards.json` alone changes nothing (it is read from the backup). Deleting both is a reset to
 "on, nothing applied yet", which also turns every board the feature made into an ordinary board (it gets a
 `PROCESS.md` at its next change).
+
+### Automatic-move records (`auto-control/`)
+
+From 0.2.5, whether the feature may move a card is decided per card and kept in the board's automatic-move record,
+`auto-control/<boardId>.json`, beside the ledger (never inside it, so 0.2.3 and 0.2.4 still read every board). A
+person's move — the board, the detail view, `kanban card move` by anyone — is saved there before the ledger: if it
+cannot be saved first, the change is refused with `E_AUTO_CONTROL` and nothing is written; send the same change
+again once the data folder can be written. While the file cannot be read (permissions, a read error), every stage
+change and new link on that board is refused the same way, even for cards nobody tracks — it is the file that tells
+which cards are tracked. Notes, titles, new cards and archiving still save.
+
+A card's detail says **Needs a check** when it isn't clear whether a person chose its stage, and **On hold**
+while the record can't be read. Nothing automatic moves such a card. **Resume automatic tracking** on its detail turns
+it back on, one card at a time; there is no "resume all".
+
+**Upgrading.** The first time 0.2.5 touches a board from an earlier version it makes the board's decisions once, from
+what the old files show, and writes a report beside them: `auto-control/<boardId>.rebase-<time>-<id>.json`, with
+the number of cards per decision and each card's reason. A card in a completion stage stays where it is; a card
+nobody ever linked stays free; a card whose newest stage change is the very move the feature itself remembers making
+keeps being tracked; a card a person moved, or one the feature had paused, stays paused — a resume pressed in the
+older version is not carried over. Every other card — for example one an orchestrator linked that the feature never
+moved, or one its own agent moved with the CLI — needs a check.
+
+**Going back to 0.2.3 or 0.2.4.** Both read the boards and `auto-cards.json` 0.2.5 wrote. The way back that keeps
+every decision: stop every writer (Paseo servers, `kanban` CLIs, scripts) and let pending work finish; switch
+**Agent auto cards** off and check that it stays off; run the older version with it still off; come back to 0.2.5
+and only then switch it on. Completions and resumes made in 0.2.5 stand. A card the older version moved — even away
+and back to the same stage — is not moved automatically any more: a card that was being tracked needs a check, and a
+card that was already paused stays **Paused**, as before. Running the older version with its automatic cards **on**, or
+older and newer servers writing the same data folder at once, is not covered: the older engine has none of these
+checks and may move a card a person completed. 0.2.5 then shows each card it changed as needing a check or, if it was
+already paused, still paused — neither moves automatically — but does not undo the change.
+
+**Restoring a backup.** Restoring older files is not the same as restoring an archived card. Stop every writer and
+switch the automatic cards off first. After restoring, for each restored board rename
+`auto-control/<boardId>.json` to `auto-control/<boardId>.json.restored-<date>` (rename, do not delete). The next
+access starts that board again in a new epoch, strictly: completed cards stay paused, every other card needs a check
+— including cards no one had linked — and a report with `"kind": "restored"` is written. Then check the cards and
+resume them one by one, and switch the automatic cards back on. Restoring a ledger and an automatic-move record that match
+each other from the same moment is not a way to keep decisions made after that moment: those decisions are gone
+with the newer files, and nothing infers them back. A damaged automatic-move record is handled the same way without your
+help: it is kept as `<boardId>.json.damaged-<time>-<id>` and the board starts again strictly, with a report. An
+automatic-move record that is simply missing from a board that had one (a report or a set-aside file of that board is still
+there) starts strictly as well.
+
+Things to know while recovering:
+
+- **A resume whose answer was lost.** If saving a resume failed after the file was replaced (for example, a folder
+  flush error), the answer says it was not saved while the card may in fact be on again. The detail reads the card
+  again and shows **Resumed** in that case; if it cannot read it, open the detail again before pressing again.
+  Pressing again on the same detail repeats the same decision and changes nothing more.
+- **A damaged `auto-cards.json`** hides the paused line and the resume button on card details, although the card
+  decisions are kept and nothing moves; repair it as described above.
+- **While the automatic-move record can't be read**, stage changes on that board are refused, not delayed in the
+  background: they have to be sent again.
+- **Card history is bounded** (the newest 1,000 stage changes per board). A detail left open while many other cards
+  moved may refuse one resume as changed; read the card again and press once more.
 
 ## Sending a draft to an agent
 
@@ -212,13 +269,36 @@ the previous value and offers **Try again**.
 | Category | Rows |
 |---|---|
 | Display | Theme (Paseo, system, light, dark), Screen size (80–150 %, only the Kanban area), Board position (left / centre / right on screens wider than the board), Sidebar link opens in (main view / right panel; desktop web and app hosts with the newer sidebar only), Reset order |
-| Automation | Agent auto cards, By workspace, Archive finished cards, Leads by workspace (read only), Auto refresh |
-| About | Version, connected host, hidden empty boards |
+| Automation | Agent auto cards, By workspace, Archive finished cards, Leads by workspace (read only), Auto refresh, Check for new versions |
+| About | Version, updates (new version and update commands), connected host, hidden empty boards |
 
 Display rows are stored per host in `ui-state.json`, except **Sidebar link opens in**: it is this device's choice, kept in
 the app's local storage (`paseo-kanban:open-in:<host>`) and applied at once. With **Right panel**, the sidebar's Kanban link
 opens the Kanban tab beside Files and Changes while a workspace is open in a wide window, and the main view otherwise.
 The screen language comes from `locale` in `config.json`.
+
+**Check for new versions** (on by default, one setting for the whole plugin) is the plugin's only network request.
+When a screen reads the overview or a board, or an open screen polls for changes, and the last attempt is 24 hours old
+(or there was none), the server makes one GET of
+`https://registry.npmjs.org/paseo-auto-kanban/latest` in the background — no timer, so with Paseo closed or no screen
+open nothing is asked. Under a lock file in the data folder (`.update-check.lock`, which other processes see too) it
+reads the switch again, records the attempt, and only then starts the request; saving the switch takes the same
+lock. So turning the check off is never followed by a request, turning it off and on the same day does not ask again,
+and two Paseo servers on one data folder ask once between them. The lock follows a board lock's rules: it is made
+and taken over only inside its entry guard, and taken over only from an owner known to be dead for over a minute (a
+lock whose owner cannot be judged dead — another machine, an unknown process — is never taken over, and the check
+waits). The clock: a last attempt later than now (the clock was set back) is never due — if it lies more than a day
+ahead it is stamped again at now, without a request, and the next day counts from there. On Linux the attempt also
+keeps the boot's id and uptime, and within the same boot a day of uptime must pass too, so setting the date forward
+does not bring the check sooner either. On other systems, after the machine restarted, or on Linux when the boot's id or uptime cannot be read, the date
+alone decides, so setting it forward can. It has a 5-second limit, refuses redirects, reads at
+most 256 KB and keeps only `version` when the answer names this package and the value is a release
+(`MAJOR.MINOR.PATCH`, no pre-release). Any failure is silent and retried the next day. About then shows
+*New version available* when that release is newer than the running plugin (semver order; a running pre-release is
+older than its release), with the two lines from the README's *Updating* to copy, and the gear carries a dot. The
+last good answer is shown for seven days; after that, without a newer answer, About says there is no recent result
+and the dot goes. An open screen hears of a finished check or another device's switch on its next poll (the
+revisions carry a fingerprint of the reading). Off, no request is made and nothing is shown; the last attempt is kept.
 A **Labs** category appears only on devices with the developer key; its features are experimental, off by
 default, and not supported.
 
@@ -245,6 +325,9 @@ ui-state.json                  # plugin view state per host (filters, order, set
 auto-cards.json                # agent auto cards (switches, boards made, last applied state per agent)
 auto-cards.backup.json         # the same bytes, written after every write of auto-cards.json
 auto-archive.json              # days before finished cards are archived
+update-check.json              # new version check: on or off (+ .backup.json)
+update-check-cache.json        # new version check: last attempt, last answer and its release number
+.update-check.lock             # temporary, while the check records an attempt or the switch is saved
 busy.json                      # busy marks per card
 workflow-picks.json            # built-in workflow tried per workspace (+ .backup.json)
 boards/<boardId>.json          # template snapshot, cards, history, receipts
@@ -260,6 +343,12 @@ templates/<id>@<version>.json  # manually installed user templates
   deliverables).
 - **Screen language.** With no `config.json`, screens start in English. A `config.json` without `locale`, written
   by an earlier version, keeps the Korean screens those versions showed. Add `"locale": "en"` to change it.
+- `update-check.json` (and `update-check.backup.json`, written with the same bytes) is `{schemaVersion: 1, enabled,
+  changedAt}`. A missing file is read from its backup. Missing both, it is a first install (on) only when
+  `update-check-cache.json` is missing too; the first check writes the default down. A setting that cannot be read, or
+  a cache without a setting, means no check is made until the switch is set again (settings say so).
+- `update-check-cache.json` is `{schemaVersion: 1, attemptAt?, attemptBoot?, attemptUptime?, checkedAt?, latest?}`; the switch never changes it. A
+  cache that cannot be read means nothing is known (the check is due); `checkedAt` and `latest` count only together.
 - `ui-state.json` and the other plugin files are written through a temporary file and rename, only when a value
   changes. A missing or malformed `ui-state.json` means "nothing hidden, automatic order" and is never repaired on
   its own.

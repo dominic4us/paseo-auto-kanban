@@ -13,6 +13,9 @@ import { sortCards } from './card-order.js';
 import { SortMenu } from './view-tools.js';
 import { useAutoCards, useWorkspaceAutoCards, workspaceAutoEntries, workspaceLeadEntries } from './auto-cards.js';
 import { SettingsSheet, useSettingsWindow } from './settings-sheet.js';
+import { useUpdateCheck } from './update-check.js';
+import { updateCheckKey } from '../shared/update-check.js';
+import { updateDot } from './update-model.js';
 import { Pressable, Text, View } from 'react-native';
 import { ScrollView } from '@getpaseo/plugin/client/react-native';
 import { useRpc, type PluginSurfaceProps } from '@getpaseo/plugin/client';
@@ -81,6 +84,8 @@ export function BoardScreen({ selector, onBack, workspaceTitle, panel = false, .
   const workspaceAuto = useWorkspaceAutoCards(props.host.id + ':surface', state.data?.autoCardsOff, true, state.readToken);
   // REQ-52: as on the swimlane board — the days (settings), the done column's "Archived N" and "Tidy", the archived list.
   const autoArchive = useAutoArchive(props.host.id + ':surface', state.data?.autoArchive, true, state.readToken);
+  // REQ-156: the new-version notice, as on the swimlane board.
+  const updateCheck = useUpdateCheck(props.host.id + ':surface', state.data?.updateCheck, true, state.readToken), newVersion = updateDot(updateCheck);
   const [tidy, setTidy] = useState<{ ask: boolean; text?: string } | null>(null), [archivedOpen, setArchivedOpen] = useState(false);
   const settingsWindow = useSettingsWindow(width, () => setMenu(false)), settingsRoot = settingsWindow.root;
   // REQ-68: a board that belongs to a Paseo workspace opens it from an ↗ in the top bar (once in ⋯).
@@ -89,7 +94,8 @@ export function BoardScreen({ selector, onBack, workspaceTitle, panel = false, .
   // One stable ref for both, so the shown watch is not re-attached on every render.
   const rootRef = useCallback((node: View | null) => { shown.ref(node); settingsRoot.current = node; }, [shown, settingsRoot]);
   const looks = useAutoRefresh({ enabled: settings.autoRefresh, known, scope: pending ? 'appeared' : 'listed',
-    boardIds: b && !pending ? [b.summary.id] : undefined, busy: state.loading, revalidate: state.revalidate, shown, groups: true });
+    boardIds: b && !pending ? [b.summary.id] : undefined, busy: state.loading, revalidate: state.revalidate, shown, groups: true,
+    updates: updateCheckKey(state.data?.updateCheck) });
   const [crumb, setCrumb] = useState({ hover: false, focus: false });
   const signalSource = useSignalSource();
   const orphaned = useOrphanedCards(signalSource, b ? [b] : []);
@@ -218,8 +224,8 @@ export function BoardScreen({ selector, onBack, workspaceTitle, panel = false, .
       {!mobile && !compact && <SortMenu value={cardOrder} onChange={setCardOrder} colors={c} m={m} />}
       {openWorkspace && <IconButton testID="open-workspace" name="SquareArrowOutUpRight" label={m.workspace} onPress={openWorkspace}
         colors={c} mobile={mobile || compact} tooltip={!mobile && !compact} />}
-      <IconButton testID="open-settings" name="Settings" label={m.settings} onPress={settingsWindow.open} colors={c} mobile={mobile || compact}
-        tooltip={!mobile && !compact} buttonRef={settingsWindow.opener} />
+      <IconButton testID="open-settings" name="Settings" label={newVersion ? m.settingsUpdateBadge : m.settings} onPress={settingsWindow.open} colors={c} mobile={mobile || compact}
+        tooltip={!mobile && !compact} buttonRef={settingsWindow.opener} dot={newVersion} />
     </View>}
     {state.loading && !b && <Notice text={m.loading} colors={c} />}
     {!!state.error && <><Notice text={`${b ? m.previous + ' · ' : ''}${state.error}`} colors={c} error />
@@ -230,7 +236,8 @@ export function BoardScreen({ selector, onBack, workspaceTitle, panel = false, .
       refreshFailing={!!looks.failing} colors={c} m={m} />
     {tabs && b && (compact ? <MobileControls stages={stages.map(s => ({ stageId: s.stageId, name: s.name, count: s.cards.length, color: stageColor(s.stageId, b!.template.stages, c) }))}
       actions={panelCompact ? <>
-        <IconButton name="Ellipsis" label={m.more} onPress={() => setMenu(true)} colors={c} mobile buttonRef={settingsWindow.opener} />
+        <IconButton name="Ellipsis" label={newVersion ? m.more + ' · ' + m.settingsUpdateBadge : m.more} onPress={() => setMenu(true)} colors={c} mobile
+          buttonRef={settingsWindow.opener} dot={newVersion} />
       </> : undefined} selected={selected ?? ''} attention={attention} count={count} onStage={setStage} onAttention={toggleAttention} colors={c} m={m} />
       : stages.length <= 4 ? stageTabs : <View style={{ height: px(44) }}><ScrollView horizontal>{stageTabs}</ScrollView></View>)}
     {/* REQ-127: the workflow in place of the columns, the board's whole width (the flow's columns widen with it). */}
@@ -257,7 +264,7 @@ export function BoardScreen({ selector, onBack, workspaceTitle, panel = false, .
       workspaces={b ? { entries: workspaceAutoEntries([b.summary], names.directory), switch: workspaceAuto } : undefined}
       leads={b ? workspaceLeadEntries([b], names.directory, agentLinks, archived, m) : undefined}
       about={state.data?.about} connection={{ host: props.host.label, observedAt: state.data?.observedAt ?? '' }} colors={c} m={m} platform={props.layout.platform}
-      autoArchive={autoArchive} />
+      autoArchive={autoArchive} updateCheck={updateCheck} />
     {archivedOpen && b && !pending && <ArchivedSheet open boardId={b.summary.id} name={heading} stages={b.template.stages}
       onClose={() => setArchivedOpen(false)} onChanged={refresh} colors={c} m={m} platform={props.layout.platform} mobile={mobile || compact} />}
     {create && b && <CreateDraft {...props} boards={[b.summary]} directory={names.directory}

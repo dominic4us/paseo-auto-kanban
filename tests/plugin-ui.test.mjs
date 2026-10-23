@@ -67,6 +67,8 @@ function harness({ mobile = false, sdkFails = false, panel = false, platform = '
   reduceMotion = false,
   // REQ-74: why the card is where it is and its automatic tracking, as card.get reports them (undefined = absent).
   cardAuto = undefined,
+  // D66 G2: answers the resume gives before the usual success, in order (an object, or a function of the request).
+  resumeReplies = [],
   // REQ-77 ②: who made the example card (the ledger's `createdBy`).
   author = actor,
   // REQ-77+78 gate a: the language the ledger is set to, as the overview and board reads report it.
@@ -147,13 +149,16 @@ function harness({ mobile = false, sdkFails = false, panel = false, platform = '
         error: { code: 'E_REVISION_CONFLICT', message: 'Board changed.', target: base.id, nextAction: 'Compare.', details: null } };
       if (outcome === 'failed') return { ok: false, committed: false,
         error: { code: 'E_LOCK_TIMEOUT', message: 'Synthetic refusal.', target: base.id, nextAction: 'Retry.', details: { reclaimableAtMs: Date.now() + 60000 } } };
+      // D66 G2: like the server when the card's automatic-move decision cannot be read or saved first.
+      if (outcome === 'autoControl') { outcome = 'ok'; return { ok: false, committed: false,
+        error: { code: 'E_AUTO_CONTROL', message: 'The change was not saved.', target: base.id, nextAction: 'Check the data folder, then send the same change again.', details: null } }; }
       const operations = input.operations.map(op => op.op === 'add' ? { ...op, intent: 'draft', acceptanceCriteria: '' } : op);
       const result = applyOperations(base, operations, actor, context(), 'board'); base = result.board;
       // REQ-82: like the server (server/auto-cards.ts), a person's move is the card's reason and pauses its tracking.
       if (cardAuto !== undefined && result.changed && operations.some(op => op.op === 'move')) {
         const at = new Date().toISOString();
         cardAuto = { ...cardAuto, reason: { by: 'user', cause: null, agentId: null, at, created: false },
-          ...(cardAuto.tracking ? { tracking: { state: 'paused', since: at } } : {}) };
+          ...(cardAuto.tracking ? { tracking: { state: 'paused', since: at }, trackingToken: { controlEpoch: 'epoch-ui', generation: 9, decisionId: 'moved-' + at, card: 'doing||' } } : {}) };
       }
       const reply = { ok: true, committed: result.changed, warnings: [], data: { boardId: base.id,
         revision: base.revision, currentRevision: base.revision, requestId: input.requestId,
@@ -237,7 +242,13 @@ function harness({ mobile = false, sdkFails = false, panel = false, platform = '
       : { state: ui.settings?.labs?.mail ? 'missing' : 'off', id: input.thread, files: [], latest: 0, more: 0 }),
     'kanban.v1.workflow.get': () => respond(structuredClone(workflow ?? { defined: false, reason: 'missing', definitionPath: '.kanban/workflow.json' })),
     // REQ-74: like the server, resuming changes only the tracking the next card read reports.
-    'kanban.v1.auto_cards.resume': () => { cardAuto = { ...cardAuto, tracking: { state: 'on', since: null } }; return respond({ resumed: 1 }); },
+    'kanban.v1.auto_cards.resume': input => {
+      const next = resumeReplies.shift();
+      if (next) return typeof next === 'function' ? next(input) : next;
+      const { trackingToken: _token, ...rest } = cardAuto ?? {};
+      cardAuto = { ...rest, tracking: { state: 'on', since: null } };
+      return respond({ resumed: 1, committed: true, replayed: false, mode: 'managed', token: { controlEpoch: input.controlEpoch, generation: input.generation + 1, decisionId: input.decisionId, card: input.card } });
+    },
     // REQ-62: like the server, every board (or only the ones asked for), id and revision only — and REQ-76 F1 its
     // groups, when asked for.
     'kanban.v1.revisions.get': input => respond(withHealth({ observedAt: base.updatedAt, removedIds: [], errors: [],
@@ -376,6 +387,8 @@ function harness({ mobile = false, sdkFails = false, panel = false, platform = '
   const props = { theme: { colors }, host: { id: 'host_example', label: 'Example host' },
     layout: { platform: mobile ? platform : 'web', compact: mobile } };
   return { get base() { return base; }, calls, sdkCalls, props, outcome: value => { outcome = value; },
+    // D66 gate 495 J1: what card.get reports from now on (a resume the server saved but could not confirm).
+    setCardAuto: value => { cardAuto = value; },
     // 253-D2: another agent named by the next preview (a newer chat opened meanwhile).
     dispatchTo: value => { dispatchLead = value; }, keyboard: type => { for (const v of [...keyboardHandlers]) if (v.type === type) v.handler(); },
     ui: { writes: uiWrites, get value() { return ui; } },
@@ -2188,7 +2201,8 @@ test('R2-B/REQ-74 ④ detail rows name the agent as the card does (sidebar mark,
 test('REQ-74 ③ the detail says why the card is where it is; a paused card offers "Resume automatic tracking"', async t => {
   const at = '2026-09-25T05:03:00.000Z';
   const h = harness({ width: 1400, link: [AGENT_A], agents: [{ id: AGENT_A, status: 'running' }],
-    cardAuto: { reason: { by: 'user', cause: null, agentId: null, at, created: false }, tracking: { state: 'paused', since: at } } });
+    cardAuto: { reason: { by: 'user', cause: null, agentId: null, at, created: false }, tracking: { state: 'paused', since: at },
+      trackingToken: { controlEpoch: 'epoch-ui', generation: 3, decisionId: 'decision-ui', card: 'todo||r:1' } } });
   const { OverviewScreen } = h.load('client/overview.tsx'); const root = await render(t, OverviewScreen, h.props);
   await act(async () => labelled(root, 'Example card').props.onPress());
   assert.match(JSON.stringify(nativeNode(root, 'detail-move-reason')), /Moved by a person · \d\d-\d\d \d\d:\d\d/);
@@ -2196,7 +2210,10 @@ test('REQ-74 ③ the detail says why the card is where it is; a paused card offe
   const calls = h.calls.length;
   await act(async () => button(root, 'Resume automatic tracking').props.onPress());
   assert.deepEqual(h.calls.slice(calls).map(c => c.name), ['kanban.v1.auto_cards.resume', 'kanban.v1.card.get']);
-  assert.deepEqual(Object.keys(h.calls[calls].input).sort(), ['boardId', 'cardId'], 'the resume names one card');
+  // D66 G2: the resume names one card and the decision the detail showed (its own new decision id beside it).
+  assert.deepEqual(Object.keys(h.calls[calls].input).sort(), ['boardId', 'card', 'cardId', 'controlEpoch', 'decisionId', 'generation'], 'the resume names one card and its decision');
+  assert.deepEqual([h.calls[calls].input.controlEpoch, h.calls[calls].input.generation, h.calls[calls].input.card], ['epoch-ui', 3, 'todo||r:1']);
+  assert.notEqual(h.calls[calls].input.decisionId, 'decision-ui', 'the resume is a new decision');
   assert.match(JSON.stringify(nativeNode(root, 'detail-tracking')), /On — the stage follows the agent/);
   assert.match(text(root), /Resumed — the agent's next signal moves the card/);
   assert.equal(root.root.findAllByType('Pressable').filter(p => p.props.accessibilityLabel === 'Resume automatic tracking').length, 0);
@@ -2206,6 +2223,70 @@ test('REQ-74 ③ the detail says why the card is where it is; a paused card offe
   await act(async () => labelled(other, 'Example card').props.onPress());
   assert.match(JSON.stringify(nativeNode(other, 'detail-move-reason')), /Automatic — work finished/);
   assert.equal(nativeNode(other, 'detail-tracking'), undefined);
+});
+// ---- D66 G2 (research/491): a paused card nobody paused, the resume by its token, and the storage refusal ----
+const D66_AT = '2026-10-19T00:10:00.000Z', D66_TOKEN = { controlEpoch: 'epoch-ui', generation: 4, decisionId: 'decision-ui', card: 'todo||r:1' };
+const d66Auto = held => ({ reason: { by: 'agent', cause: null, agentId: AGENT_A, at: D66_AT, created: false },
+  tracking: { state: 'paused', since: D66_AT, ...(held ? { held } : {}) }, ...(held === 'unreadable' ? {} : { trackingToken: D66_TOKEN }) });
+test('D66 G2 the detail tells "needs a check" apart from a person\'s pause, with the warning mark; each offers its own resume', async t => {
+  for (const [locale, words] of [['en', /Needs a check — it isn't clear whether a person chose this stage/], ['ko', /확인 필요 — 이 단계가 사람이 정한 것인지 알 수 없어/]]) {
+    const { h, root } = await detail(t, { cardAuto: { ...d66Auto('check'), locale } });
+    assert.match(JSON.stringify(nativeNode(root, 'detail-tracking')), words, locale);
+    assert.ok(nativeNode(root, 'detail-tracking-held'), locale + ': the warning row');
+    const press = button(root, locale === 'ko' ? '자동 추적 다시 켜기' : 'Resume automatic tracking');
+    const calls = h.calls.length;
+    await act(async () => press.props.onPress()); await settle();
+    const sent = h.calls.slice(calls).find(c => c.name === 'kanban.v1.auto_cards.resume');
+    assert.deepEqual([sent.input.controlEpoch, sent.input.generation], [D66_TOKEN.controlEpoch, D66_TOKEN.generation], locale + ': by the token shown');
+    assert.equal(nativeNode(root, 'detail-tracking-held'), undefined, locale + ': read again, it is on');
+  }
+  // A person's pause stays as it was: no warning row.
+  const { root } = await detail(t, { cardAuto: { ...d66Auto(null), reason: { by: 'user', cause: null, agentId: null, at: D66_AT, created: false } } });
+  assert.match(JSON.stringify(nativeNode(root, 'detail-tracking')), /Paused — moved outside automatic tracking/);
+  assert.equal(nativeNode(root, 'detail-tracking-held'), undefined);
+});
+test('D66 G2 a record that cannot be read is held with no resume to press; nothing is sent', async t => {
+  const { h, root } = await detail(t, { cardAuto: d66Auto('unreadable') });
+  assert.match(JSON.stringify(nativeNode(root, 'detail-tracking')), /On hold — the automatic-move record can't be read right now/);
+  assert.equal(root.root.findAllByType('Pressable').filter(p => p.props.accessibilityLabel === 'Resume automatic tracking').length, 0);
+  assert.equal(h.calls.filter(c => c.name === 'kanban.v1.auto_cards.resume').length, 0);
+});
+test('D66 G2 a resume refused for the storage says to check it; pressed again it is the same decision (same id), then it holds', async t => {
+  const refusal = { ok: false, committed: false, error: { code: 'E_AUTO_CONTROL', message: 'The resume was not saved.', target: '', nextAction: 'Check the data folder.', details: null } };
+  const { h, root } = await detail(t, { cardAuto: d66Auto('check'), resumeReplies: [refusal] });
+  await act(async () => button(root, 'Resume automatic tracking').props.onPress()); await settle();
+  assert.match(JSON.stringify(nativeNode(root, 'detail-resume-storage')), /Not saved — check free space and permissions for the plugin's data folder, then try again/);
+  await act(async () => button(root, 'Resume automatic tracking').props.onPress()); await settle();
+  const sent = h.calls.filter(c => c.name === 'kanban.v1.auto_cards.resume').map(c => c.input.decisionId);
+  assert.equal(sent.length, 2); assert.equal(sent[0], sent[1], 'a retry of the same press is the same decision');
+  assert.match(text(root), /Resumed — the agent's next signal moves the card/);
+});
+test('D66 495-J1 a resume refused for the storage that was saved after all (read again: on) says it resumed, not "not saved"', async t => {
+  let h;
+  const unsure = () => { h.setCardAuto({ ...d66Auto(null), tracking: { state: 'on', since: null }, trackingToken: undefined });
+    return { ok: false, committed: false, error: { code: 'E_AUTO_CONTROL', message: 'The resume may not have been saved.', target: '', nextAction: 'Check.', details: null } }; };
+  const r = await detail(t, { cardAuto: d66Auto('check'), resumeReplies: [unsure] }); h = r.h;
+  await act(async () => button(r.root, 'Resume automatic tracking').props.onPress()); await settle();
+  assert.match(text(r.root), /Resumed — the agent's next signal moves the card/);
+  assert.equal(nativeNode(r.root, 'detail-resume-storage'), undefined);
+  assert.match(JSON.stringify(nativeNode(r.root, 'detail-tracking')), /On — the stage follows the agent/);
+});
+test('D66 G2 a resume of a card changed since it was shown is not sent again behind the person: it is read again and they decide', async t => {
+  const stale = { ok: false, committed: false, error: { code: 'E_AUTO_STALE', message: 'Changed.', target: '', nextAction: 'Read the card again and decide again.', details: null } };
+  const { h, root } = await detail(t, { cardAuto: { ...d66Auto('check'), locale: 'ko' }, resumeReplies: [stale] });
+  const calls = h.calls.length;
+  await act(async () => button(root, '자동 추적 다시 켜기').props.onPress()); await settle();
+  assert.deepEqual(h.calls.slice(calls).map(c => c.name), ['kanban.v1.auto_cards.resume', 'kanban.v1.card.get'], 'one resume, then the card read again — no second resume');
+  assert.match(JSON.stringify(nativeNode(root, 'detail-resume-stale')), /표시된 뒤 카드가 바뀌었습니다/);
+});
+test('D66 G2 a stage pressed in the detail and refused for the storage (E_AUTO_CONTROL) says to check it, in both languages', async t => {
+  for (const [locale, words] of [['en', /Not saved — check free space and permissions/], ['ko', /저장하지 못했습니다 — 플러그인 데이터 폴더의 저장 공간·권한을 확인한 뒤 다시 시도해 주세요/]]) {
+    const { h, root } = await detail(t, { cardAuto: { reason: null, tracking: { state: 'on', since: null }, locale } });
+    h.outcome('autoControl');
+    await act(async () => sheetButton(root, 'stage-bar-doing').props.onPress()); await settle();
+    assert.equal(h.base.cards[0].stageId, 'todo', locale + ': not moved');
+    assert.match(text(root), words, locale);
+  }
 });
 test('R2-B quiet transitions remove both the glyph and an open tooltip; completed cards cannot become orphaned', async t=>{
   const h=harness({width:1400,link:[AGENT_A],agents:[{id:AGENT_A,status:'running'}]});
@@ -3623,7 +3704,7 @@ test('REQ-68 ① what ⋯ held works from the settings window: the demo switch a
   const demo = () => sheetButton(root, 'demo-toggle');
   assert.equal(demo().props.accessibilityState.checked, false);
   assert.deepEqual(hosts(root, 'setting-demo')[0].findAllByType('Text').map(n => n.props.children).slice(0, 2),
-    ['Demo data', 'Shows sample boards to look around Kanban. Nothing is saved while it is on.']);
+    ['Demo data', 'Explore Kanban with sample boards. Nothing is saved while on.']);
   await act(async () => demo().props.onPress());
   assert.equal(hosts(root, 'demo-banner').length, 1, 'the demo shows behind the window');
   assert.equal(demo().props.accessibilityState.checked, true);
@@ -3672,7 +3753,7 @@ test('REQ-70 ① the theme leads the display settings: four glyphs with words, P
   assert.deepEqual(rows.map(r => r.props.testID), ['setting-theme', 'setting-ui-scale', 'setting-board-align', 'setting-order-reset']);
   const row = hosts(root, 'setting-theme')[0];
   assert.deepEqual(row.findAllByType('Text').map(n => n.props.children), ['Theme',
-    'The colors of the Kanban screens. Paseo\'s sidebar and header keep Paseo\'s theme.', 'Light', 'Dark', 'System', 'Paseo']);
+    'Changes Kanban colors. Paseo\'s sidebar and header keep Paseo\'s theme.', 'Light', 'Dark', 'System', 'Paseo']);
   assert.deepEqual(row.findAllByType('Icon').map(n => n.props.name), ['Sun', 'Moon', 'Monitor', 'AppWindow']);
   assert.equal(row.findAll(n => n.props?.role === 'radiogroup' && typeof n.type === 'string').length, 1);
   assert.deepEqual(themeRadios(root).map(r => [r.props.accessibilityLabel, r.props.accessibilityHint]), [
@@ -3686,7 +3767,7 @@ test('REQ-70 ① the theme leads the display settings: four glyphs with words, P
   assert.equal(hosts(root, 'theme-tooltip').length, 0);
   const { copy } = h.load('client/i18n.ts'), ko = copy('ko');
   assert.deepEqual([ko.theme, ko.themeLight, ko.themeDark, ko.themeSystem, ko.themePaseo, ko.themeHelp],
-    ['테마', '라이트', '다크', '시스템', 'Paseo', '칸반 화면의 색입니다. Paseo 사이드바와 머리글은 Paseo 테마 그대로입니다.']);
+    ['테마', '라이트', '다크', '시스템', 'Paseo', '칸반 색만 바꿉니다. Paseo 사이드바·머리글은 Paseo 테마를 따릅니다.']);
   assert.deepEqual([ko.themeLightHint, ko.themeDarkHint, ko.themeSystemHint, ko.themePaseoHint],
     ['항상 라이트', '항상 다크', '기기의 라이트·다크 설정을 따릅니다', 'Paseo에서 고른 테마를 따릅니다']);
   assert.deepEqual([ko.swimlaneView, ko.listView], ['스윔레인으로 보기', '목록으로 보기']);
@@ -5137,6 +5218,19 @@ test('REQ-82 ③ a card moved on a board the server changed meanwhile is sent on
   assert.notEqual(writes[0].input.ifRevision, writes[1].input.ifRevision);
   assert.equal(h.base.cards[1].stageId, 'review');
   assert.match(textOf(nativeNode(root, 'move-toast')), /^Moved to Review/);
+});
+test('D66 G2b a card moved from the board and refused for the storage (E_AUTO_CONTROL) says to check it, in both languages, and is not sent again', async t => {
+  for (const [locale, words] of [['en', /^Not saved — check free space and permissions for the plugin's data folder, then try again\.$/],
+    ['ko', /^저장하지 못했습니다 — 플러그인 데이터 폴더의 저장 공간·권한을 확인한 뒤 다시 시도해 주세요\.$/]]) {
+    const { h, root } = await archivedBoard(t, { locale });
+    h.outcome('autoControl');
+    await act(async () => cardArea(root, 'Loose card').props.onPointerEnter());
+    await act(async () => inCard(root, 'Loose card', 'card-move-menu')[0].props.onPress({ stopPropagation() {} }));
+    await act(async () => sheetButton(root, 'move-to-review').props.onPress());
+    assert.equal(h.calls.filter(c => c.name === 'kanban.v1.board.mutate').length, 1, locale + ': sent once, not again behind the person');
+    assert.equal(h.base.cards[1].stageId, 'todo', locale + ': not moved');
+    assert.match(textOf(nativeNode(root, 'move-toast')), words, locale);
+  }
 });
 test('REQ-82 G1 undo goes back where the ledger had the card, not where the screen showed it — and not at all once it moved again', async t => {
   const { h, root } = await archivedBoard(t);
@@ -8816,7 +8910,7 @@ test('REQ-139 ① the size row: after the theme, − 100% + and "Back to 100%"; 
   await openSettings(root, 'display');
   const row = hosts(root, 'setting-ui-scale')[0];
   assert.deepEqual(row.findAllByType('Text').slice(0, 2).map(n => n.props.children),
-    ['Screen size', 'Draws the Kanban screens larger or smaller, from 80% to 150%. Paseo\'s sidebar and chat keep their size.']);
+    ['Screen size', 'Scales Kanban from 80% to 150%. Paseo\'s sidebar and chat keep their size.']);
   assert.deepEqual(row.findAllByType('Icon').map(n => n.props.name), ['Minus', 'Plus']);
   assert.equal(scaleValue(root), '100%');
   assert.equal(sheetButton(root, 'ui-scale-reset').props.accessibilityState?.disabled ?? sheetButton(root, 'ui-scale-reset').props.disabled, true, 'already 100%');
@@ -8895,7 +8989,7 @@ test('REQ-158 ① the Display row "Sidebar link opens in": Main view until Right
   await openSettings(root, 'display');
   const row = hosts(root, 'setting-open-in')[0];
   assert.deepEqual(row.findAllByType('Text').slice(0, 2).map(n => n.props.children), ['Sidebar link opens in',
-    'Choose where Kanban opens when you click it in Paseo\'s sidebar. The right panel is used only when a workspace is open and the window is wide enough; otherwise Kanban opens in the main view. Saved on this device only.']);
+    'Sets where Paseo\'s sidebar opens Kanban. The right panel opens beside chat only with an open workspace and a wide window; otherwise in the main view. Saved on this device only.']);
   assert.deepEqual(row.findAllByType('Text').slice(2).map(n => n.props.children), ['Main view', 'Right panel']);
   assert.deepEqual(openInChoices(root), [['main', true], ['panel', false]], 'the main screen by default');
   const order = hosts(root, 'settings-category-display')[0].findAll(n => typeof n.props.testID === 'string' && n.props.testID.startsWith('setting-') && typeof n.type === 'string')
@@ -8917,7 +9011,7 @@ test('REQ-158 ② Korean copy; no row on an older host, on a phone app, or befor
   let root = await render(t, OverviewScreen, ko.props);
   await openSettings(root, 'display');
   assert.deepEqual(hosts(root, 'setting-open-in')[0].findAllByType('Text').map(n => n.props.children), ['왼쪽 메뉴에서 열 위치',
-    'Paseo 왼쪽 메뉴에서 Kanban을 누르면 열리는 곳입니다. 오른쪽 패널은 워크스페이스가 열려 있고 창이 넓을 때 채팅 옆에 열리고, 그 밖에는 메인 화면으로 열립니다. 이 기기에만 저장됩니다.',
+    'Paseo 왼쪽 메뉴에서 칸반을 열 곳입니다. 오른쪽 패널은 워크스페이스가 열려 있고 창이 넓을 때 채팅 옆에, 아니면 메인 화면에 엽니다. 이 기기에만 저장됩니다.',
     '메인 화면', '오른쪽 패널']);
   for (const [name, h, register] of [['an older host', harness({ width: 1400 }), true], ['not registered', harness({ width: 1400 }), false],
     ['a phone app', harness({ mobile: true, platform: 'ios' }), true]]) {

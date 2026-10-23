@@ -275,6 +275,14 @@ export type AutoHealthDTO = z.infer<typeof autoHealthSchema>;
 /** REQ-52: the automatic archive's setting (server/auto-archive.ts). */
 export const autoArchiveSchema = z.object({ days: z.number().int().min(0).max(365), damaged: z.literal(true).optional() });
 export type AutoArchiveDTO = z.infer<typeof autoArchiveSchema>;
+/**
+ * REQ-156: the new-version notice (server/update-check.ts) — on or off for the whole plugin, `newer` the registry's latest release
+ * when it is newer than the running plugin (only while on), `checkedAt` when the registry last answered — both only for seven days
+ * after that answer (gate 486 F5) — `damaged` when the setting cannot be read (nothing is then asked). Absent from an older server.
+ */
+export const updateCheckSchema = z.object({ enabled: z.boolean(), newer: z.string().max(64).optional(), checkedAt: time.optional(),
+  damaged: z.literal(true).optional() });
+export type UpdateCheckDTO = z.infer<typeof updateCheckSchema>;
 const overviewData = z.object({ ...observed, boards: z.array(summary.extend({ needsHuman: z.number() })),
   attention: z.array(attention), errors: z.array(errorSchema),
   workspaceLabels: workspaceLabelsSchema.optional(), boardViews: z.array(boardDTO).optional(), removedIds: z.array(boardId).optional(),
@@ -288,6 +296,8 @@ const overviewData = z.object({ ...observed, boards: z.array(summary.extend({ ne
   autoHealth: autoHealthSchema.optional(),
   /** REQ-52: the automatic archive's days (0: off) for the whole plugin; `damaged` when its file cannot be read. */
   autoArchive: autoArchiveSchema.optional(),
+  /** REQ-156: the new-version notice, with hostId. */
+  updateCheck: updateCheckSchema.optional(),
   /** REQ-90: the lab's "messages waiting" badge — only with hostId, the badge on and a folder set. */
   mail: mailSchema.optional(),
   /** REQ-48: the running plugin's build metadata, returned without a separate RPC. */
@@ -304,7 +314,9 @@ const boardData = z.object({ ...observed, board: boardDTO, revision: z.string(),
   /** REQ-83: the server's automatic tracking. */
   autoHealth: autoHealthSchema.optional(),
   /** REQ-52: as on the overview. */
-  autoArchive: autoArchiveSchema.optional() });
+  autoArchive: autoArchiveSchema.optional(),
+  /** REQ-156: as on the overview. */
+  updateCheck: updateCheckSchema.optional() });
 export type BoardSnapshot = z.infer<typeof boardData>;
 const moveCause = z.enum(['created', 'turn_started', 'turn_ended', 'permission_requested', 'permission_resolved', 'archived', 'reconcile']);
 /** REQ-74: why the card sits in its stage — the automatic cards (and which signal), a person, or another agent. */
@@ -312,11 +324,25 @@ const moveReason = z.object({ by: z.enum(['auto', 'user', 'agent']), cause: move
   at: time, created: z.boolean() });
 export type MoveReasonDTO = z.infer<typeof moveReason>;
 export type MoveCause = z.infer<typeof moveCause>;
-/** REQ-74: automatic tracking of an auto card: following its agent, paused by somebody's move, or switched off. */
-const tracking = z.object({ state: z.enum(['on', 'paused', 'off']), since: time.nullable() });
+/**
+ * REQ-74: automatic tracking of an auto card: following its agent, paused by somebody's move, or switched off. D66 G2:
+ * `held` names a paused card nobody paused — `check` "needs a check" (it is not known whether its stage is somebody's
+ * decision), `unreadable` the decision file cannot be read now. Absent from an older server.
+ */
+const tracking = z.object({ state: z.enum(['on', 'paused', 'off']), since: time.nullable(), held: z.enum(['check', 'unreadable']).optional() });
 export type TrackingDTO = z.infer<typeof tracking>;
+/**
+ * D66 G2: the card's automatic-move decision as the detail showed it. A resume carries it back; the server refuses it once
+ * the card's decision changed (476 F2: the board's revision is not part of it, so another card's edit never refuses it).
+ */
+const trackingToken = z.object({ controlEpoch: z.string().min(1).max(64), generation: z.number().int().nonnegative(), decisionId: z.string().min(1).max(64),
+  /** Gate 495 F1: the card as the detail showed it; a resume of a card changed since is refused. */
+  card: z.string().min(1).max(256) });
+export type TrackingTokenDTO = z.infer<typeof trackingToken>;
 const cardData = z.object({ ...observed, boardId, card, template, history: z.array(history), revision: z.string(),
   reason: moveReason.nullable().optional(), tracking: tracking.nullable().optional(),
+  /** D66 G2: present while the card is paused and its decision can be read — what its "Resume automatic tracking" sends. */
+  trackingToken: trackingToken.optional(),
   /** REQ-86: as on the board's card (`boardCard`), for the detail's "Entered this stage". */
   stageEnteredAt: time.optional(), stageEnteredEstimated: z.literal(true).optional(),
   /** REQ-84: as on the board's card, for the detail's line and its "Turn off". Null with none; absent from an older server. */
@@ -353,6 +379,8 @@ export const revisionsGet = defineRpc({ name: 'kanban.v1.revisions.get',
     autoHealth: autoHealthSchema.optional(),
     /** REQ-90: the message folder's fingerprint (`mail.key` of the overview), with hostId while the lab's badge is on. */
     mail: z.string().max(64).optional(),
+    /** Gate 486 F4: the new-version reading's fingerprint (`updateCheckKey` of the overview's `updateCheck`). Absent from an older server. */
+    updates: z.string().max(64).optional(),
   })),
 });
 
@@ -462,12 +490,18 @@ export const autoCardsLeadSet = defineRpc({ name: 'kanban.v1.auto_cards.lead.set
   input: z.strictObject({ boardId, cardId, lead: z.boolean() }),
   output: envelope(z.object({ lead: z.string().nullable(), previous: z.string().nullable(), changed: z.boolean() })) });
 /**
- * REQ-74: "resume automatic tracking" for one card whose automatic moves a person paused by moving it.
- * Only the plugin's own `auto-cards.json` changes; the card stays put until its agent's next signal.
+ * REQ-74: "resume automatic tracking" for one card whose automatic moves a person paused by moving it. The card stays
+ * put until its agent's next signal; the ledger is not written. D66 G2: committed in the card's decision file, and only
+ * by the decision the detail showed — `controlEpoch`, `generation` and `card` (the card as shown) from its `trackingToken`, and `decisionId` a new
+ * id for this resume, sent again unchanged when the same press is retried (a replay). A request without them (an older
+ * screen) is refused with E_AUTO_STALE; so is one whose decision changed since (read the card again and decide again).
+ * The answer says whether this call committed it (`committed`) or found it already saved (`replayed`).
  */
 export const autoCardsResume = defineRpc({ name: 'kanban.v1.auto_cards.resume',
-  input: z.strictObject({ boardId, cardId }),
-  output: envelope(z.object({ resumed: z.number() })) });
+  input: z.strictObject({ boardId, cardId, controlEpoch: z.string().min(1).max(64).optional(), generation: z.number().int().nonnegative().optional(),
+    decisionId: z.string().min(1).max(64).optional(), card: z.string().min(1).max(256).optional() }),
+  output: envelope(z.object({ resumed: z.number(), committed: z.boolean(), replayed: z.boolean(),
+    mode: z.enum(['unowned', 'managed', 'paused', 'unknown']).nullable(), token: trackingToken.nullable() })) });
 /**
  * REQ-84 ⑤: a person turns a card's busy mark off from the detail. Only the plugin's own `busy.json` changes; turning off
  * a mark already gone is no error (`changed: false`).
@@ -570,3 +604,12 @@ export const archivedList = defineRpc({ name: 'kanban.v1.archived.list',
 export const archivedRestore = defineRpc({ name: 'kanban.v1.archived.restore',
   input: z.strictObject({ boardId, cardId, ifRevision: z.string().regex(/^[0-9a-f-]{36}:[1-9][0-9]*$/).optional() }),
   output: envelope(z.object({ changed: z.boolean(), kept: z.literal(true).optional(), revision: z.string().optional() })) });
+
+/**
+ * REQ-156: the new-version notice on or off, one setting for the whole plugin (the server asks the registry, not a device). Kept in
+ * the plugin's own `update-check.json` (and its backup). Off: nothing is asked any more and no answer is shown; the last attempt's
+ * stamp stays, so turning it on again the same day does not ask again.
+ */
+export const updateCheckSet = defineRpc({ name: 'kanban.v1.update_check.set',
+  input: z.strictObject({ enabled: z.boolean() }),
+  output: envelope(z.object({ enabled: z.boolean(), changed: z.boolean() })) });

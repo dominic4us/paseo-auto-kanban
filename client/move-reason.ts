@@ -34,9 +34,13 @@ export function moveReasonText(reason: MoveReasonDTO, m: Copy, now: number, card
   const age = elapsed(reason.at, now);
   return who + ' · ' + localStamp(reason.at, now) + (age ? ' ' + unbroken('(' + m.ago(age) + ')') : '');
 }
+/** D66 G2: a paused card nobody paused reads as "needs a check" (or held, its record unreadable), not as a person's pause. */
 export function trackingText(tracking: TrackingDTO, m: Copy, now: number): string {
-  return tracking.state === 'on' ? m.trackingOn : tracking.state === 'off' ? m.trackingOff
-    : m.trackingPaused + (tracking.since ? ' · ' + localStamp(tracking.since, now) : '');
+  if (tracking.state === 'on') return m.trackingOn;
+  if (tracking.state === 'off') return m.trackingOff;
+  if (tracking.held === 'check') return m.trackingCheck;
+  if (tracking.held === 'unreadable') return m.trackingUnreadable;
+  return m.trackingPaused + (tracking.since ? ' · ' + localStamp(tracking.since, now) : '');
 }
 /** REQ-126: the agents a card's detail names besides its assignees — its author, the one that moved it, those in its history. */
 export function detailAgentIds(data: Pick<CardSnapshot, 'card' | 'history' | 'reason'>): string[] {

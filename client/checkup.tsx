@@ -5,8 +5,9 @@ import { useRpc } from '@getpaseo/plugin/client';
 import { archivedRestore, boardMutate } from '../shared/rpc.js';
 import type { SignalSource } from './agent-signals.js';
 import { assigneeName } from './card-meta.js';
-import { addSkip, CHECKUP_BATCH, CHECKUP_LIMITS, checkupCandidates, checkupGroups, checkupKey, checkupLine, checkupPlan, operationsOf, readSkips,
-  checkupResult, homeOperations, selectionCounts, withoutSkipped, type CheckupAction, type CheckupBoard, type CheckupCandidate, type CheckupPlanBoard,
+import { leadTitle, type AgentLinks } from './card-groups.js';
+import { addSkip, CHECKUP_BATCH, CHECKUP_LIMITS, checkupCandidates, checkupGroups, checkupKey, checkupLine, checkupPlan, checkupTree, operationsOf, readSkips,
+  checkupResult, homeOperations, selectionCounts, withoutSkipped, type CheckupAction, type CheckupItem, type CheckupBoard, type CheckupCandidate, type CheckupPlanBoard,
   type CheckupSignals, type CheckupSkips, type CheckupTally } from './checkup-model.js';
 import { newRequestId } from './editor-state.js';
 import { mutationAllowed } from './demo.js';
@@ -36,16 +37,19 @@ import { px } from './ui-scale.js';
 const signalsOf = (source: SignalSource): CheckupSignals => ({ archived: id => source.archived?.(id) === true,
   pending: id => source.pending?.(id) === true, activity: id => source.activity?.(id), ready: source.ready() });
 
-/** The candidates of `boards`, kept live: read again when the agents' signals change it, and once an hour (days cross over). */
-export function useCheckupList(source: SignalSource, boards: readonly CheckupBoard[], enabled: boolean): CheckupCandidate[] {
+/**
+ * The candidates of `boards`, kept live: read again when the agents' signals change it, and once an hour (days cross over).
+ * REQ-157: `agents`, the agents' labels the board reads (`useAgentLinks`), so a sub-card names the card the board puts it under.
+ */
+export function useCheckupList(source: SignalSource, boards: readonly CheckupBoard[], enabled: boolean, agents?: AgentLinks): CheckupCandidate[] {
   const hour = useMinuteKey(now => String(Math.floor(now / 3600_000)), enabled);
   const [tick, bump] = useState(0);
-  const list = useMemo(() => enabled ? checkupCandidates(boards, signalsOf(source), Date.now()) : [], [source, boards, enabled, tick, hour]);
+  const list = useMemo(() => enabled ? checkupCandidates(boards, signalsOf(source), Date.now(), CHECKUP_LIMITS, agents) : [], [source, boards, enabled, tick, hour, agents]);
   const seen = useRef(''); seen.current = checkupKey(list);
-  const latest = useRef({ boards, enabled }); latest.current = { boards, enabled };
+  const latest = useRef({ boards, enabled, agents }); latest.current = { boards, enabled, agents };
   useEffect(() => source.subscribe(() => {
-    const { boards: shown, enabled: on } = latest.current;
-    const next = on ? checkupKey(checkupCandidates(shown, signalsOf(source), Date.now())) : '';
+    const { boards: shown, enabled: on, agents: links } = latest.current;
+    const next = on ? checkupKey(checkupCandidates(shown, signalsOf(source), Date.now(), CHECKUP_LIMITS, links)) : '';
     if (next !== seen.current) { seen.current = next; bump(value => value + 1); }
   }), [source]);
   return list;
@@ -220,10 +224,10 @@ type Notice149 = { text: string; error?: boolean; undo?: CheckupOutcome };
  * (hidden projects left out); `enabled` is false in the demo. `layer` draws the sheet and, while it is closed, the notice
  * at the bottom of the screen (as a quick move's).
  */
-export function useCheckup({ hostId, scope, source, boards, enabled, refresh }: {
-  hostId: string; scope: string; source: SignalSource; boards: readonly CheckupBoard[]; enabled: boolean; refresh: () => void;
+export function useCheckup({ hostId, scope, source, boards, enabled, refresh, agents }: {
+  hostId: string; scope: string; source: SignalSource; boards: readonly CheckupBoard[]; enabled: boolean; refresh: () => void; agents?: AgentLinks;
 }) {
-  const found = useCheckupList(source, boards, enabled);
+  const found = useCheckupList(source, boards, enabled, agents);
   const { skips, skip } = useCheckupSkips(scope, hostId);
   // Cards an action changed leave the list at once, before the boards are read again.
   const [gone, setGone] = useState<readonly string[]>([]);
@@ -287,7 +291,9 @@ export type Checkup = ReturnType<typeof useCheckup>;
  * The list: on a wide screen a centred window 640px wide, on a phone a sheet from the bottom. Its head says nothing moves by
  * itself and what it looks for; the groups follow the rules' order, each with its tick box (all or none), name and count; a
  * row is a tick box, the title (opens the card), its reason and suggestion, and Skip (a phone: ⋯ → open, skip). The bottom row
- * says how many are ticked and offers Archive and Move to Done; Archive first asks in that row.
+ * says how many are ticked and offers Archive and Move to Done; Archive first asks in that row. REQ-157: inside a group a
+ * lead's sub-cards sit under it, moved in (`checkupTree`), or under its heading when the lead is not a candidate there; ticking,
+ * "Select all" and the actions go by the cards as before.
  */
 export function CheckupSheet({ open, list, selected, busy, notice, onNotice, onTick, onSkip, onOpenCard, onAct, onUndo, workspaceOf, agentName,
   onClose, colors: c, m, platform, mobile }: {
@@ -322,9 +328,16 @@ export function CheckupSheet({ open, list, selected, busy, notice, onNotice, onT
       {m.checkupEmptyBody(limits.stalledDays, limits.waitingDays)}</Text>
     <Text testID="checkup-empty-tidy" style={{ color: muted, fontSize: px(12), lineHeight: px(18), textAlign: 'center' }}>{m.checkupEmptyTidy}</Text>
   </View>;
-  const row = (cand: CheckupCandidate, index: number) => {
+  // REQ-157: a level under a lead moves a row in by about a tick box and its gap, so a sub-card's box sits under its lead's title;
+  // a thin line in the divider's colour runs down the left of a sub-card, as a tree's.
+  const indent = mobile ? px(24) : px(30);
+  const guide = (depth: number) => depth > 0 && <View pointerEvents="none" testID="checkup-guide"
+    style={{ position: 'absolute', left: -Math.round(indent / 2) - 1, top: px(4), bottom: px(4), width: 2, borderRadius: 1, backgroundColor: c.divider }} />;
+  const row = (cand: CheckupCandidate, index: number, depth = 0) => {
     const on = selected.has(cand.key), menu = rowMenu === cand.key;
-    return <View key={cand.key} testID={'checkup-row-' + cand.rule + '-' + index} style={{ borderRadius: px(6), backgroundColor: on ? c.surface1 : 'transparent' }}>
+    return <View key={cand.key} testID={'checkup-row-' + cand.rule + '-' + index}
+      style={{ borderRadius: px(6), backgroundColor: on ? c.surface1 : 'transparent', marginLeft: depth * indent }}>
+      {guide(depth)}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: px(8), paddingVertical: px(6), paddingLeft: px(4), paddingRight: px(2), minHeight: mobile ? px(52) : px(44) }}>
         <TickBox testID="checkup-tick" checked={on} label={m.checkupTick(cand.title)} onPress={() => onTick([cand.key], !on)} colors={c} mobile={mobile} />
         <Pressable testID="checkup-title" accessibilityRole="link" accessibilityLabel={m.checkupOpenCard + ': ' + cand.title} onPress={() => onOpenCard(cand)}
@@ -349,6 +362,30 @@ export function CheckupSheet({ open, list, selected, busy, notice, onNotice, onT
       </View>}
     </View>;
   };
+  /**
+   * REQ-157: a lead's heading — the lead is not a candidate in this group but cards under it are: a tick for those cards only
+   * (all, none or some), a crown, the lead's short name (`leadTitle`) and its workspace, small and quiet. It is never a card itself.
+   */
+  const leadHead = (item: CheckupItem & { kind: 'lead' }) => {
+    const some = item.keys.filter(key => selected.has(key)).length, all = some === item.keys.length, name = leadTitle(item.title);
+    const workspace = workspaceOf(item.boardId);
+    return <View key={'lead:' + item.key} testID="checkup-lead" accessibilityLabel={m.checkupLeadHead(item.title, item.keys.length)}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: px(8), paddingLeft: px(4), paddingRight: px(2), marginTop: px(2), minHeight: mobile ? px(40) : px(30) }}>
+      <TickBox testID="checkup-lead-tick" checked={all} mixed={some > 0 && !all} label={m.checkupLeadTick(item.title, item.keys.length)}
+        onPress={() => onTick(item.keys, !all)} colors={c} mobile={mobile} />
+      <Icon name="Crown" size={px(13)} color={muted} />
+      {/* A narrow screen gives up the workspace's name (every row below says it too); the lead's keeps up to 70% of the line. */}
+      <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'baseline' }}>
+        <Text testID="checkup-lead-name" numberOfLines={1} style={{ flexShrink: 0, maxWidth: '70%', color: muted, fontSize: px(12), fontWeight: '600' }}>{name}</Text>
+        {!!workspace && <Text testID="checkup-lead-workspace" numberOfLines={1} style={{ flexShrink: 1, minWidth: 0, color: muted, fontSize: px(12) }}>{' · ' + workspace}</Text>}
+      </View>
+    </View>;
+  };
+  /** REQ-157: a group's rows by family (`checkupTree`) — a row's number counts the cards in the order drawn, headings left out. */
+  const items = (cards: readonly CheckupCandidate[]) => {
+    let n = 0;
+    return checkupTree(cards).map(item => item.kind === 'lead' ? leadHead(item) : row(item.card, n++, item.depth));
+  };
   const group = (g: { rule: CheckupCandidate['rule']; cards: CheckupCandidate[] }, index: number) => {
     const keys = g.cards.map(card => card.key), some = keys.filter(key => selected.has(key)).length, all = some === keys.length;
     const name = mobile ? m.checkupRuleShort(g.rule, daysOf(g.rule)) : m.checkupRuleName(g.rule, daysOf(g.rule));
@@ -367,7 +404,7 @@ export function CheckupSheet({ open, list, selected, busy, notice, onNotice, onT
             {all ? (mobile ? m.checkupClearShort : m.checkupClear) : (mobile ? m.checkupSelectAllShort : m.checkupSelectAll)}</Text>
         </Pressable>
       </View>
-      {g.cards.map(row)}
+      {items(g.cards)}
     </View>;
   };
   const primary = (label: string, onPress: () => void, testID: string, disabled: boolean, description?: string) =>
